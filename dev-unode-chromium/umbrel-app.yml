@@ -1,5 +1,5 @@
 manifestVersion: 1.1
-id: unode-chromium
+id: dev-unode-chromium
 icon: https://raw.githubusercontent.com/servietos/unode/38efff66a9e0013b3be886b804c436ed4cfcf790/gallery/Chromium_Logo.svg
 category: networking
 name: Chromium
