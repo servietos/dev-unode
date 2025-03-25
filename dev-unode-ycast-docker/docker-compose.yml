@@ -9,7 +9,7 @@ networks:
 
 services:
     ycast-docker:
-        container_name: ycast
+        container_name: dev-unode-ycast
         environment:
             - YC_STATIONS=/opt/ycast/stations/stations.yml
             - YC_DEBUG=ON
