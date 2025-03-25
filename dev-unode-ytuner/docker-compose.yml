@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  ytuner:
+    image: mtijnnl/ytuner:latest
+    container_name: dev-unode-ytuner
+    ports:
+      - "8080:8080" # Adjust the port if needed
+    environment:
+      - YT_API_KEY=your_youtube_api_key # Replace with your actual YouTube API key
+    volumes:
+      - ${APP_DATA_DIR}/data/ytuner_data:/data
+    restart: unless-stopped
+
+volumes:
+  ytuner_data:
+    driver: local
