@@ -1,0 +1,9 @@
+version: "3"
+services:
+  owncast:
+    image: owncast/owncast:0.2.1@sha256:0df31c934eade2ca9275db374318a32088e1a060bdb3853716d6343a5d5c8d42
+    ports:
+      - "8055:8080"
+      - "1935:1935"
+    volumes:
+      - ${APP_DATA_DIR}/data/owncast:/app/data:rw
