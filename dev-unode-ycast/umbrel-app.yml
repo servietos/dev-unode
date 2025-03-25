@@ -1,9 +1,9 @@
 manifestVersion: 1.1
-id: dev-unode-ycast
+id: dev-unode-ycast-docker
 name: YCast
 tagline: Replacement for vTuner
 icon: https://avatars.githubusercontent.com/u/891620?v=4
-category: stream
+category: radio streaming
 version: "1.1.0"
 description: >-
 YCast is a self hosted replacement for the vTuner internet radio service which many AVRs use.
