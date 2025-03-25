@@ -1,4 +1,5 @@
 manifestVersion: 1.1
+id: dev-unode-ytuner
 
 name: ytuner
 type: service
