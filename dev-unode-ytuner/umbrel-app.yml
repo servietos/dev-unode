@@ -4,26 +4,26 @@ id: dev-unode-ytuner
 name: ytuner
 type: service
 description: A simple YouTube tuner for managing and interacting with YouTube content.
-image: mtijnnl/ytuner:latest
+#image: mtijnnl/ytuner:latest
 version: "0.1.0"
-slug: ytuner
-ui: true
-appURL: "http://localhost:8080"  # Update if you want to expose it on a different port
-exposed_ports:
-  - "8080"
-required_ports:
-  - "8080"
-environment:
-  - name: YT_API_KEY
-    type: secret
-    description: "Your YouTube API key"
-    value: ""
+#slug: ytuner
+#ui: true
+#appURL: "http://localhost:8080"  # Update if you want to expose it on a different port
+#exposed_ports:
+ # - "8080"
+#required_ports:
+ # - "8080"
+#environment:
+#  - name: YT_API_KEY
+#    type: secret
+#    description: "Your YouTube API key"
+ #   value: ""
 
-volumes:
-  - name: ytuner_data
-    description: "Persistent data storage for ytuner"
-    mount_path: /data
-    is_persistent: true
+#volumes:
+#  - name: ytuner_data
+#    description: "Persistent data storage for ytuner"
+#    mount_path: /data
+ #   is_persistent: true
 
 # Optional: Define any dependencies or external apps (if necessary)
 # dependencies:
