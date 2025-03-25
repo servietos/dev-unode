@@ -1,1 +1,36 @@
+manifestVersion: 1.1
+id: dev-unode-ycast
+name: YCast
+tagline: Replacement for vTuner
+icon: https://avatars.githubusercontent.com/u/891620?v=4
+category: stream
+version: "1.1.0"
+description: >-
+YCast is a self hosted replacement for the vTuner internet radio service which many AVRs use.
+It emulates a vTuner backend to provide your AVR with the necessary information to play self defined categorized internet radio stations and listen to Radio stations listed in the Community Radio Browser index.. 
+YCast is for you if:
+  - You do not want to use a proprietary streaming service
+  - You are sick of loading delays and/or downtimes of the vTuner service
+  - You do not want to pay for a feature which was free before
+  - You are unsure about the continuation of the vTuner service
+developer: milaq®
+website: https://github.com/milaq/YCast
+dependencies: []
+repo: https://github.com/milaq/YCast
+support: https://github.com/milaq/YCast
+port: 80
+gallery:
+  - https://raw.githubusercontent.com/servietos/unode/3cc1e7ad9542e77600b65967173e030b7313bfd4/gallery/1.jpg
+  - https://raw.githubusercontent.com/servietos/unode/3cc1e7ad9542e77600b65967173e030b7313bfd4/gallery/2.jpg
+  - https://raw.githubusercontent.com/servietos/unode/3cc1e7ad9542e77600b65967173e030b7313bfd4/gallery/3.jpg
+# path: "/admin/"
+# defaultUsername: ""
+# deterministicPassword: true
+torOnly: false
+releaseNotes: >-
+  This is 
 
+
+  Full release notes can be found here: https://github.com/milaq/YCast/releases
+submitter: Servietos
+submission: https://github.com/servietos/dev-unode
