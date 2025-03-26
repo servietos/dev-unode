@@ -1,0 +1,4 @@
+https://umbrel.local:4007 {
+	reverse_proxy app_proxy:8443
+	tls internal
+}
