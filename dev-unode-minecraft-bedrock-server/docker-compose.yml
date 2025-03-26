@@ -1,0 +1,31 @@
+version: '3.7'
+
+services:
+  # app_proxy:
+  #   environment:
+  #     # APP_HOST: dev-unode-brcly-crafty_server_1
+  #     # APP_PORT: 8443
+  #     # PROXY_AUTH_ADD: "false"
+  #     # PROXY_TRUST_UPSTREAM: "true"
+  #     APP_PROTOCOL: "https"
+      
+
+  server:
+    image: itzg/minecraft-bedrock-server:latest
+    restart: on-failure
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    ports:
+      - 8000:8000
+      - 8443:8443 # APP
+      - 8523:8123 # DYNMAP
+      - 19132:19132/udp # BEDROCK
+      - 25500-25600:25500-25600 # MC SERV PORT RANGE
+    volumes:
+      - ${APP_DATA_DIR}/data/app/config:/crafty/app/config
+      - ${APP_DATA_DIR}/data/logs:/crafty/logs
+      - ${APP_DATA_DIR}/data/import:/crafty/import
+      - ${APP_DATA_DIR}/data/backups:/crafty/backups
+      - ${APP_DATA_DIR}/data/servers:/crafty/servers
