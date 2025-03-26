@@ -1,0 +1,26 @@
+manifestVersion: 1
+id: dev-unode-brcly-crafty
+name: Crafty
+tagline: Manage multiple Minecraft Server intances.
+icon: https://docs.craftycontrol.com/img/favicon.ico
+category: Gaming
+version: "2025.3.0"
+port: 8443
+description: >-
+  Crafty Controller is a versatile all-in-one Open-Source Minecraft Server Manager. From Vanilla Bedrock to Modded Java, Crafty can manage it all!
+
+  Please change the password from the default credentials
+developer: Arcadia Technology
+website: https://github.com/itzg/docker-minecraft-server/
+submitter: itzg
+submission: N/A
+repo: https://gitlab.com/crafty-controller/crafty-4
+gallery:
+  - https://docs.craftycontrol.com/img/page-assets/user-guide/server-creation/minecraft/dashboard-server-running.png
+  - https://docs.craftycontrol.com/img/page-assets/user-guide/server-creation/minecraft/server-builder.png
+  - https://docs.craftycontrol.com/img/page-assets/user-guide/server-configuration/minecraft-config-overview.png
+  - https://docs.craftycontrol.com/img/page-assets/user-guide/backup-manager/backup-manager-overview.png
+dependencies: []
+path: ""
+defaultUsername: "admin"
+defaultPassword: "umbrelcrafty"
