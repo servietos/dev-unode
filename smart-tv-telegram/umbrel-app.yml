@@ -1,5 +1,5 @@
 manifestVersion: 1
-id: smart-tv-telegram
+id: dev-unode-smart-tv-telegram
 name: Smart TV Telegram
 version: "1.4.0"
 repo: https://github.com/andrew-ld/smart-tv-telegram
