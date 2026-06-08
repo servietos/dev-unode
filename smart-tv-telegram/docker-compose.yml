@@ -1,0 +1,18 @@
+version: "3.7"
+
+services:
+  smart-tv-telegram:
+    image: andrewhyphenld/smart-tv-telegram:latest
+    # Alternative: Baue selbst
+    # build: .
+    container_name: smart-tv-telegram
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ${APP_DATA_DIR}/data/config.ini:/app/config.ini:ro
+    # Optional: Healthcheck
+    healthcheck:
+      test: ["CMD", "smart_tv_telegram", "--healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
