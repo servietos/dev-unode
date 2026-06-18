@@ -1,7 +1,7 @@
 manifestVersion: 1
 id: dev-unode-ycast
 name: YCast
-version: "1.0.0"
+version: "1.0.1"
 repo: https://github.com/milaq/YCast
 support: https://github.com/milaq/YCast/issues
 category: media
