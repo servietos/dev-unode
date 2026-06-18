@@ -1,0 +1,30 @@
+manifestVersion: 1
+id: dev-unode-ycast
+name: YCast
+version: "1.0.0"
+repo: https://github.com/milaq/YCast
+support: https://github.com/milaq/YCast/issues
+category: media
+tagline: Selbstgehosteter vTuner-Ersatz für Internet-Radio
+icon: https://raw.githubusercontent.com/milaq/YCast/master/ycast/static/favicon.png
+screenshots:
+  - https://raw.githubusercontent.com/milaq/YCast/master/screenshot.png
+
+description: >-
+  YCast ist ein selbstgehosteter Ersatz für den vTuner Internet-Radio-Dienst. 
+  Perfekt für AV-Receiver (Denon, Marantz, Onkyo, Pioneer etc.), die vTuner unterstützen.
+
+website: https://github.com/milaq/YCast
+port: 8080
+torOnly: false
+dependencies: []
+
+umbrel:
+  version: "1.0"
+  app:
+    config:
+      - name: config
+        path: /config
+        template: |
+          # YCast Konfiguration
+          # Die meisten Einstellungen können über die Weboberfläche vorgenommen werden.
