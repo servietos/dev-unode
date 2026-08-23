@@ -1,21 +1,18 @@
-FROM debian:bookworm-slim
+# Offizielles Verfahren aus coffeegreg/YTuner doc/DOCKER.md
+FROM alpine:3.19
 
 ARG YTUNER_VERSION=1.2.6
 ARG YTUNER_ARCH=x86_64-linux
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    unzip libsqlite3-0 ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# libc6-compat: noetig fuer FPC-Binaries; sqlite-libs fuer den DB-Cache
+RUN apk --no-cache add libc6-compat sqlite-libs unzip
 
-WORKDIR /opt/ytuner
-ADD https://github.com/coffeegreg/YTuner/releases/download/${YTUNER_VERSION}/ytuner-${YTUNER_VERSION}-${YTUNER_ARCH}.zip .
-RUN unzip -o ytuner-${YTUNER_VERSION}-${YTUNER_ARCH}.zip && rm ytuner-${YTUNER_VERSION}-${YTUNER_ARCH}.zip \
-    && chmod +x ytuner* 2>/dev/null || true
+WORKDIR /app
+ADD https://github.com/coffeegreg/YTuner/releases/download/${YTUNER_VERSION}/ytuner-${YTUNER_VERSION}-${YTUNER_ARCH}.zip /tmp/ytuner.zip
+RUN unzip -o /tmp/ytuner.zip ytuner ytuner.ini -d /app \
+    && chmod +x /app/ytuner && rm /tmp/ytuner.zip
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+EXPOSE 80/tcp
+EXPOSE 53/udp
 
-EXPOSE 80 53/udp
-VOLUME /data
-
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["./ytuner"]

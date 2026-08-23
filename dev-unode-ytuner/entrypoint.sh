@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 set -e
-# Konfig nach /data spiegeln, damit sie persistent bleibt
-mkdir -p /data/config
-if [ ! -f /data/config/ytuner.ini ] && [ -f /opt/ytuner/ytuner.ini ]; then
-  cp /opt/ytuner/ytuner.ini /data/config/
+# Persistente Ordner (per ytuner.ini auf /data zeigen)
+mkdir -p /data/config /data/cache /data/db
+if [ ! -f /data/config/ytuner.ini ]; then
+  cp /app/ytuner.ini /data/config/
 fi
 cd /data/config
-exec ./ytuner 2>/dev/null || exec /opt/ytuner/ytuner
+exec /app/ytuner
