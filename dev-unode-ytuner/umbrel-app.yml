@@ -1,30 +1,25 @@
-manifestVersion: 1.1
+manifestVersion: 1
 id: dev-unode-ytuner
+name: YTuner
+tagline: Internet-Radio für vTuner-AVRs (Yamaha, Denon, Marantz u. a.)
+category: media
+version: "1.2.6"
+port: 8095
+description: |-
+  YTuner ersetzt den eingestellten vTuner-Internetradio-Dienst für AVRs
+  von Yamaha, Denon, Onkyo, Marantz, Pioneer, Harman Kardon u. a.
+  Bietet eigene Stationslisten (MyStations), Radio-browser.info-Anbindung,
+  Lesezeichen und Logo-Caching.
 
-name: ytuner
-type: service
-description: A simple YouTube tuner for managing and interacting with YouTube content.
-#image: mtijnnl/ytuner:latest
-version: "0.1.0"
-#slug: ytuner
-#ui: true
-#appURL: "http://localhost:8080"  # Update if you want to expose it on a different port
-#exposed_ports:
- # - "8080"
-#required_ports:
- # - "8080"
-#environment:
-#  - name: YT_API_KEY
-#    type: secret
-#    description: "Your YouTube API key"
- #   value: ""
-
-#volumes:
-#  - name: ytuner_data
-#    description: "Persistent data storage for ytuner"
-#    mount_path: /data
- #   is_persistent: true
-
-# Optional: Define any dependencies or external apps (if necessary)
-# dependencies:
-#   - some-other-app
+  Hinweis: Der AVR muss so konfiguriert sein, dass er YTuner erreicht
+  (DNS auf den Umbrel-Server umleiten oder Port 80 erreichbar halten).
+releaseNotes: Erste Umbrel-Verpackung von YTuner 1.2.6.
+developer: coffeegreg
+website: https://github.com/coffeegreg/YTuner
+repo: https://github.com/coffeegreg/YTuner
+support: https://github.com/coffeegreg/YTuner/issues
+gallery:
+  - 1.jpg
+path: ""
+defaultUsername: ""
+deterministicPasswords: false
