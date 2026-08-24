@@ -4,11 +4,12 @@ services:
   app_proxy:
     environment:
       APP_HOST: dev-unode-ytuner_server_1
-      APP_PORT: 8080
+      APP_PORT: 80
+    container_name: dev-unode-ytuner_app_proxy_1
 
   server:
     image: gpopesc/ytuner:latest
-    container_name: dev-unode-ytuner-server
+    container_name: dev-unode-ytuner_server_1
     restart: unless-stopped
     ports:
       - "8095:80"
