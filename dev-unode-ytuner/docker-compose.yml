@@ -9,8 +9,22 @@ services:
   server:
     image: gpopesc/ytuner:latest
     restart: unless-stopped
+    networks:
+      default: {}
+      ytuner_macvlan:
+        ipv4_address: 192.168.178.201
     ports:
       - "8053:53/udp"
       - "8053:53/tcp"
     volumes:
       - ${APP_DATA_DIR}/data:/app/host-shared
+
+networks:
+  ytuner_macvlan:
+    driver: macvlan
+    driver_opts:
+      parent: eno1
+    ipam:
+      config:
+        - subnet: 192.168.178.0/24
+          gateway: 192.168.178.1
