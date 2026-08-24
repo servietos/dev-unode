@@ -2,6 +2,7 @@ manifestVersion: 1
 id: dev-unode-ytuner
 name: YTuner
 tagline: Internet-Radio für vTuner-AVRs (Yamaha, Denon, Marantz u. a.)
+icon: https://raw.githubusercontent.com/servietos/dev-unode/f00ff166d2f7ec2c28a7345fae3a5bfd2fe0a486/gallery/ytuner_icon.svg
 category: media
 version: "1.2.6"
 port: 8095
