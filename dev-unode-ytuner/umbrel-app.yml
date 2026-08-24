@@ -6,18 +6,17 @@ icon: https://raw.githubusercontent.com/servietos/dev-unode/f00ff166d2f7ec2c28a7
 category: media
 version: "1.2.6"
 port: 8095
-description: |-
+description: >-
   YTuner ersetzt den eingestellten vTuner-Internetradio-Dienst für AVRs
   von Yamaha, Denon, Onkyo, Marantz, Pioneer, Harman Kardon u. a.
   Bietet eigene Stationslisten (MyStations), Radio-browser.info-Anbindung,
   Lesezeichen und Logo-Caching.
 
-  Läuft auf Ports 8095 (Web) und 8053 (DNS). Da Port 80/53 auf dem Node
-  durch Umbrel/Pi-hole belegt sind, muss am Router eine DNS-Weiterleitung
-  für *.vtuner.com auf den Node-Port 8053 bzw. der AVR entsprechend
+  Läuft auf Ports 8095 (Web) und 8053 (DNS). Da Port 80 und 53 auf dem Node
+  durch Umbrel bzw. Pi-hole belegt sind, muss der AVR entsprechend
   konfiguriert werden.
 releaseNotes: YTuner 1.2.6 mit Community-Image gpopesc/ytuner.
-developer: coffeegreg (Image: gpopesc)
+developer: coffeegreg
 website: https://github.com/coffeegreg/YTuner
 repo: https://github.com/gpopesc/ytuner
 support: https://github.com/coffeegreg/YTuner/issues
