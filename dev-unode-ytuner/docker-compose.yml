@@ -4,12 +4,15 @@ services:
   app_proxy:
     environment:
       APP_HOST: dev-unode-ytuner_server_1
-      APP_PORT: 8090
+      APP_PORT: 8080
 
   server:
-    image: servietos/ytuner-umbrel:1.2.6
+    image: gpopesc/ytuner:latest
     container_name: dev-unode-ytuner-server
     restart: unless-stopped
-    network_mode: host
+    ports:
+      - "8095:80"
+      - "8053:53/udp"
+      - "8053:53/tcp"
     volumes:
-      - ${APP_DATA_DIR}/data:/data
+      - ${APP_DATA_DIR}/data:/app/host-shared

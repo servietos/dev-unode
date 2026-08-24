@@ -11,12 +11,14 @@ description: |-
   Bietet eigene Stationslisten (MyStations), Radio-browser.info-Anbindung,
   Lesezeichen und Logo-Caching.
 
-  Hinweis: Der AVR muss so konfiguriert sein, dass er YTuner erreicht
-  (DNS auf den Umbrel-Server umleiten oder Port 80 erreichbar halten).
-releaseNotes: Erste Umbrel-Verpackung von YTuner 1.2.6.
-developer: coffeegreg
+  Läuft auf Ports 8095 (Web) und 8053 (DNS). Da Port 80/53 auf dem Node
+  durch Umbrel/Pi-hole belegt sind, muss am Router eine DNS-Weiterleitung
+  für *.vtuner.com auf den Node-Port 8053 bzw. der AVR entsprechend
+  konfiguriert werden.
+releaseNotes: YTuner 1.2.6 mit Community-Image gpopesc/ytuner.
+developer: coffeegreg (Image: gpopesc)
 website: https://github.com/coffeegreg/YTuner
-repo: https://github.com/coffeegreg/YTuner
+repo: https://github.com/gpopesc/ytuner
 support: https://github.com/coffeegreg/YTuner/issues
 gallery:
   - 1.jpg
