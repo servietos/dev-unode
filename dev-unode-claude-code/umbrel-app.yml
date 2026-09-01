@@ -1,0 +1,40 @@
+manifestVersion: 1.1
+id: dev-unode-claude-code
+name: Claude Code
+tagline: Anthropic's agentic coding CLI im Web-Terminal
+category: developer
+version: "1.0.0"
+port: 7681
+icon: https://avatars.githubusercontent.com/u/76263028?s=256
+description: >-
+  Inoffizielles Umbrel-Paket für Claude Code (Anthropics Terminal-Coding-Agent).
+  Öffnet sich als Web-Terminal hinter deinem Umbrel-Login.
+
+
+  Kein offizielles Anthropic- oder Umbrel-Produkt.
+
+
+  Du brauchst einen Anthropic API-Key oder ein Claude Pro/Max-Abo.
+  Nach der Installation im Terminal /login ausführen, oder in
+  data/.env setzen: ANTHROPIC_API_KEY=sk-ant-...
+
+
+  Workspace und Claude-Config liegen persistent im App-Datenordner.
+
+
+  Nicht ins öffentliche Internet exposen. Claude Code kann im Container
+  Shell-Befehle ausführen.
+developer: Community
+website: https://code.claude.com/docs
+repo: https://github.com/anthropics/claude-code
+support: https://github.com/anthropics/claude-code/issues
+gallery: []
+releaseNotes: >-
+  Erstes Release: ttyd Web-Terminal + Claude Code CLI.
+  Beim ersten Start werden ttyd und die CLI heruntergeladen.
+dependencies: []
+submitter: servietos
+submission: https://github.com/servietos/dev-unode
+path: ""
+defaultUsername: ""
+defaultPassword: ""
