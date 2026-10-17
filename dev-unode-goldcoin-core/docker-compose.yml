@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     command: ["python", "/app/web.py"]
     environment:
-      RPC_URL: http://node:8332
+      RPC_URL: http://dev-unode-goldcoin-core_node_1:8332
       RPC_USER: "goldcoin"
       RPC_PASSWORD: "${APP_SEED}"
       PORT: "3000"
@@ -37,7 +37,7 @@ services:
   node-p2p:
     image: alpine/socat:1.8.0.1
     restart: unless-stopped
-    command: ["TCP-LISTEN:8334,fork,reuseaddr", "TCP:node:8333"]
+    command: ["TCP-LISTEN:8334,fork,reuseaddr", "TCP:dev-unode-goldcoin-core_node_1:8333"]
     ports:
       - "8334:8334"
     depends_on: [node]
