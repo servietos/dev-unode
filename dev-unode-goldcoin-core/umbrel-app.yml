@@ -1,0 +1,19 @@
+manifestVersion: 1
+id: dev-unode-goldcoin-core
+name: Goldcoin Core
+tagline: Goldcoin full node with web-based RPC console
+icon: https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/Bitcoin_icon.svg
+category: bitcoin
+version: "0.1.0"
+port: 3000
+description: >-
+  Betreibe einen Goldcoin-Core-Node (GLC) mit persistenter Blockchain und
+  integrierter Weboberfläche für Status und RPC-Aufrufe. RPC ist nur intern
+  im App-Netzwerk erreichbar; P2P wird auf Host-Port 8334 veröffentlicht.
+developer: Goldcoin Project
+website: https://goldcoinproject.org
+repo: https://github.com/goldcoin/goldcoin
+support: https://github.com/goldcoin/goldcoin/issues
+releaseNotes: "Erste Version: Goldcoin Core v0.15.0 mit Web-RPC-Konsole."
+path: ""
+dependencies: []
