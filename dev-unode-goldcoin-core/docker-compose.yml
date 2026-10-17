@@ -11,14 +11,32 @@ services:
     container_name: dev-unode-goldcoin-core_node_1
     restart: unless-stopped
     stop_grace_period: 2m
-    entrypoint: ["/bin/sh", "/opt/goldcoin/start-node.sh"]
+    entrypoint: ["/bin/sh", "-ec"]
+    command: |
+      if [ ! -x /data/bin/goldcoind ]; then
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl tar
+        rm -rf /var/lib/apt/lists/*
+        case "$$(uname -m)" in
+          x86_64) ARCH=x86_64 ;;
+          aarch64|arm64) ARCH=aarch64 ;;
+          *) echo "Unsupported architecture: $$(uname -m)" >&2; exit 1 ;;
+        esac
+        VERSION="$${GOLDCOIN_VERSION}"
+        curl -fL "https://github.com/goldcoin/goldcoin/releases/download/v$${VERSION}/goldcoin-$${VERSION}-$${ARCH}-linux-gnu.tar.gz" -o /tmp/goldcoin.tar.gz
+        tar -xzf /tmp/goldcoin.tar.gz -C /tmp
+        cp "/tmp/goldcoin-$${VERSION}/bin/goldcoind" "/tmp/goldcoin-$${VERSION}/bin/goldcoin-cli" /data/bin/
+        chmod 755 /data/bin/goldcoind /data/bin/goldcoin-cli
+      fi
+      mkdir -p /data/bin /data/.goldcoin
+      printf 'server=1\ndaemon=0\nlisten=1\nport=8333\nrpcport=8332\nrpcbind=0.0.0.0\nrpcallowip=172.16.0.0/12\nrpcuser=%s\nrpcpassword=%s\n' "$${RPC_USER}" "$${RPC_PASSWORD}" > /data/.goldcoin/goldcoin.conf
+      exec /data/bin/goldcoind -datadir=/data/.goldcoin -conf=/data/.goldcoin/goldcoin.conf -printtoconsole
     environment:
       GOLDCOIN_VERSION: "0.15.0"
       RPC_USER: "goldcoin"
       RPC_PASSWORD: "${APP_SEED}"
     volumes:
       - ${APP_DATA_DIR}/data:/data
-      - ${APP_DATA_DIR}/scripts/start-node.sh:/opt/goldcoin/start-node.sh:ro
 
 
   web:

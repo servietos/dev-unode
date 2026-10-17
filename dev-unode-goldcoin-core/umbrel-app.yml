@@ -4,7 +4,7 @@ name: Goldcoin Core
 tagline: Goldcoin full node with web-based RPC console
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/Bitcoin_icon.svg
 category: bitcoin
-version: "0.1.2"
+version: "0.1.3"
 port: 3000
 description: >-
   Betreibe einen Goldcoin-Core-Node (GLC) mit persistenter Blockchain und
@@ -14,6 +14,6 @@ developer: Goldcoin Project
 website: https://goldcoinproject.org
 repo: https://github.com/goldcoin/goldcoin
 support: https://github.com/goldcoin/goldcoin/issues
-releaseNotes: "Fix: DNS-Verbindungen zu Node-Containern verwenden jetzt die festen Umbrel-Containernamen."
+releaseNotes: "Fix: Node-Start ist unabhängig von alten Skriptdateien im persistenten App-Datenverzeichnis."
 path: ""
 dependencies: []
