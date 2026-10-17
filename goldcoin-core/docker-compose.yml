@@ -1,0 +1,41 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: dev-unode-goldcoin-core_web_1
+      APP_PORT: 3000
+
+  node:
+    image: alpine:3.21
+    restart: unless-stopped
+    stop_grace_period: 2m
+    entrypoint: ["/bin/sh", "/opt/goldcoin/start-node.sh"]
+    environment:
+      GOLDCOIN_VERSION: "0.15.0"
+      RPC_USER: "goldcoin"
+      RPC_PASSWORD: "${APP_SEED}"
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+      - ${APP_DATA_DIR}/scripts/start-node.sh:/opt/goldcoin/start-node.sh:ro
+
+
+  web:
+    image: python:3.13-alpine
+    restart: unless-stopped
+    command: ["python", "/app/web.py"]
+    environment:
+      RPC_URL: http://dev-unode-goldcoin-core_node_1:8332
+      RPC_USER: "goldcoin"
+      RPC_PASSWORD: "${APP_SEED}"
+      PORT: "3000"
+    volumes:
+      - ${APP_DATA_DIR}/scripts/web.py:/app/web.py:ro
+
+  node-p2p:
+    image: alpine/socat:1.8.0.1
+    restart: unless-stopped
+    command: ["TCP-LISTEN:8334,fork,reuseaddr", "TCP:dev-unode-goldcoin-core_node_1:8334"]
+    ports:
+      - "8334:8334"
+    depends_on: [node]
