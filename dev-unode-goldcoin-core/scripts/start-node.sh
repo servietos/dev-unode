@@ -1,7 +1,6 @@
 #!/bin/sh
 set -eu
 
-apk add --no-cache ca-certificates curl tar
 ARCH="$(uname -m)"
 case "$ARCH" in
   x86_64) ASSET_ARCH=x86_64 ;;
@@ -13,11 +12,14 @@ ARCHIVE="goldcoin-${VERSION}-${ASSET_ARCH}-linux-gnu.tar.gz"
 URL="https://github.com/goldcoin/goldcoin/releases/download/v${VERSION}/${ARCHIVE}"
 mkdir -p /data/bin /data/.goldcoin
 if [ ! -x "/data/bin/goldcoind" ]; then
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl tar
+  rm -rf /var/lib/apt/lists/*
   echo "Downloading Goldcoin Core ${VERSION} (${ASSET_ARCH})..."
   curl -fL "$URL" -o /tmp/goldcoin.tar.gz
   tar -xzf /tmp/goldcoin.tar.gz -C /tmp
-  BIN_DIR="$(find /tmp -type f -name goldcoind -print -quit | xargs -r dirname)"
-  [ -n "$BIN_DIR" ] || { echo "goldcoind not found in release archive" >&2; exit 1; }
+  BIN_DIR="/tmp/goldcoin-${VERSION}/bin"
+  [ -x "$BIN_DIR/goldcoind" ] || { echo "goldcoind not found in release archive" >&2; exit 1; }
   cp "$BIN_DIR/goldcoind" "$BIN_DIR/goldcoin-cli" /data/bin/
   chmod 755 /data/bin/goldcoind /data/bin/goldcoin-cli
 fi
