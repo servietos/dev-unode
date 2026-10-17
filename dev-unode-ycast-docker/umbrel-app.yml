@@ -3,16 +3,16 @@ id: dev-unode-ycast-docker
 name: YCast
 tagline: Replacement for vTuner
 icon: https://avatars.githubusercontent.com/u/891620?v=4
-category: radio streaming
+category: media
 version: "1.1.0"
 description: >-
-YCast is a self hosted replacement for the vTuner internet radio service which many AVRs use.
-It emulates a vTuner backend to provide your AVR with the necessary information to play self defined categorized internet radio stations and listen to Radio stations listed in the Community Radio Browser index.. 
-YCast is for you if:
-  - You do not want to use a proprietary streaming service
-  - You are sick of loading delays and/or downtimes of the vTuner service
-  - You do not want to pay for a feature which was free before
-  - You are unsure about the continuation of the vTuner service
+  YCast is a self hosted replacement for the vTuner internet radio service which many AVRs use.
+  It emulates a vTuner backend to provide your AVR with the necessary information to play self defined categorized internet radio stations and listen to Radio stations listed in the Community Radio Browser index..
+  YCast is for you if:
+    - You do not want to use a proprietary streaming service
+    - You are sick of loading delays and/or downtimes of the vTuner service
+    - You do not want to pay for a feature which was free before
+    - You are unsure about the continuation of the vTuner service
 developer: milaq®
 website: https://github.com/milaq/YCast
 dependencies: []
