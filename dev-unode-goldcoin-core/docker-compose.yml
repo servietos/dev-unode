@@ -7,7 +7,8 @@ services:
       APP_PORT: 3000
 
   node:
-    image: alpine:3.21
+    image: debian:bookworm-slim
+    container_name: dev-unode-goldcoin-core_node_1
     restart: unless-stopped
     stop_grace_period: 2m
     entrypoint: ["/bin/sh", "/opt/goldcoin/start-node.sh"]
@@ -22,10 +23,11 @@ services:
 
   web:
     image: python:3.13-alpine
+    container_name: dev-unode-goldcoin-core_web_1
     restart: unless-stopped
     command: ["python", "/app/web.py"]
     environment:
-      RPC_URL: http://dev-unode-goldcoin-core_node_1:8332
+      RPC_URL: http://node:8332
       RPC_USER: "goldcoin"
       RPC_PASSWORD: "${APP_SEED}"
       PORT: "3000"
@@ -35,7 +37,7 @@ services:
   node-p2p:
     image: alpine/socat:1.8.0.1
     restart: unless-stopped
-    command: ["TCP-LISTEN:8334,fork,reuseaddr", "TCP:dev-unode-goldcoin-core_node_1:8334"]
+    command: ["TCP-LISTEN:8334,fork,reuseaddr", "TCP:node:8333"]
     ports:
       - "8334:8334"
     depends_on: [node]
