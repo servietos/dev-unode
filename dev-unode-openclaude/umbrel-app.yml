@@ -1,0 +1,33 @@
+manifestVersion: 1.1
+id: dev-unode-openclaude
+name: OpenClaude
+tagline: Terminal-Coding-Agent für Cloud- und lokale KI-Modelle
+category: developer
+version: "1.0.0"
+port: 7681
+icon: https://github.com/Twigpine/openclaude/raw/main/docs/assets/openclaude-wordmark.png
+description: >-
+  Open-source Coding-Agent als Web-Terminal. Unterstützt OpenAI-kompatible
+  APIs, Gemini, GitHub Models, Codex, Ollama und weitere Provider.
+
+
+  Nicht offiziell von Umbrel oder den unterstützten Modellanbietern.
+  OpenClaude kann Shell-Befehle ausführen und auf Dateien im Workspace
+  zugreifen. Nicht ins öffentliche Internet exponieren.
+
+
+  Beim ersten Start wird OpenClaude installiert. Provider/API-Zugangsdaten
+  richtest du anschließend im Terminal mit /provider ein.
+developer: Twigpine
+website: https://github.com/Twigpine/openclaude
+repo: https://github.com/Twigpine/openclaude
+support: https://github.com/Twigpine/openclaude/issues
+gallery: []
+releaseNotes: >-
+  Erstes Community-App-Store-Release.
+dependencies: []
+submitter: servietos
+submission: https://github.com/servietos/dev-unode
+path: ""
+defaultUsername: ""
+defaultPassword: ""
