@@ -4,7 +4,7 @@ name: OpenClaude
 tagline: Terminal-Coding-Agent für Cloud- und lokale KI-Modelle
 category: developer
 version: "1.0.0"
-port: 7681
+port: 7682
 icon: https://github.com/Twigpine/openclaude/raw/main/docs/assets/openclaude-wordmark.png
 description: >-
   Open-source Coding-Agent als Web-Terminal. Unterstützt OpenAI-kompatible
