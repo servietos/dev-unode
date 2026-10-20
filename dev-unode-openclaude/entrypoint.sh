@@ -28,4 +28,4 @@ if [ ! -f "$MARKER" ] || [ ! -x /data/bin/ttyd ] || [ ! -x /data/npm/bin/opencla
 fi
 
 cd /data/workspace
-exec /data/bin/ttyd --writable -p 7681 --interface 0.0.0.0 /data/npm/bin/openclaude
+exec /data/bin/ttyd --writable -p 7682 --interface 0.0.0.0 /data/npm/bin/openclaude
