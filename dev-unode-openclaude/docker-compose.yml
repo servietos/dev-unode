@@ -4,7 +4,7 @@ services:
   app_proxy:
     environment:
       APP_HOST: dev-unode-openclaude_web_1
-      APP_PORT: 7681
+      APP_PORT: 7682
 
   web:
     image: node:22-bookworm-slim
