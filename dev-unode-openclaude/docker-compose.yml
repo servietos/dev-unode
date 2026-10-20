@@ -20,4 +20,4 @@ services:
       - ${APP_DATA_DIR}/data:/data
       - ${APP_DATA_DIR}/entrypoint.sh:/entrypoint.sh:ro
     entrypoint: ["/bin/bash", "/entrypoint.sh"]
-umbrel@umbrel:~/umbrel/app-data/hermes-agent/data/hermes/dev-unode/dev-unode-openclaude$
+
