@@ -20,5 +20,114 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - ${APP_DATA_DIR}/data:/data
-      - ${APP_DATA_DIR}/entrypoint.sh:/entrypoint.sh:ro
-    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    # Startskript eingebettet: Umbrel aktualisiert die Compose-Datei bei
+    # App-Updates, separate Dateien im App-Ordner aber nicht.
+    # $$ ist das Compose-Escape für ein literales $.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -euo pipefail
+
+        export DEBIAN_FRONTEND=noninteractive
+        export HOME=/data
+        export NPM_CONFIG_PREFIX=/data/npm
+        export PATH="/data/.local/bin:/data/npm/bin:/data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        export TZ="$${TZ:-Europe/Berlin}"
+
+        mkdir -p /data/workspace /data/npm /data/.claude /data/bin /data/.local/bin /data/logs
+
+        if [ ! -f /data/.env ]; then
+          cat > /data/.env <<'EOF'
+        # Optional: Anthropic API key (alternativ /login im Terminal)
+        # ANTHROPIC_API_KEY=sk-ant-...
+
+        # Zeitzone für cron
+        TZ=Europe/Berlin
+        EOF
+        fi
+
+        set -a
+        # shellcheck disable=SC1091
+        . /data/.env
+        set +a
+
+        # Systempakete liegen im Container-Layer und gehen bei einem App-Update
+        # verloren, deshalb bei jedem Start prüfen (nicht nur beim Erststart).
+        PKGS="ca-certificates curl git python3 python3-venv python3-pip cron tzdata"
+        missing=""
+        for p in $$PKGS; do
+          dpkg -s "$$p" >/dev/null 2>&1 || missing="$$missing $$p"
+        done
+        if [ -n "$$missing" ]; then
+          apt-get update
+          # shellcheck disable=SC2086
+          apt-get install -y --no-install-recommends $$missing
+          rm -rf /var/lib/apt/lists/*
+        fi
+
+        if [ ! -x /data/bin/ttyd ]; then
+          ARCH="$$(uname -m)"
+          case "$$ARCH" in
+            x86_64|amd64) TTYD_ASSET="ttyd.x86_64" ;;
+            aarch64|arm64) TTYD_ASSET="ttyd.aarch64" ;;
+            *) echo "Unsupported arch: $$ARCH"; exit 1 ;;
+          esac
+          curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/1.7.7/$${TTYD_ASSET}" -o /data/bin/ttyd
+          chmod +x /data/bin/ttyd
+        fi
+
+        if [ ! -x /data/npm/bin/claude ]; then
+          npm install -g @anthropic-ai/claude-code
+        fi
+
+        # uv: Python-Paket- und Versionsmanager, installiert nach /data/.local/bin (persistent)
+        if [ ! -x /data/.local/bin/uv ]; then
+          curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/data/.local/bin INSTALLER_NO_MODIFY_PATH=1 sh
+        fi
+
+        # Wrapper für cron-Jobs: lädt /data/.env und den PATH, dann den Befehl
+        cat > /data/bin/with-env <<'EOF'
+        #!/bin/bash
+        export HOME=/data
+        export NPM_CONFIG_PREFIX=/data/npm
+        export PATH="/data/.local/bin:/data/npm/bin:/data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        set -a
+        . /data/.env
+        set +a
+        exec "$$@"
+        EOF
+        chmod +x /data/bin/with-env
+
+        # Terminal-Sitzung: Claude starten, beim Beenden in eine Shell fallen
+        cat > /data/bin/session <<'EOF'
+        #!/bin/bash
+        cd /data/workspace
+        claude || true
+        echo
+        echo "Claude beendet. Shell aktiv, 'claude' startet neu."
+        exec bash -l
+        EOF
+        chmod +x /data/bin/session
+
+        if [ ! -f /data/crontab ]; then
+          cat > /data/crontab <<'EOF'
+        # Cron-Jobs für diesen Container. Nach Änderungen App neu starten.
+        # Zeiten in TZ aus /data/.env (Standard Europe/Berlin).
+        # Jeder Job läuft über /data/bin/with-env, damit PATH, HOME und .env stimmen.
+        #
+        # Beispiel (auskommentiert):
+        # 30 7 * * 1-5  /data/bin/with-env bash -c 'cd /data/workspace/broking && claude -p "Pre-Market-Lauf gemäß CLAUDE.md" --model sonnet --max-turns 15' >> /data/logs/premarket.log 2>&1
+        EOF
+        fi
+
+        ln -sf "/usr/share/zoneinfo/$$TZ" /etc/localtime
+        echo "$$TZ" > /etc/timezone
+        crontab /data/crontab
+        cron
+
+        chown -R 1000:1000 /data || true
+
+        cd /data/workspace
+        exec /data/bin/ttyd --writable -p 7681 --interface 0.0.0.0 /data/bin/session
+

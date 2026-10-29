@@ -9,8 +9,7 @@ Zielpfad im Repo:
 ```
 dev-unode-claude-code/
   umbrel-app.yml
-  docker-compose.yml
-  entrypoint.sh
+  docker-compose.yml   (enthält ab 1.1.1 auch das Startskript)
 ```
 
 Danach in Umbrel:
@@ -38,3 +37,10 @@ ANTHROPIC_API_KEY=sk-ant-...
   `data/.env` geladen sind. Logs z. B. nach `/data/logs/`.
 - **Zeitzone:** `TZ=Europe/Berlin` (Standard) in `data/.env` anpassbar.
 - **Terminal:** Wer Claude beendet, landet in einer Shell; `claude` startet neu.
+
+## Ab Version 1.1.1
+
+Das Startskript steckt direkt in `docker-compose.yml`. Grund: Umbrel
+aktualisiert bei App-Updates die Compose-Datei, ließ aber ein separates
+`entrypoint.sh` im App-Ordner unverändert. Ein altes `entrypoint.sh` im
+App-Ordner wird nicht mehr verwendet und kann gelöscht werden.
