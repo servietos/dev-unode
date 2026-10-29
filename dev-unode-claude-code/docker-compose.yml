@@ -15,7 +15,8 @@ services:
     environment:
       HOME: /data
       NPM_CONFIG_PREFIX: /data/npm
-      PATH: /data/npm/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      TZ: ${TZ:-Europe/Berlin}
+      PATH: /data/.local/bin:/data/npm/bin:/data/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - ${APP_DATA_DIR}/data:/data

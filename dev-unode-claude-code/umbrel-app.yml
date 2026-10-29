@@ -3,7 +3,7 @@ id: dev-unode-claude-code
 name: Claude Code
 tagline: Anthropic's agentic coding CLI im Web-Terminal
 category: developer
-version: "1.0.0"
+version: "1.1.0"
 port: 7681
 icon: https://avatars.githubusercontent.com/u/76263028?s=256
 description: >-
@@ -30,8 +30,12 @@ repo: https://github.com/anthropics/claude-code
 support: https://github.com/anthropics/claude-code/issues
 gallery: []
 releaseNotes: >-
-  Erstes Release: ttyd Web-Terminal + Claude Code CLI.
-  Beim ersten Start werden ttyd und die CLI heruntergeladen.
+  Python 3 (inkl. venv/pip) und uv für eigene Skripte, persistent in /data.
+  Cron im Container: Jobs in data/crontab eintragen, App neu starten.
+  Wrapper /data/bin/with-env lädt PATH und data/.env für cron-Jobs.
+  Zeitzone per TZ in data/.env (Standard Europe/Berlin).
+  Claude beenden führt jetzt in eine Shell statt die Sitzung zu schließen.
+  Systempakete werden bei jedem Start geprüft und überleben so App-Updates.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode
