@@ -1,0 +1,34 @@
+manifestVersion: 1
+id: dev-unode-broking
+name: Broking
+tagline: Aktien screenen, Thesen protokollieren, Orders gegen Risiko-Limits prüfen
+category: finance
+version: "0.1.0"
+port: 3847
+icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/broking/web/static/icon.svg
+description: >-
+  Weboberfläche für das broking-Projekt: lädt Tageskurse (Yahoo Finance), filtert das
+  Universum nach Trend, RSI und Liquidität, zeigt Kurs-Charts mit SMA 50/200 und führt ein
+  Journal mit messbaren Thesen samt Trefferquote.
+
+
+  Ein Risiko-Check prüft Order-Vorschläge gegen feste Limits (Positionsgröße, Risiko pro
+  Trade, Tagesverlust, Whitelist, Handelszeiten). Die App handelt nicht selbst und läuft
+  fest im Paper-Trading-Modus.
+
+
+  Mo–Fr lädt sie zu einstellbaren Uhrzeiten (Standard 07:30 und 22:30) automatisch Kurse
+  und rechnet den Screen neu. Daten liegen persistent im App-Datenordner.
+developer: servietos
+website: https://github.com/servietos/dev-unode/tree/master/src/broking
+repo: https://github.com/servietos/dev-unode/tree/master/src/broking
+support: https://github.com/servietos/dev-unode/issues
+gallery: []
+releaseNotes: >-
+  Erste Version: Screen, Charts, Thesen-Journal, Risiko-Check, Zeitplan.
+dependencies: []
+submitter: servietos
+submission: https://github.com/servietos/dev-unode
+path: ""
+defaultUsername: ""
+defaultPassword: ""
