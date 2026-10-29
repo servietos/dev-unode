@@ -1,0 +1,18 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: dev-unode-broking_web_1
+      APP_PORT: 8000
+
+  web:
+    # Gebaut von .github/workflows/broking-image.yml aus src/broking (amd64 + arm64)
+    image: ghcr.io/servietos/broking:0.1.0
+    user: "1000:1000"
+    restart: on-failure
+    stop_grace_period: 30s
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - ${APP_DATA_DIR}/data:/data

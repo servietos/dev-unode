@@ -1,0 +1,59 @@
+{
+  "paper_trading": true,
+  "universe": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMZN",
+    "GOOGL",
+    "META",
+    "JPM",
+    "V",
+    "UNH",
+    "XOM",
+    "SAP.DE",
+    "SIE.DE",
+    "ALV.DE",
+    "DTE.DE",
+    "MUV2.DE",
+    "SPY",
+    "QQQ",
+    "URTH",
+    "EUNL.DE"
+  ],
+  "benchmark": "URTH",
+  "screen": {
+    "top_n": 10,
+    "min_history_days": 200,
+    "min_avg_volume": 100000,
+    "rsi_min": 35,
+    "rsi_max": 70
+  },
+  "risk": {
+    "max_position_pct": 10.0,
+    "max_risk_per_trade_pct": 1.0,
+    "max_daily_loss_pct": 2.0,
+    "max_open_positions": 8,
+    "enforce_market_hours": true,
+    "market_hours": {
+      "US": {
+        "tz": "America/New_York",
+        "open": "09:30",
+        "close": "16:00"
+      },
+      "DE": {
+        "tz": "Europe/Berlin",
+        "open": "09:00",
+        "close": "17:30"
+      }
+    }
+  },
+  "schedule": {
+    "enabled": true,
+    "tz": "Europe/Berlin",
+    "times": [
+      "07:30",
+      "22:30"
+    ]
+  }
+}
