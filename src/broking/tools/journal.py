@@ -60,7 +60,8 @@ def _ensure(journal_dir: Path) -> Path:
 
 def add_thesis(ticker: str, direction: str, entry: float, target: float, horizon_days: int,
                rationale: str, model: str = "", stop: float | None = None,
-               journal_dir: Path = JOURNAL_DIR, today: dt.date | None = None) -> dict:
+               journal_dir: Path = JOURNAL_DIR, today: dt.date | None = None,
+               order_id: str | None = None) -> dict:
     if direction not in ("up", "down"):
         raise ValueError("direction muss 'up' oder 'down' sein")
     if horizon_days <= 0:
@@ -84,6 +85,8 @@ def add_thesis(ticker: str, direction: str, entry: float, target: float, horizon
         "model": model,
         "status": "open",
     }
+    if order_id:
+        thesis["order_id"] = order_id
     with open(_ensure(journal_dir), "a", encoding="utf-8") as f:
         f.write(json.dumps(thesis, ensure_ascii=False) + "\n")
     return thesis
@@ -105,6 +108,16 @@ def resolve(thesis_id: str, status: str, price: float | None = None, note: str =
             if t["status"] != "open":
                 raise ValueError(f"These {thesis_id} ist schon {t['status']}")
             t.update(status=status, resolved_at=_now(), resolved_price=price, note=note)
+            _save_theses(theses, journal_dir)
+            return t
+    raise KeyError(f"These {thesis_id} nicht gefunden")
+
+
+def attach_order(thesis_id: str, order_id: str | None, journal_dir: Path = JOURNAL_DIR) -> dict:
+    theses = load_theses(journal_dir)
+    for t in theses:
+        if t["id"] == thesis_id:
+            t["order_id"] = order_id
             _save_theses(theses, journal_dir)
             return t
     raise KeyError(f"These {thesis_id} nicht gefunden")

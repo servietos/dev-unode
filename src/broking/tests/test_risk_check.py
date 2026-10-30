@@ -36,6 +36,14 @@ class RiskTests(unittest.TestCase):
         self.assertEqual(risk_check.position_size(200, 150, 100_000, risk), 20)  # Risikolimit greift
         self.assertEqual(risk_check.position_size(200, 200, 100_000, risk), 0)
 
+    def test_max_qty_respects_holding_and_cash(self):
+        risk = self.cfg["risk"]
+        pf = {"equity": 100_000, "cash": 50_000, "positions": {"AAPL": {"qty": 30, "price": 200}}}
+        self.assertEqual(risk_check.max_qty(200, 190, pf, "aapl", risk), 20)   # 50 erlaubt - 30 Bestand
+        self.assertEqual(risk_check.max_qty(200, 190, {**pf, "cash": 1000}, "MSFT", risk), 5)
+        r = self.check(ticker="MSFT", qty=1, price=400, stop=390)
+        self.assertEqual(r["suggested_qty"], 15)  # 10 % = 25 Stück, 10 gehalten
+
     def assertBlocked(self, r, fragment):
         self.assertFalse(r["approved"])
         self.assertTrue(any(fragment in v for v in r["violations"]), r["violations"])
