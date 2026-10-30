@@ -52,6 +52,17 @@ def position_size(price: float, stop: float, equity: float, risk: dict) -> int:
     return max(0, math.floor(min(by_risk, by_size)))
 
 
+def max_qty(price: float, stop: float, portfolio: dict, ticker: str, risk: dict) -> int:
+    """Wie position_size, aber zusätzlich begrenzt durch Bestand im selben Titel und Cash."""
+    equity = portfolio["equity"]
+    held = {k.upper(): p for k, p in portfolio.get("positions", {}).items()}.get(ticker.upper(), {}).get("qty", 0)
+    if price <= 0:
+        return 0
+    room = equity * risk["max_position_pct"] / 100 / price - held
+    by_cash = portfolio.get("cash", 0) / price
+    return max(0, math.floor(min(position_size(price, stop, equity, risk), room, by_cash)))
+
+
 def check(order: dict, portfolio: dict, cfg: dict, now: dt.datetime | None = None) -> dict:
     risk = cfg["risk"]
     v: list[str] = []
@@ -104,7 +115,7 @@ def check(order: dict, portfolio: dict, cfg: dict, now: dt.datetime | None = Non
 
     result = {"approved": not v, "violations": v, "ticker": ticker, "side": side, "qty": qty}
     if side == "buy" and isinstance(order.get("stop"), (int, float)) and equity > 0:
-        result["suggested_qty"] = position_size(price, order["stop"], equity, risk)
+        result["suggested_qty"] = max_qty(price, order["stop"], portfolio, ticker, risk)
     return result
 
 

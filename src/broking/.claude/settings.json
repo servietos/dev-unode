@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 tools/fetch_prices.py:*)",
+      "Bash(python3 tools/screen.py:*)",
+      "Bash(python3 tools/journal.py:*)",
+      "Bash(python3 tools/evaluate_theses.py:*)",
+      "Bash(python3 tools/risk_check.py:*)",
+      "Bash(python3 tools/broker.py account:*)",
+      "Bash(python3 tools/broker.py positions:*)",
+      "Bash(python3 tools/broker.py orders:*)",
+      "Bash(python3 tools/broker.py sync:*)"
+    ],
+    "ask": [
+      "mcp__alpaca"
+    ],
+    "deny": [
+      "Edit(tools/config.json)",
+      "Edit(tools/risk_check.py)",
+      "Edit(tools/hooks.py)",
+      "Edit(.claude/settings.json)",
+      "Read(data/secrets.json)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__alpaca__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/hooks.py\" pre"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__alpaca__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/hooks.py\" post"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,9 +1,9 @@
 manifestVersion: 1
 id: dev-unode-broking
 name: Broking
-tagline: Aktien screenen, Thesen protokollieren, Orders gegen Risiko-Limits prüfen
+tagline: Aktien screenen, Thesen führen und per Alpaca Paper-Trading handeln
 category: finance
-version: "0.1.0"
+version: "0.2.0"
 port: 3847
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/broking/web/static/icon.svg
 description: >-
@@ -12,20 +12,24 @@ description: >-
   Journal mit messbaren Thesen samt Trefferquote.
 
 
-  Ein Risiko-Check prüft Order-Vorschläge gegen feste Limits (Positionsgröße, Risiko pro
-  Trade, Tagesverlust, Whitelist, Handelszeiten). Die App handelt nicht selbst und läuft
-  fest im Paper-Trading-Modus.
+  Handel über Alpaca (nur Paper-Trading): Order-Ticket mit Vorschlag aus ATR und Limits,
+  serverseitige Prüfung gegen das Live-Depot inklusive offener Orders (Positionsgröße, Risiko
+  pro Trade, Cash, Tagesverlust, Whitelist, Handelszeiten), Bestätigung, dann Bracket-Order
+  mit Stop-Loss und Ziel. Jede Order legt automatisch eine These im Journal an.
 
 
-  Mo–Fr lädt sie zu einstellbaren Uhrzeiten (Standard 07:30 und 22:30) automatisch Kurse
-  und rechnet den Screen neu. Daten liegen persistent im App-Datenordner.
+  Mo–Fr lädt sie zu einstellbaren Uhrzeiten (Standard 07:30 und 22:30) automatisch Kurse,
+  rechnet den Screen, wertet fällige Thesen aus und gleicht das Depot ab. Alpaca-Schlüssel
+  trägst du in den Einstellungen ein; sie bleiben auf dem Umbrel.
 developer: servietos
 website: https://github.com/servietos/dev-unode/tree/master/src/broking
 repo: https://github.com/servietos/dev-unode/tree/master/src/broking
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Erste Version: Screen, Charts, Thesen-Journal, Risiko-Check, Zeitplan.
+  Neues Design mit Dashboard (Depot vs. Benchmark), Handel über Alpaca Paper-Trading
+  (Bracket-Orders, Positionen schließen, Orders stornieren), automatische Thesen-Auswertung
+  mit Trefferquote je Modell, Broker-Verbindung in den Einstellungen.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

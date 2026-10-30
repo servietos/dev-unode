@@ -1,10 +1,11 @@
-"""Weboberfläche für broking: Kurse laden, Screen, Charts, Journal, Risiko-Check.
+"""Weboberfläche für broking: Kurse, Screen, Charts, Journal, Handel über Alpaca (Paper).
 
 Start lokal:   uvicorn web.app:app --port 8000   (aus dem Projektordner)
 Im Container:  siehe Dockerfile; Daten liegen dann unter BROKING_DATA_DIR=/data.
 
-Es gibt bewusst KEINEN Order-Endpunkt: Die Oberfläche zeigt, prüft und protokolliert,
-sie handelt nicht. paper_trading lässt sich hier nicht abschalten.
+Orders gehen ausschließlich an Alpaca Paper-Trading (feste URL in tools/broker.py) und
+werden serverseitig gegen risk_check und das Live-Depot geprüft. paper_trading lässt sich
+hier nicht abschalten. Schreibende API-Aufrufe brauchen den Header X-Broking (CSRF-Schutz).
 """
 from __future__ import annotations
 
@@ -18,17 +19,21 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
+import broker  # noqa: E402
+import evaluate_theses  # noqa: E402
 import fetch_prices  # noqa: E402
 import journal  # noqa: E402
+import trading  # noqa: E402
 import risk_check  # noqa: E402
 import screen  # noqa: E402
+from broker import Alpaca, BrokerError  # noqa: E402
 from common import (CONFIG_PATH, DEFAULT_CONFIG_PATH, JOURNAL_DIR, SCREENS_DIR,  # noqa: E402
                     load_config, read_prices)
 from indicators import sma_series  # noqa: E402
@@ -81,6 +86,13 @@ class Jobs:
                 res = screen.run(cfg["universe"], cfg["screen"], cfg["screen"]["top_n"])
                 save_screen(res)
                 result["screen"] = {"passed": res["passed"], "screened": res["screened"]}
+            if "evaluate" in steps:
+                self.state["step"] = "evaluate"
+                ev = evaluate_theses.evaluate()
+                result["evaluate"] = {"resolved": len(ev["resolved"])}
+            if "sync" in steps and broker.load_keys():
+                self.state["step"] = "sync"
+                result["sync"] = {"equity": broker.sync_portfolio(Alpaca.from_config())["equity"]}
         except Exception as e:  # Fehler sichtbar machen statt den Thread still sterben zu lassen
             self.state["error"] = str(e)[:500]
         finally:
@@ -106,6 +118,8 @@ def load_screen() -> dict | None:
     path = SCREENS_DIR / "latest.json"
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
+
+ALL_STEPS = ["fetch", "screen", "evaluate", "sync"]
 
 # --- Zeitplan --------------------------------------------------------------------------
 
@@ -149,7 +163,7 @@ class Scheduler:
         while True:
             try:
                 key = self.due(load_config())
-                if key and jobs.start(["fetch", "screen"], force=True, trigger="zeitplan"):
+                if key and jobs.start(ALL_STEPS, force=True, trigger="zeitplan"):
                     self.last_key = key
             except Exception:
                 pass  # Konfigurationsfehler dürfen den Zeitplan nicht beenden
@@ -170,6 +184,27 @@ async def lifespan(_app):
 app = FastAPI(title="Broking", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def csrf_guard(request: Request, call_next):
+    """Fremde Seiten können keinen eigenen Header setzen, ohne dass der Browser blockt."""
+    if (request.url.path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS")
+            and request.headers.get("x-broking") != "1"):
+        return JSONResponse({"detail": "Header X-Broking fehlt"}, status_code=403)
+    return await call_next(request)
+
+
+@app.exception_handler(BrokerError)
+def broker_error(_request, e: BrokerError):
+    code = 409 if "Schlüssel hinterlegt" in str(e) else 502
+    return JSONResponse({"detail": str(e)}, status_code=code)
+
+
+@app.exception_handler(trading.OrderRejected)
+def order_rejected(_request, e: trading.OrderRejected):
+    return JSONResponse({"detail": "Order abgelehnt", "violations": e.violations,
+                         "suggested_qty": (e.risk or {}).get("suggested_qty")}, status_code=422)
+
+
 @app.get("/api/status")
 def status():
     cfg = load_config()
@@ -182,6 +217,7 @@ def status():
         "next_run": scheduler.next_run(cfg),
         "open_theses": sum(1 for t in journal.load_theses() if t["status"] == "open"),
         "due_theses": len(journal.due_theses()),
+        "broker_configured": broker.load_keys() is not None,
     }
 
 
@@ -192,8 +228,8 @@ class RunRequest(BaseModel):
 
 @app.post("/api/run")
 def run(req: RunRequest):
-    if not set(req.steps) <= {"fetch", "screen"} or not req.steps:
-        raise HTTPException(400, "steps: fetch und/oder screen")
+    if not set(req.steps) <= set(ALL_STEPS) or not req.steps:
+        raise HTTPException(400, f"steps: Auswahl aus {ALL_STEPS}")
     if not jobs.start(req.steps, req.force, trigger="manuell"):
         raise HTTPException(409, "Es läuft bereits ein Job")
     return jobs.state
@@ -345,6 +381,150 @@ def put_config(new: dict):
     tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     tmp.replace(CONFIG_PATH)
     return cfg
+
+
+# --- Thesen-Auswertung -----------------------------------------------------------------
+
+@app.get("/api/stats")
+def stats():
+    return evaluate_theses.stats(journal.load_theses())
+
+
+@app.post("/api/evaluate")
+def evaluate():
+    return evaluate_theses.evaluate()
+
+
+# --- Broker (Alpaca Paper) --------------------------------------------------------------
+
+def client() -> Alpaca:
+    return Alpaca.from_config()
+
+
+@app.get("/api/broker")
+def broker_status():
+    keys = broker.load_keys()
+    if not keys:
+        return {"configured": False, "paper": True}
+    out = {"configured": True, "paper": True, "key_id": broker.mask(keys[0])}
+    try:
+        c = client()
+        a, clock = c.account(), c.clock()
+        out.update(
+            account={k: a.get(k) for k in ("account_number", "status", "currency", "equity", "last_equity",
+                                           "cash", "buying_power", "trading_blocked", "pattern_day_trader")},
+            clock={k: clock.get(k) for k in ("is_open", "next_open", "next_close")},
+        )
+    except BrokerError as e:
+        out["error"] = str(e)
+    return out
+
+
+class KeysIn(BaseModel):
+    key_id: str
+    secret: str  # Länge wird von Hand geprüft: Pydantic-Fehler würden den Wert zurückschicken
+
+
+@app.put("/api/broker/keys")
+def broker_keys(k: KeysIn):
+    """Schlüssel erst gegen Alpaca prüfen, dann speichern."""
+    if not (8 <= len(k.key_id.strip()) <= 64 and 16 <= len(k.secret.strip()) <= 128):
+        raise HTTPException(400, "Key ID (8–64 Zeichen) oder Secret (16–128 Zeichen) hat eine unerwartete Länge")
+    acct = Alpaca(k.key_id.strip(), k.secret.strip()).account()
+    broker.save_keys(k.key_id, k.secret)
+    journal.log_action({"source": "web", "action": "broker_keys_saved", "key_id": broker.mask(k.key_id)})
+    return {"configured": True, "key_id": broker.mask(k.key_id), "account_number": acct.get("account_number")}
+
+
+@app.delete("/api/broker/keys")
+def broker_keys_delete():
+    broker.delete_keys()
+    journal.log_action({"source": "web", "action": "broker_keys_deleted"})
+    return {"configured": False}
+
+
+@app.get("/api/broker/positions")
+def broker_positions():
+    keep = ("symbol", "qty", "avg_entry_price", "current_price", "market_value", "cost_basis",
+            "unrealized_pl", "unrealized_plpc", "unrealized_intraday_pl", "change_today")
+    return [{k: p.get(k) for k in keep} for p in client().positions()]
+
+
+@app.get("/api/broker/orders")
+def broker_orders(status: str = Query("open", pattern="^(open|closed|all)$")):
+    keep = ("id", "client_order_id", "symbol", "side", "type", "order_class", "qty", "filled_qty",
+            "limit_price", "stop_price", "filled_avg_price", "status", "created_at", "filled_at")
+    out = []
+    for o in client().orders(status, 100):
+        row = {k: o.get(k) for k in keep}
+        row["legs"] = [{k: leg.get(k) for k in keep} for leg in (o.get("legs") or [])]
+        out.append(row)
+    return out
+
+
+@app.get("/api/broker/history")
+def broker_history(period: str = Query("3M", pattern="^(1M|3M|6M|1A)$")):
+    """Depotwert und Benchmark, beide auf 100 indexiert (eine gemeinsame Achse)."""
+    h = client().portfolio_history(period)
+    dates = [dt.datetime.fromtimestamp(t, dt.timezone.utc).date().isoformat() for t in h.get("timestamp") or []]
+    equity = h.get("equity") or []
+    pairs = [(d, e) for d, e in zip(dates, equity) if e]
+    if not pairs:
+        return {"dates": [], "equity": [], "equity_idx": [], "benchmark": None, "benchmark_idx": []}
+    dates, equity = [p[0] for p in pairs], [p[1] for p in pairs]
+    bench = load_config().get("benchmark")
+    closes = {r["date"]: r["close"] for r in read_prices(bench)} if bench else {}
+    bseries, last = [], None
+    for d in dates:  # Lücken (Feiertage) mit letztem Kurs füllen
+        last = closes.get(d, last)
+        bseries.append(last)
+    b0 = next((b for b in bseries if b), None)
+    return {
+        "dates": dates, "equity": equity,
+        "equity_idx": [round(e / equity[0] * 100, 2) for e in equity],
+        "benchmark": bench,
+        "benchmark_idx": [round(b / b0 * 100, 2) if b and b0 else None for b in bseries],
+    }
+
+
+@app.get("/api/trade/ticket/{ticker}")
+def trade_ticket(ticker: str):
+    return trading.ticket(client(), check_ticker(ticker), load_config())
+
+
+class OrderIn(BaseModel):
+    ticker: str
+    qty: int = Field(gt=0, le=1_000_000)
+    price: float = Field(gt=0, allow_inf_nan=False)
+    stop: float = Field(gt=0, allow_inf_nan=False)
+    target: float = Field(gt=0, allow_inf_nan=False)
+    horizon_days: int = 10
+    rationale: str = Field(max_length=2000)
+    model: str = Field("manuell", max_length=60)
+
+
+@app.post("/api/trade/check")
+def trade_check(o: OrderIn):
+    res = trading.check(client(), {**o.model_dump(), "ticker": check_ticker(o.ticker)}, load_config())
+    return {"approved": True, "risk": res["risk"], "last_price": res["last_price"]}
+
+
+@app.post("/api/trade/order")
+def trade_order(o: OrderIn):
+    return trading.place(client(), {**o.model_dump(), "ticker": check_ticker(o.ticker)}, load_config())
+
+
+@app.delete("/api/trade/orders/{order_id}")
+def trade_cancel(order_id: str):
+    if not re.match(r"^[0-9a-f-]{36}$", order_id):
+        raise HTTPException(400, "Ungültige Order-ID")
+    trading.cancel(client(), order_id)
+    return {"cancelled": order_id}
+
+
+@app.post("/api/trade/close/{symbol}")
+def trade_close(symbol: str):
+    return trading.close(client(), check_ticker(symbol))
 
 
 @app.get("/")

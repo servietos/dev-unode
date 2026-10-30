@@ -26,8 +26,8 @@ class WebTests(unittest.TestCase):
         os.environ.update(BROKING_DATA_DIR=str(d), BROKING_JOURNAL_DIR=str(d / "journal"),
                           BROKING_CONFIG=str(d / "config.json"))
         # Module neu laden, damit sie die Pfade aus der Umgebung übernehmen
-        import common, fetch_prices, journal, risk_check, screen  # noqa: E401
-        for mod in (common, fetch_prices, journal, risk_check, screen):
+        import broker, common, evaluate_theses, fetch_prices, journal, risk_check, screen, trading  # noqa: E401
+        for mod in (common, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading):
             importlib.reload(mod)
         import web.app as webapp
         cls.webapp = importlib.reload(webapp)
@@ -40,13 +40,13 @@ class WebTests(unittest.TestCase):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-        import common, fetch_prices, journal, risk_check, screen  # noqa: E401
-        for mod in (common, fetch_prices, journal, risk_check, screen):
+        import broker, common, evaluate_theses, fetch_prices, journal, risk_check, screen, trading  # noqa: E401
+        for mod in (common, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading):
             importlib.reload(mod)
         cls.tmp.cleanup()
 
     def setUp(self):
-        self.client = TestClient(self.webapp.app).__enter__()
+        self.client = TestClient(self.webapp.app, headers={"X-Broking": "1"}).__enter__()
 
     def tearDown(self):
         self.client.__exit__(None, None, None)
@@ -99,6 +99,44 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.client.put("/api/config", json=bad).status_code, 400)
         bad = {**cfg, "schedule": {"enabled": True, "times": ["25:00"]}}
         self.assertEqual(self.client.put("/api/config", json=bad).status_code, 400)
+
+    def test_csrf_header_required_for_writes(self):
+        raw = TestClient(self.webapp.app)
+        r = raw.post("/api/run", json={"steps": ["screen"]})
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(raw.get("/api/status").status_code, 200)
+
+    def test_broker_without_keys(self):
+        os.environ.pop("ALPACA_API_KEY", None)
+        self.assertEqual(self.client.get("/api/broker").json(), {"configured": False, "paper": True})
+        self.assertEqual(self.client.get("/api/broker/positions").status_code, 409)
+
+    def test_trade_flow_with_fake_alpaca(self):
+        from tests.fake_alpaca import FakeAlpaca
+        import broker
+        fake = FakeAlpaca(price=200.0)
+        orig = self.webapp.client
+        self.webapp.client = lambda: broker.Alpaca("KEYID123", "s" * 20, transport=fake)
+        cfg = self.client.get("/api/config").json()
+        cfg["risk"]["enforce_market_hours"] = False
+        self.client.put("/api/config", json=cfg)
+        try:
+            from common import write_prices
+            from tests.helpers import make_rows
+            write_prices("AAPL", make_rows([200.0] * 30))
+            order = {"ticker": "AAPL", "qty": 40, "price": 200, "stop": 190, "target": 220,
+                     "horizon_days": 10, "rationale": "Test"}
+            self.assertTrue(self.client.post("/api/trade/check", json=order).json()["approved"])
+            bad = self.client.post("/api/trade/order", json={**order, "qty": 400})
+            self.assertEqual(bad.status_code, 422)
+            self.assertTrue(bad.json()["violations"])
+            ok = self.client.post("/api/trade/order", json=order).json()
+            self.assertEqual(ok["thesis"]["order_id"], ok["order"]["id"])
+            h = self.client.get("/api/broker/history?period=1M").json()
+            self.assertEqual(h["equity_idx"], [100.0, 101.0])
+            self.assertEqual(self.client.delete("/api/trade/orders/not-an-id").status_code, 400)
+        finally:
+            self.webapp.client = orig
 
     def test_scheduler(self):
         sch = self.webapp.Scheduler()

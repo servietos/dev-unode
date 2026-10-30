@@ -1,7 +1,31 @@
 # broking
 
-Screening, Thesen-Journal und Risiko-Check für Paper-Trading – als Python-CLIs (`tools/`)
-und als Weboberfläche (`web/`), die auch als Umbrel-App läuft.
+Screening, Thesen-Journal, Risiko-Check und Paper-Trading über Alpaca – als Python-CLIs (`tools/`)
+und als Weboberfläche (`web/`), die als Umbrel-App läuft.
+
+## Weboberfläche
+
+- **Dashboard:** Depotwert, Tages-G/V, Cash, Trefferquote, Depot vs. Benchmark (indexiert), Positionen, Top-Kandidaten
+- **Markt:** Screen (Trend, RSI, Liquidität), Kurschart mit SMA 50/200, Kennzahlen
+- **Handel:** Order-Ticket (Vorschlag aus ATR + Limits) → serverseitige Prüfung gegen das Live-Depot →
+  Bestätigung → Bracket-Order (Limit-Kauf + Stop-Loss + Take-Profit). Jede Order legt eine These an.
+  Positionen schließen, Orders stornieren.
+- **Journal:** Thesen anlegen/auswerten (auch automatisch), Trefferquote je Quelle/Modell, Aktionsprotokoll
+- **Einstellungen:** Alpaca-Schlüssel (werden gegen Alpaca geprüft, Datei mit Rechten 600), Universum, Limits, Zeitplan
+
+Zeitplan (Mo–Fr, Standard 07:30 und 22:30): Kurse laden → Screen → Thesen auswerten → Depot abgleichen.
+
+## Sicherheit
+
+- Nur Paper-Trading: `tools/broker.py` spricht ausschließlich mit `paper-api.alpaca.markets`.
+- Jede Order wird serverseitig neu geprüft (`tools/trading.py` → `tools/risk_check.py`); Browserwerte zählen nicht.
+- Nur US-Werte über Alpaca; .DE-Titel bleiben Beobachtung. Keine Krypto, Optionen, Leerverkäufe.
+- Schreibende API-Aufrufe brauchen den Header `X-Broking: 1` (CSRF-Schutz); Login übernimmt Umbrel.
+
+## Claude Code
+
+`CLAUDE.md`, Skill `.claude/skills/trading-playbook` und `.claude/settings.json` (PreToolUse-Hook
+`tools/hooks.py pre` vor Alpaca-MCP-Orders, Protokoll per PostToolUse, Limits nicht editierbar).
 
 ## Lokal
 
@@ -10,8 +34,6 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt -r web/require
 .venv/bin/uvicorn web.app:app --port 8000      # → http://localhost:8000
 python -m unittest discover -s tests -t .      # Tests
 ```
-
-Windows: `.venv\Scripts\...` statt `.venv/bin/...`.
 
 ## Docker / Umbrel
 
@@ -22,6 +44,4 @@ Jeder Push, der `src/broking/` ändert, baut über `.github/workflows/broking-im
 Neue Version: `VERSION` erhöhen, denselben Tag in `dev-unode-broking/docker-compose.yml` und
 `version` in `dev-unode-broking/umbrel-app.yml` eintragen.
 
-Daten im Container: `/data` (`config.json`, `prices/`, `screens/`, `journal/`).
-
-Die Oberfläche handelt nicht: Es gibt keinen Order-Endpunkt, `paper_trading` ist fest aktiv.
+Daten im Container: `/data` (`config.json`, `secrets.json`, `portfolio.json`, `prices/`, `screens/`, `journal/`).

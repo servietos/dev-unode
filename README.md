@@ -12,7 +12,7 @@ pi-hole         DNS server and add blocker (working, Version 5.18.2/2024.03.2)
 
 invidious       add free youtube access (not working, Version latest)
 
-broking         Aktien-Screen, Thesen-Journal, Risiko-Check (Paper-Trading, Version 0.1.0, Quellcode in src/broking)
+broking         Aktien-Screen, Thesen-Journal, Handel über Alpaca Paper-Trading (Version 0.2.0, Quellcode in src/broking)
 
 ## How to use (description from Umbrel's template):
 

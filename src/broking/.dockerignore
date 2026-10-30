@@ -7,3 +7,4 @@ journal
 tests
 **/__pycache__
 *.md
+.claude
