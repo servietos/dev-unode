@@ -91,6 +91,17 @@ class TestWeb(Base):
         self.assertEqual(self.client.put("/api/settings", json={"piholes": "192.168.178.2"}).status_code, 400)
         self.assertEqual(self.client.put("/api/settings", json={"piholes": None}).status_code, 400)
 
+    def test_search_order_is_passed_to_radio_browser(self):
+        resp = mock.Mock()
+        resp.json.return_value = []
+        expect = {"name": ("name", "false"), "bitrate": ("bitrate", "true"), "votes": ("votes", "true"),
+                  "": ("clickcount", "true"), "evil": ("clickcount", "true")}
+        for order, (field, rev) in expect.items():
+            with mock.patch.object(self.web.requests, "get", return_value=resp) as get:
+                self.client.get(f"/api/search?name=fip&order={order}")
+            params = get.call_args.kwargs["params"]
+            self.assertEqual((params["order"], params["reverse"]), (field, rev), order)
+
     def test_search_tolerates_nulls(self):
         resp = mock.Mock()
         resp.json.return_value = [{"name": None, "url": "http://a", "tags": None, "codec": None, "bitrate": None},

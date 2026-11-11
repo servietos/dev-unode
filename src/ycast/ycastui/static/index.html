@@ -126,6 +126,12 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
               <option value="">Alle Länder</option>
             </select>
             <select name="tag" id="search-tag" aria-label="Genre"><option value="">Alle Genres</option></select>
+            <select name="order" id="search-order" aria-label="Sortierung">
+              <option value="clickcount">Beliebteste zuerst</option>
+              <option value="name">Name A–Z</option>
+              <option value="bitrate">Beste Bitrate zuerst</option>
+              <option value="votes">Meiste Bewertungen</option>
+            </select>
             <button class="btn">Suchen</button>
           </form>
           <div id="search-results" class="results"></div>

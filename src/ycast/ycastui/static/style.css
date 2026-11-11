@@ -184,7 +184,8 @@ label { display: grid; gap: 5px; font-size: .85rem; color: var(--muted); }
 .empty { padding: 22px 2px; }
 
 .add-form { display: grid; grid-template-columns: 1fr 2fr auto; gap: 8px; margin-top: 18px; }
-.search-form { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
+.search-form { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
+.results[aria-busy="true"] { opacity: .55; transition: opacity .15s; }
 .manual-form { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 10px; align-items: end; }
 .manual-form .row { grid-column: 1 / -1; justify-content: flex-end; }
 .inline-form { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin: 12px 0; }
