@@ -183,6 +183,103 @@ class TestNetwork(Base):
         self.down.start()
 
 
+class FakeMarantz:
+    """Simuliert die Webschnittstelle und UPnP des M-CR510."""
+
+    def __init__(self):
+        self.power, self.volume, self.mute, self.calls, self.soap = "STANDBY", 3, "off", [], []
+
+    def get(self, url, timeout=None, **kw):
+        r = mock.Mock(ok=True, status_code=200)
+        r.raise_for_status = lambda: None
+        if "formiPhoneAppDirect.xml?" in url:
+            code = url.split("?", 1)[1]
+            self.calls.append(code)
+            if code == "PWON":
+                self.power = "ON"
+            elif code.startswith("MV") and code[2:].isdigit():
+                self.volume = int(code[2:])
+            r.text = ""
+        elif "MainZoneXmlStatusLite" in url:
+            r.text = (f"<item><Power><value>{self.power}</value></Power><InputFuncSelect><value>NET</value></InputFuncSelect>"
+                      f"<MasterVolume><value>{self.volume - 80}.0</value></MasterVolume><Mute><value>{self.mute}</value></Mute></item>")
+        elif "NetAudio_StatusXml" in url:
+            r.text = ("<item><szLine><value>Now Playing</value><value>Bayern 3</value><value>Musik</value><value></value></szLine>"
+                      "<NetFuncSelect><value>IRADIO</value></NetFuncSelect></item>")
+        elif "description.xml" in url:
+            r.text = ("<root><service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>"
+                      "<controlURL>/AVTransport/ctrl</controlURL></service></root>")
+        return r
+
+    def post(self, url, data=None, headers=None, timeout=None):
+        self.soap.append((url, headers["SOAPACTION"], data.decode()))
+        return mock.Mock(ok=True, status_code=200, text="<ok/>")
+
+
+class TestMarantz(Base):
+    def setUp(self):
+        super().setUp()
+        import ycastui.marantz as marantz
+        import ycastui.web as web
+        self.m = importlib.reload(marantz)
+        self.web = importlib.reload(web)
+        self.client = self.web.app.test_client()
+        self.fake = FakeMarantz()
+        self.p1 = mock.patch.object(self.m.requests, "get", side_effect=self.fake.get)
+        self.p2 = mock.patch.object(self.m.requests, "post", side_effect=self.fake.post)
+        self.p3 = mock.patch.object(self.m.time, "sleep", lambda s: None)
+        for p in (self.p1, self.p2, self.p3):
+            p.start()
+        self.common.save_setting("marantz_ip", "192.168.178.56")
+
+    def tearDown(self):
+        for p in (self.p1, self.p2, self.p3):
+            p.stop()
+        super().tearDown()
+
+    def test_status(self):
+        s = self.client.get("/api/marantz").get_json()
+        self.assertTrue(s["reachable"])
+        self.assertFalse(s["power"])
+        self.assertEqual(s["volume"], 3)
+        self.assertEqual(s["lines"], ["Now Playing", "Bayern 3", "Musik"])
+        self.assertEqual(s["source"], "IRADIO")
+
+    def test_commands_and_volume_limit(self):
+        self.client.post("/api/marantz/cmd", json={"cmd": "power_on"})
+        self.client.post("/api/marantz/cmd", json={"cmd": "volume", "value": 99})
+        self.assertEqual(self.fake.calls, ["PWON", "MV60"])
+        self.assertEqual(self.client.post("/api/marantz/cmd", json={"cmd": "rm -rf"}).status_code, 502)
+
+    def test_play_powers_on_and_uses_relay_for_https(self):
+        r = self.client.post("/api/marantz/play", json={"name": "B3 <&>", "url": "https://stream.example/b3.mp3"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.fake.calls[0], "PWON")
+        actions = [a for _, a, _ in self.fake.soap]
+        self.assertEqual(actions, ['"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI"',
+                                   '"urn:schemas-upnp-org:service:AVTransport:1#Play"'])
+        body = self.fake.soap[0][2]
+        self.assertIn("http://192.168.178.210/relay?url=https%3A%2F%2Fstream.example%2Fb3.mp3&amp;sig=", body)
+        self.assertIn("B3 &amp;lt;&amp;amp;&amp;gt;", body)  # Titel doppelt maskiert (DIDL in SOAP)
+        self.assertEqual(self.fake.soap[0][0], "http://192.168.178.56:8080/AVTransport/ctrl")
+
+    def test_ip_must_be_private(self):
+        self.assertEqual(self.client.put("/api/marantz/settings", json={"ip": "8.8.8.8"}).status_code, 400)
+        self.assertEqual(self.client.put("/api/marantz/settings", json={"ip": "localhost"}).status_code, 400)
+
+    def test_ip_autodetect_from_log(self):
+        self.common.save_setting("marantz_ip", "")
+        self.common.log_request("192.168.178.77", "denon.vtuner.com", "/ycast/", "Marantz")
+        self.assertEqual(self.client.get("/api/marantz").get_json()["how"], "erkannt")
+        self.assertEqual(self.web.marantz_ip()[0], "192.168.178.77")
+
+    def test_manifest_and_icons(self):
+        mf = self.client.get("/manifest.webmanifest").get_json()
+        self.assertEqual(mf["display"], "standalone")
+        for icon in ("icon-180.png", "icon-192.png", "icon-512.png", "icon.svg"):
+            self.assertEqual(self.client.get(f"/static/{icon}").status_code, 200, icon)
+
+
 class TestVtuner(Base):
     def setUp(self):
         super().setUp()

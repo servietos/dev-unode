@@ -2,58 +2,90 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>YCast</title>
 <link rel="icon" href="static/icon.svg">
+<link rel="apple-touch-icon" href="static/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="YCast">
+<meta name="theme-color" content="#1d1e21">
 <link rel="stylesheet" href="static/style.css">
 <script>/* Theme vor dem ersten Zeichnen setzen, damit nichts aufblitzt */
-try { const t = localStorage.getItem("ycast-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+let t = "dark"; try { t = localStorage.getItem("ycast-theme") || "dark"; } catch (e) {}
+document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "dark";
 </script>
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <img src="static/icon.svg" alt="" width="34" height="34">
-    <div>
-      <h1>YCast</h1>
-      <p class="sub">Internetradio für deinen Marantz</p>
-    </div>
-  </div>
-  <div class="pills">
-    <div class="theme" role="group" aria-label="Darstellung">
-      <button type="button" data-theme-set="auto" title="Wie das System">Auto</button>
-      <button type="button" data-theme-set="light" title="Hell">☀</button>
-      <button type="button" data-theme-set="dark" title="Dunkel">☾</button>
-    </div>
-    <span class="pill" id="pill-ycast">YCast …</span>
-    <span class="pill" id="pill-avr">Receiver …</span>
-  </div>
-</header>
+<div class="shell">
 
-<nav class="tabs" role="tablist">
-  <button role="tab" class="tab active" data-tab="stations">Meine Sender</button>
-  <button role="tab" class="tab" data-tab="search">Sender suchen</button>
-  <button role="tab" class="tab" data-tab="setup">Status &amp; Einrichtung</button>
-</nav>
+  <!-- Gerät: rundes Display und Bedienung -->
+  <aside class="deck" aria-label="Marantz">
+    <header class="deck-top">
+      <div class="brand">
+        <img src="static/icon.svg" alt="" width="30" height="30">
+        <h1>YCast</h1>
+      </div>
+      <div class="theme" role="group" aria-label="Darstellung">
+        <button type="button" data-theme-set="auto" title="Wie das System">Auto</button>
+        <button type="button" data-theme-set="light" title="Hell" aria-label="Hell">☀</button>
+        <button type="button" data-theme-set="dark" title="Dunkel" aria-label="Dunkel">☾</button>
+      </div>
+    </header>
 
-<main>
-  <!-- Meine Sender -->
-  <section id="tab-stations" class="panel">
-    <div class="grid-stations">
-      <aside class="card cats">
-        <div class="card-head">
-          <h2>Kategorien</h2>
-          <button class="btn small" id="cat-add">+ Neu</button>
+    <div class="porthole-wrap">
+      <div class="porthole" id="porthole" data-state="unknown">
+        <svg class="dial" viewBox="0 0 200 200" aria-hidden="true">
+          <circle class="dial-track" cx="100" cy="100" r="92"/>
+          <circle class="dial-level" id="dial-level" cx="100" cy="100" r="92"/>
+        </svg>
+        <div class="glass">
+          <p class="ph-source" id="ph-source">Marantz</p>
+          <p class="ph-title" id="ph-title">Verbinde …</p>
+          <p class="ph-sub" id="ph-sub"></p>
+          <p class="ph-vol" id="ph-vol"></p>
         </div>
-        <ul id="cat-list" class="cat-list"></ul>
-        <div class="cat-tools">
-          <button class="btn ghost small" id="btn-export">Export</button>
-          <button class="btn ghost small" id="btn-import">Import</button>
-        </div>
-      </aside>
+      </div>
+    </div>
 
-      <div class="card">
-        <div class="card-head">
+    <div class="controls" id="controls">
+      <button class="knob power" id="btn-power" type="button" aria-label="Einschalten" title="Ein / Standby" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+      </button>
+      <button class="knob" id="btn-vol-down" type="button" aria-label="Leiser" title="Leiser">−</button>
+      <input class="volume" id="vol-range" type="range" min="0" max="60" step="1" value="0" aria-label="Lautstärke">
+      <button class="knob" id="btn-vol-up" type="button" aria-label="Lauter" title="Lauter">+</button>
+      <button class="knob mute" id="btn-mute" type="button" aria-label="Stumm" title="Stumm" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="mute-x" d="M17 9l4 6M21 9l-4 6"/></svg>
+      </button>
+    </div>
+    <p class="deck-note" id="deck-note"></p>
+
+    <dl class="deck-status">
+      <div><dt>YCast</dt><dd><span class="dot" id="pill-ycast"></span><span id="pill-ycast-text">…</span></dd></div>
+      <div><dt>Receiver</dt><dd><span class="dot" id="pill-avr"></span><span id="pill-avr-text">…</span></dd></div>
+    </dl>
+  </aside>
+
+  <!-- Inhalt -->
+  <div class="content">
+    <nav class="tabs" role="tablist">
+      <button role="tab" class="tab active" data-tab="stations">Meine Sender</button>
+      <button role="tab" class="tab" data-tab="search">Sender suchen</button>
+      <button role="tab" class="tab" data-tab="setup">Einrichtung</button>
+    </nav>
+
+    <main>
+      <!-- Meine Sender -->
+      <section id="tab-stations" class="panel">
+        <div class="cats-bar">
+          <ul id="cat-list" class="cat-list" aria-label="Kategorien"></ul>
+          <button class="btn ghost small" id="cat-add">Neue Kategorie</button>
+        </div>
+
+        <div class="list-head">
           <div>
             <h2 id="cat-title">–</h2>
             <p class="muted small" id="cat-meta"></p>
@@ -63,123 +95,141 @@ try { const t = localStorage.getItem("ycast-theme"); if (t === "light" || t === 
             <button class="btn ghost small danger" id="cat-delete">Löschen</button>
           </div>
         </div>
+
+        <ul id="station-list" class="station-list"></ul>
+        <p class="empty muted" id="station-empty" hidden>Noch keine Sender in dieser Kategorie. Füge unten einen hinzu oder nutze „Sender suchen“.</p>
+
         <form id="station-add" class="add-form">
           <input name="name" placeholder="Sendername" aria-label="Sendername" maxlength="120" required>
           <input name="url" placeholder="Stream-URL (http:// oder https://)" aria-label="Stream-URL" type="url" maxlength="2000" required>
           <button class="btn">Hinzufügen</button>
         </form>
-        <ul id="station-list" class="station-list"></ul>
-        <p class="empty muted" id="station-empty" hidden>Noch keine Sender in dieser Kategorie. Füge oben einen hinzu oder nutze „Sender suchen“.</p>
-      </div>
-    </div>
-  </section>
 
-  <!-- Suchen -->
-  <section id="tab-search" class="panel" hidden>
-    <div class="card">
-      <div class="card-head">
-        <div>
+        <div class="cat-tools">
+          <button class="btn ghost small" id="btn-export">Export</button>
+          <button class="btn ghost small" id="btn-import">Import</button>
+        </div>
+      </section>
+
+      <!-- Suchen -->
+      <section id="tab-search" class="panel" hidden>
+        <div class="block">
+          <h2>Im Radio Browser suchen</h2>
+          <form id="search-form" class="search-form">
+            <input name="name" placeholder="Name, z. B. Bayern 3, Antenne, Jazz …" aria-label="Sendername">
+            <select name="countrycode" id="search-country" aria-label="Land">
+              <option value="DE">Deutschland</option>
+              <option value="AT">Österreich</option>
+              <option value="CH">Schweiz</option>
+              <option value="">Alle Länder</option>
+            </select>
+            <select name="tag" id="search-tag" aria-label="Genre"><option value="">Alle Genres</option></select>
+            <button class="btn">Suchen</button>
+          </form>
+          <p class="muted small">Hinzugefügte Sender landen in <select id="search-target" aria-label="Zielkategorie"></select></p>
+          <div id="search-results" class="results"></div>
+        </div>
+
+        <div class="block">
           <h2>Sender manuell hinzufügen</h2>
-          <p class="muted small">Für Sender, die der Radio Browser nicht kennt. Die Stream-URL findest du meist auf der Website des Senders (oft mit .mp3, .aac oder /stream).</p>
+          <p class="muted small">Für Sender, die der Radio Browser nicht kennt. Die Stream-URL steht meist auf der Website des Senders (oft mit .mp3, .aac oder /stream).</p>
+          <form id="manual-form" class="manual-form">
+            <label>Name<input name="name" placeholder="z. B. Mein Lokalradio" required></label>
+            <label>Stream-URL<input name="url" placeholder="http://… oder https://…" required></label>
+            <label>Kategorie<select name="cat" id="manual-cat"></select></label>
+            <div class="row">
+              <button class="btn ghost" type="button" id="manual-test">Testen</button>
+              <button class="btn ghost" type="button" id="manual-play">Vorhören</button>
+              <button class="btn">Hinzufügen</button>
+            </div>
+          </form>
+          <p class="muted small" id="manual-result"></p>
         </div>
-      </div>
-      <form id="manual-form" class="manual-form">
-        <label>Name<input name="name" placeholder="z. B. Mein Lokalradio" required></label>
-        <label>Stream-URL<input name="url" placeholder="http://… oder https://…" required></label>
-        <label>Kategorie<select name="cat" id="manual-cat"></select></label>
-        <div class="row">
-          <button class="btn ghost" type="button" id="manual-test">Testen</button>
-          <button class="btn ghost" type="button" id="manual-play">▶ Vorhören</button>
-          <button class="btn">Hinzufügen</button>
+      </section>
+
+      <!-- Einrichtung -->
+      <section id="tab-setup" class="panel" hidden>
+        <div class="block">
+          <h2>Marantz</h2>
+          <p class="muted small">Für Fernbedienung und „Auf dem Marantz abspielen“. Die Adresse wird aus den Abrufen erkannt; trage sie nur ein, wenn sie nicht stimmt. Im Marantz muss „Netzwerk-Standby“ eingeschaltet sein, damit er sich aus dem Standby wecken lässt.</p>
+          <dl class="kv" id="mz-info"></dl>
+          <form id="mz-form" class="inline-form">
+            <label>IP des Marantz <input name="ip" id="mz-ip" inputmode="decimal" autocomplete="off"></label>
+            <button class="btn">Speichern</button>
+            <button class="btn ghost" type="button" id="mz-auto">Automatisch</button>
+          </form>
         </div>
-      </form>
-      <p class="muted small" id="manual-result"></p>
-    </div>
 
-    <div class="card">
-      <h2>Im Radio Browser suchen</h2>
-      <form id="search-form" class="search-form">
-        <input name="name" placeholder="Name, z. B. Bayern 3, Antenne, Jazz …">
-        <select name="countrycode" id="search-country" aria-label="Land">
-          <option value="DE">Deutschland</option>
-          <option value="AT">Österreich</option>
-          <option value="CH">Schweiz</option>
-          <option value="">Alle Länder</option>
-        </select>
-        <select name="tag" id="search-tag" aria-label="Genre"><option value="">Alle Genres</option></select>
-        <button class="btn">Suchen</button>
-      </form>
-      <p class="muted small">Quelle: Community Radio Browser. Hinzugefügte Sender landen in der Kategorie:
-        <select id="search-target"></select></p>
-      <div id="search-results" class="results"></div>
-    </div>
-  </section>
+        <div class="block">
+          <h2>Auf dem iPhone als App</h2>
+          <p class="small">In Safari diese Seite öffnen, unten auf <em>Teilen</em> tippen und <em>Zum Home-Bildschirm</em> wählen. YCast startet dann im Vollbild mit eigenem Symbol. Beim ersten Start einmal mit dem Umbrel-Passwort anmelden.</p>
+        </div>
 
-  <!-- Einrichtung -->
-  <section id="tab-setup" class="panel" hidden>
-    <div class="grid-2">
-      <div class="card">
-        <h2>Dienst</h2>
-        <dl class="kv" id="svc-info"></dl>
-      </div>
-      <div class="card">
-        <h2>Receiver</h2>
-        <dl class="kv" id="avr-info"></dl>
-      </div>
-    </div>
+        <div class="grid-2">
+          <div class="block">
+            <h2>Dienst</h2>
+            <dl class="kv" id="svc-info"></dl>
+          </div>
+          <div class="block">
+            <h2>Receiver</h2>
+            <dl class="kv" id="avr-info"></dl>
+          </div>
+        </div>
 
-    <div class="card">
-      <h2>Netzwerk</h2>
-      <p class="muted small">Der Receiver-Dienst braucht eine eigene, freie IP in deinem Heimnetz (Port 80). Wähle eine Adresse
-        außerhalb des DHCP-Bereichs deines Routers. Adapter, Netz und Gateway erkennt die App beim Start selbst.</p>
-      <dl class="kv" id="net-info"></dl>
-      <div class="notice" id="net-note" hidden></div>
-      <div class="notice warn" id="net-pending" hidden></div>
-      <form id="net-form" class="pihole-form">
-        <label>IP für YCast <input name="ip" id="net-ip" inputmode="decimal" autocomplete="off"></label>
-        <button class="btn">Speichern</button>
-        <button class="btn ghost" type="button" id="net-default">Standard</button>
-      </form>
-    </div>
+        <div class="block">
+          <h2>Netzwerk</h2>
+          <p class="muted small">Der Receiver-Dienst braucht eine eigene, freie IP in deinem Heimnetz (Port 80). Wähle eine Adresse
+            außerhalb des DHCP-Bereichs deines Routers. Adapter, Netz und Gateway erkennt die App beim Start selbst.</p>
+          <dl class="kv" id="net-info"></dl>
+          <div class="notice" id="net-note" hidden></div>
+          <div class="notice warn" id="net-pending" hidden></div>
+          <form id="net-form" class="inline-form">
+            <label>IP für YCast <input name="ip" id="net-ip" inputmode="decimal" autocomplete="off"></label>
+            <button class="btn">Speichern</button>
+            <button class="btn ghost" type="button" id="net-default">Standard</button>
+          </form>
+        </div>
 
-    <div class="card">
-      <div class="card-head">
-        <h2>DNS über Pi-hole</h2>
-        <button class="btn small" id="dns-check">DNS prüfen</button>
-      </div>
-      <p>Der Marantz fragt <code>denon.vtuner.com</code> ab. Deine Pi-holes müssen diesen Namen auf
-        <strong class="ip">–</strong> umleiten.</p>
-      <ol class="steps">
-        <li>Pi-hole 6 öffnen → <em>Settings</em> → <em>Local DNS Records</em>.</li>
-        <li>Zwei Einträge anlegen, jeweils mit der IP <strong class="ip">–</strong>:
-          <div class="copy"><code>denon.vtuner.com</code><code>denon2.vtuner.com</code></div></li>
-        <li>Auf jedem Pi-hole wiederholen.</li>
-        <li>Der Marantz muss einen Pi-hole als DNS nutzen (per DHCP der Fritzbox oder fest im Receiver). Danach den Marantz einmal komplett stromlos machen.</li>
-      </ol>
-      <details class="alt">
-        <summary>Alternative: alle <code>*.vtuner.com</code> umleiten (nicht über die Weboberfläche möglich)</summary>
-        <p>Pi-hole direkt installiert, per SSH:</p>
-        <div class="copy"><code id="dns-cli">sudo pihole-FTL --config misc.dnsmasq_lines '["address=/vtuner.com/–"]'</code><button class="btn ghost small" data-copy="dns-cli">Kopieren</button></div>
-        <p>Pi-hole im Docker-Container, als Umgebungsvariable (danach Container neu starten):</p>
-        <div class="copy"><code id="dns-env">FTLCONF_misc_dnsmasq_lines: 'address=/vtuner.com/–'</code><button class="btn ghost small" data-copy="dns-env">Kopieren</button></div>
-      </details>
-      <form id="pihole-form" class="pihole-form">
-        <label>Pi-hole 1 (IP) <input name="p0" placeholder="z. B. 192.168.178.2" inputmode="decimal"></label>
-        <label>Pi-hole 2 (IP) <input name="p1" placeholder="optional" inputmode="decimal"></label>
-        <button class="btn ghost">Speichern</button>
-      </form>
-      <div id="dns-results"></div>
-    </div>
+        <div class="block">
+          <div class="block-head">
+            <h2>DNS über Pi-hole</h2>
+            <button class="btn small" id="dns-check">DNS prüfen</button>
+          </div>
+          <p>Der Marantz fragt <code>denon.vtuner.com</code> ab. Deine Pi-holes müssen diesen Namen auf
+            <strong class="ip">–</strong> umleiten.</p>
+          <ol class="steps">
+            <li>Pi-hole 6 öffnen → <em>Settings</em> → <em>Local DNS Records</em>.</li>
+            <li>Zwei Einträge anlegen, jeweils mit der IP <strong class="ip">–</strong>:
+              <div class="copy"><code>denon.vtuner.com</code><code>denon2.vtuner.com</code></div></li>
+            <li>Auf jedem Pi-hole wiederholen.</li>
+            <li>Der Marantz muss einen Pi-hole als DNS nutzen (per DHCP der Fritzbox oder fest im Receiver). Danach den Marantz einmal komplett stromlos machen.</li>
+          </ol>
+          <details class="alt">
+            <summary>Alternative: alle <code>*.vtuner.com</code> umleiten (nicht über die Weboberfläche möglich)</summary>
+            <p>Pi-hole direkt installiert, per SSH:</p>
+            <div class="copy"><code id="dns-cli">sudo pihole-FTL --config misc.dnsmasq_lines '["address=/vtuner.com/–"]'</code><button class="btn ghost small" data-copy="dns-cli">Kopieren</button></div>
+            <p>Pi-hole im Docker-Container, als Umgebungsvariable (danach Container neu starten):</p>
+            <div class="copy"><code id="dns-env">FTLCONF_misc_dnsmasq_lines: 'address=/vtuner.com/–'</code><button class="btn ghost small" data-copy="dns-env">Kopieren</button></div>
+          </details>
+          <form id="pihole-form" class="inline-form">
+            <label>Pi-hole 1 (IP) <input name="p0" placeholder="z. B. 192.168.178.2" inputmode="decimal"></label>
+            <label>Pi-hole 2 (IP) <input name="p1" placeholder="optional" inputmode="decimal"></label>
+            <button class="btn ghost">Speichern</button>
+          </form>
+          <div id="dns-results"></div>
+        </div>
 
-    <div class="card">
-      <h2>Letzte Abrufe</h2>
-      <div class="table-wrap"><table class="log"><thead><tr><th>Zeit</th><th>Gerät</th><th>Anfrage</th></tr></thead><tbody id="log-body"></tbody></table></div>
-    </div>
-  </section>
-</main>
+        <div class="block">
+          <h2>Letzte Abrufe</h2>
+          <div class="table-wrap"><table class="log"><thead><tr><th>Zeit</th><th>Gerät</th><th>Anfrage</th></tr></thead><tbody id="log-body"></tbody></table></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
 
 <div class="player" id="player" hidden>
-  <button class="btn round" id="player-stop" aria-label="Stopp">■</button>
+  <button class="knob small" id="player-stop" aria-label="Vorhören beenden">■</button>
   <div class="player-text"><strong id="player-name"></strong><span class="muted small" id="player-state"></span></div>
   <audio id="audio" preload="none"></audio>
 </div>
@@ -195,7 +245,7 @@ try { const t = localStorage.getItem("ycast-theme"); if (t === "light" || t === 
   </form>
 </dialog>
 
-<div class="toast" id="toast" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
 <script src="static/app.js"></script>
 </body>
 </html>

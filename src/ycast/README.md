@@ -9,6 +9,12 @@ Basis ist [YCast 1.1.0 von milaq](https://github.com/milaq/YCast) (PyPI), ergän
 - **Weboberfläche** (Umbrel-Dashboard): Kategorien und Sender verwalten, Drag & Drop,
   vorhören im Browser, Stream-Test, Suche im Community Radio Browser, Import/Export der
   `stations.yml`, Status, Abruf-Log des Receivers, DNS-Prüfung, Netzwerk-Einstellung.
+- **Fernbedienung** für Denon/Marantz-Netzwerkgeräte (getestet M-CR510): Ein/Standby, Lautstärke,
+  Stumm, Display mit dem laufenden Titel und „Abspielen“ bei jedem Sender. Status und Befehle über
+  die Webschnittstelle des Geräts (`/goform/…`, bewusst nicht Telnet, damit die Hersteller-App frei
+  bleibt), Abspielen per UPnP AVTransport. Die Geräte-IP wird aus den Abrufen erkannt oder fest
+  eingetragen; im Gerät muss Netzwerk-Standby aktiv sein.
+- **iPhone/Android**: Web-App-Manifest und Symbole, „Zum Home-Bildschirm“ startet im Vollbild.
 - **HTTPS-Relay**: Receiver können kein HTTPS. YCast schreibt `https://` normalerweise auf
   `http://` um, was bei vielen Sendern scheitert. Hier laufen HTTPS-Streams stattdessen über
   `http://<YCast-IP>/relay?url=…` (abschaltbar mit `RELAY_HTTPS=off`).

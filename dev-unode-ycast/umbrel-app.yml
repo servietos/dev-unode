@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "2.4.0"
+version: "3.0.0"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -11,6 +11,11 @@ description: >-
   (ca. 2011–2017, z. B. Marantz, Denon, Yamaha, Onkyo, Pioneer, Grundig) für Internetradio nutzen.
   Der Receiver zeigt deine eigenen Sender unter „My Stations“ und kann den Community Radio
   Browser durchsuchen. Getestet mit einem Marantz M-CR510.
+
+
+  Fernbedienung für Denon/Marantz-Netzwerkgeräte: einschalten, Lautstärke, Stumm und jeden
+  Sender per Klick direkt auf dem Gerät abspielen (UPnP/DLNA), mit rundem Display für den
+  laufenden Titel. Auf dem iPhone über „Zum Home-Bildschirm“ als App nutzbar.
 
 
   Weboberfläche: Kategorien und Sender verwalten (Drag & Drop), im Browser vorhören, Streams
@@ -49,12 +54,11 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Sicherheit und Stabilität nach Code-Review: Das HTTPS-Relay nimmt nur noch signierte URLs an und
-  keine Ziele im Heimnetz (vorher war es ein offener Proxy im LAN), höchstens 8 Streams gleichzeitig,
-  Container gehärtet. Abruf-Log kann den Receiver-Dienst nicht mehr stören. Beschädigte stations.yml
-  wird mit Hinweis gemeldet statt leerer Oberfläche. Pi-hole-Eingaben werden geprüft. Oberfläche:
-  Sender per ▲/▼ sortieren (auch auf Handy/Tablet), Rückfrage beim Löschen, Konfliktprüfung bei
-  gleichzeitigem Bearbeiten in zwei Tabs, weniger Hintergrundabfragen.
+  Neu: Fernbedienung für den Marantz in der Weboberfläche (Ein/Standby, Lautstärke, Stumm) und
+  „Abspielen“ bei jedem Sender und Suchergebnis: Der Marantz schaltet sich ein und spielt den
+  Stream per UPnP. Neues Design im Stil des Geräts mit rundem Display für den laufenden Titel,
+  dunkel als Standard. Als App auf dem iPhone-Home-Bildschirm nutzbar. Enthält die Sicherheits-
+  und Stabilitätsverbesserungen aus 2.4.0 (signiertes HTTPS-Relay, gehärtete Container).
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

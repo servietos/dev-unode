@@ -199,9 +199,14 @@ def save_settings(data):
             raise ValidationError(f"„{p}“ ist keine IP-Adresse (Hostnamen gehen hier nicht)") from None
         if p not in piholes:
             piholes.append(p)
-    settings = {**load_settings(), "piholes": piholes[:4]}
+    return save_setting("piholes", piholes[:4])
+
+
+def save_setting(key, value):
+    """Einzelnen Eintrag in settings.json setzen, andere Einträge bleiben erhalten."""
     ensure_data()
     with _lock:
+        settings = {**load_settings(), key: value}
         _atomic_write(SETTINGS_FILE, json.dumps(settings, indent=2))
     return settings
 
