@@ -27,5 +27,6 @@ submission: https://github.com/servietos/dev-unode
 gallery: []
 releaseNotes: >-
   Einrichtungsseite gehärtet: Schutz vor Fremdanfragen (CSRF), Prüfung von Anfragegröße und Zeilenumbrüchen, atomares Speichern der config.ini mit Rechten 0600. Nach Eingabefehlern werden API-Hash und Bot-Token nicht mehr zurückgeschickt, eine beschädigte config.ini wird erkannt und neu angelegt.
+  Wichtig: Dieses Update bringt die Einrichtungsseite erstmals per App-Update mit (vorher blieb sie auf dem Stand der Erstinstallation). Damit kommen jetzt auch Icon, Hinweise, Dark Mode und verdeckte Zugangsdaten an.
 dependencies: []
 path: ""

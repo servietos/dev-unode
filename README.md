@@ -14,7 +14,7 @@ Contained apps (alle mit Weboberfläche über das Umbrel-Dashboard, x86 und ARM)
 | goldcoin-core | Goldcoin-Fullnode mit Statusseite | 0.1.4 |
 | hello-world | Beispiel-App aus der Umbrel-Vorlage | 1.0.0 |
 | myspeed | Speedtest-Verlauf | 1.0.9 |
-| openclaude | OpenClaude im Browser-Terminal | 1.0.0 |
+| openclaude | OpenClaude im Browser-Terminal | 1.0.1 |
 | owncast | Livestream-Server (Zuschauerseite ohne Umbrel-Login, RTMP auf Port 1935) | 0.2.1-1 |
 | pi-hole | DNS-Server und Werbeblocker (Weboberfläche auf Port 8082) | 2025.05.1 |
 | smart-tv-telegram | Telegram-Videos per Bot auf Smart-TV/Chromecast, mit Einrichtungsseite | 1.4.0-1.3 |
@@ -22,6 +22,10 @@ Contained apps (alle mit Weboberfläche über das Umbrel-Dashboard, x86 und ARM)
 
 Hinweis: Apps mit Spiele- oder Streaming-Ports (crafty, owncast) brauchen für Zugriffe von außen
 eine Portfreigabe im Router; pi-hole kollidiert mit dem offiziellen Pi-hole aus dem Umbrel-Store.
+
+Hinweis für Entwickler: Umbrel kopiert bei App-Updates nur `docker-compose.yml`, `umbrel-app.yml`, `exports.sh`,
+`*.template` und `hooks/`. Skripte, die mit Updates mitkommen sollen, liegen deshalb als `configs`-Inhalt in der
+Compose-Datei; Quelle bleibt die Datei im App-Ordner, nach Änderungen `python tools/embed.py` ausführen.
 
 ## How to use (description from Umbrel's template):
 

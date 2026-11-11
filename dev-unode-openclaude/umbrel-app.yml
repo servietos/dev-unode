@@ -3,7 +3,7 @@ id: dev-unode-openclaude
 name: OpenClaude
 tagline: Terminal-Coding-Agent für Cloud- und lokale KI-Modelle
 category: developer
-version: "1.0.0"
+version: "1.0.1"
 port: 7682
 icon: https://github.com/Twigpine/openclaude/raw/main/docs/assets/openclaude-wordmark.png
 description: >-
@@ -24,7 +24,7 @@ repo: https://github.com/Twigpine/openclaude
 support: https://github.com/Twigpine/openclaude/issues
 gallery: []
 releaseNotes: >-
-  Erstes Community-App-Store-Release.
+  Startskript liegt jetzt in der Compose-Datei, damit App-Updates es mitbringen.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode
