@@ -6,6 +6,9 @@
 <title>YCast</title>
 <link rel="icon" href="static/icon.svg">
 <link rel="stylesheet" href="static/style.css">
+<script>/* Theme vor dem ersten Zeichnen setzen, damit nichts aufblitzt */
+try { const t = localStorage.getItem("ycast-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 </head>
 <body>
 <header class="top">
@@ -17,6 +20,11 @@
     </div>
   </div>
   <div class="pills">
+    <div class="theme" role="group" aria-label="Darstellung">
+      <button type="button" data-theme-set="auto" title="Wie das System">Auto</button>
+      <button type="button" data-theme-set="light" title="Hell">☀</button>
+      <button type="button" data-theme-set="dark" title="Dunkel">☾</button>
+    </div>
     <span class="pill" id="pill-ycast">YCast …</span>
     <span class="pill" id="pill-avr">Receiver …</span>
   </div>
@@ -98,10 +106,9 @@
           <option value="CH">Schweiz</option>
           <option value="">Alle Länder</option>
         </select>
-        <input name="tag" placeholder="Genre (optional)" list="tag-list">
+        <select name="tag" id="search-tag" aria-label="Genre"><option value="">Alle Genres</option></select>
         <button class="btn">Suchen</button>
       </form>
-      <datalist id="tag-list"></datalist>
       <p class="muted small">Quelle: Community Radio Browser. Hinzugefügte Sender landen in der Kategorie:
         <select id="search-target"></select></p>
       <div id="search-results" class="results"></div>

@@ -5,11 +5,18 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #141312; --surface: #1d1b19; --surface-2: #262320; --text: #f1ede6; --muted: #a39d93;
     --line: #34302b; --shadow: 0 1px 2px rgba(0,0,0,.4); color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #141312; --surface: #1d1b19; --surface-2: #262320; --text: #f1ede6; --muted: #a39d93;
+  --line: #34302b; --shadow: 0 1px 2px rgba(0,0,0,.4); color-scheme: dark;
+}
+.theme { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); padding: 2px; }
+.theme button { font: inherit; font-size: .82rem; border: 0; background: none; color: var(--muted); padding: 3px 10px; border-radius: 999px; cursor: pointer; }
+.theme button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); font-weight: 600; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 0 20px 96px; }
