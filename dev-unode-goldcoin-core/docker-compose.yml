@@ -13,6 +13,7 @@ services:
     stop_grace_period: 2m
     entrypoint: ["/bin/sh", "-ec"]
     command: |
+      mkdir -p /data/bin /data/.goldcoin
       if [ ! -x /data/bin/goldcoind ]; then
         apt-get update
         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl tar
@@ -28,7 +29,6 @@ services:
         cp "/tmp/goldcoin-$${VERSION}/bin/goldcoind" "/tmp/goldcoin-$${VERSION}/bin/goldcoin-cli" /data/bin/
         chmod 755 /data/bin/goldcoind /data/bin/goldcoin-cli
       fi
-      mkdir -p /data/bin /data/.goldcoin
       printf 'server=1\ndaemon=0\nlisten=1\nport=8333\nrpcport=8332\nrpcbind=0.0.0.0\nrpcallowip=172.16.0.0/12\nrpcuser=%s\nrpcpassword=%s\n' "$${RPC_USER}" "$${RPC_PASSWORD}" > /data/.goldcoin/goldcoin.conf
       exec /data/bin/goldcoind -datadir=/data/.goldcoin -conf=/data/.goldcoin/goldcoin.conf -printtoconsole
     environment:
@@ -43,6 +43,7 @@ services:
     image: python:3.13-alpine
     container_name: dev-unode-goldcoin-core_web_1
     restart: unless-stopped
+    user: "1000:1000"
     command: ["python", "/app/web.py"]
     environment:
       RPC_URL: http://dev-unode-goldcoin-core_node_1:8332

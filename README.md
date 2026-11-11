@@ -8,16 +8,16 @@ Contained apps (alle mit Weboberfläche über das Umbrel-Dashboard, x86 und ARM)
 |---|---|---|
 | broking | Aktien-Screen, Thesen-Journal, Handel über Alpaca Paper-Trading (Quellcode in `src/broking`) | 0.2.0 |
 | chromium | Browser im Browser (linuxserver/chromium) | 7b8e918f-ls63 |
-| claude-code | Claude Code im Browser-Terminal | 1.1.1 |
+| claude-code | Claude Code im Browser-Terminal | 1.1.2 |
 | crafty | Crafty Controller: Minecraft-Server (Java & Bedrock) anlegen und verwalten | 4.11.0 |
 | freshrss | RSS-Reader | 1.30.4 |
-| goldcoin-core | Goldcoin-Fullnode mit Statusseite | 0.1.3 |
+| goldcoin-core | Goldcoin-Fullnode mit Statusseite | 0.1.4 |
 | hello-world | Beispiel-App aus der Umbrel-Vorlage | 1.0.0 |
 | myspeed | Speedtest-Verlauf | 1.0.9 |
 | openclaude | OpenClaude im Browser-Terminal | 1.0.0 |
-| owncast | Livestream-Server (Zuschauerseite ohne Umbrel-Login, RTMP auf Port 1935) | 0.2.1 |
+| owncast | Livestream-Server (Zuschauerseite ohne Umbrel-Login, RTMP auf Port 1935) | 0.2.1-1 |
 | pi-hole | DNS-Server und Werbeblocker (Weboberfläche auf Port 8082) | 2025.05.1 |
-| smart-tv-telegram | Telegram-Videos per Bot auf Smart-TV/Chromecast, mit Einrichtungsseite | 1.4.0-1.2 |
+| smart-tv-telegram | Telegram-Videos per Bot auf Smart-TV/Chromecast, mit Einrichtungsseite | 1.4.0-1.3 |
 | ycast | Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …), HTTPS-Relay, einstellbare IP (Anleitung in `src/ycast/README.md`) | 2.3.0 |
 
 Hinweis: Apps mit Spiele- oder Streaming-Ports (crafty, owncast) brauchen für Zugriffe von außen

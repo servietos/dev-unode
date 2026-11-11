@@ -24,3 +24,5 @@ deterministicPassword: false
 torOnly: false
 submitter: servietos
 submission: https://github.com/servietos/dev-unode
+releaseNotes: >-
+  Chromium-Browser im Browser auf Basis des linuxserver/chromium-Images.
