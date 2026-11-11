@@ -2,9 +2,9 @@ manifestVersion: 1
 id: dev-unode-owncast
 name: Owncast
 tagline: A free and open source live video and web chat server
-icon: https://i.imgur.com/Lqjm0QC.png
+icon: https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/owncast-icon.svg
 category: social
-version: "0.2.1"
+version: "0.2.1-1"
 port: 8055
 description: >-
     Owncast is an innovative open-source platform designed for self-hosted live streaming and video hosting. With Owncast, users can broadcast their live streams directly from their own servers, offering a decentralized alternative to popular streaming services. This empowers creators to maintain control over their content, audience interactions, and monetization strategies without the constraints of corporate platforms.
@@ -28,12 +28,12 @@ description: >-
     Whether you’re a gamer, artist, educator, or content creator, Owncast provides the tools to build your unique streaming experience. Embrace the freedom of self-hosting and engage your audience like never before!
 
 
-    ⚠️ After starting the server, enter `umbrel.local:8050/admin` in your web browser to access the admin panel. The admin username is 'admin' and the password is 'abc123'.
+    ⚠️ Der Admin-Bereich erreichbar unter `umbrel.local:8055/admin` ist durch den Umbrel-Login geschützt, die Zuschauerseite bleibt frei. Der Standard-Zugang der Owncast-Weboberfläche ist admin / abc123: Ändere das Passwort nach dem ersten Start in den Owncast-Einstellungen, ebenso den Stream-Key.
 
 developer: Gabe Kangas
 website: https://owncast.online
-submitter: dennysubke
-submission: https://github.com/dennysubke/dennys-umbrel-app-store
+submitter: servietos
+submission: https://github.com/servietos/dev-unode
 repo: https://github.com/owncast
 support: https://github.com/owncast/owncast/issues
 gallery:
@@ -41,14 +41,8 @@ gallery:
   - https://i.imgur.com/zIeK5Yc.png
   - https://i.imgur.com/NyhKo1Y.png
 releaseNotes: >-
-    In the latest update, several enhancements and fixes have been introduced to improve functionality and user experience. Notably, the addition of sanitization for Fediverse usernames and the specification of content types for custom JavaScript significantly enhance system integrity and performance. The "rel-me" attribute has also been added to the server-rendered bot/metadata/search page template, contributing to better SEO practices.
-
-    Key changes include preventing duplicate join chat events for users already in the chat and ensuring that chat messages and state changes are read aloud in the ARIA live region for improved accessibility. Additionally, chat moderators are now exempt from message rate limiting, and the design for offline video embeds has been improved.
-
-    Several bugs have been addressed, including issues with horizontal scrolling on narrower screens, concurrency errors, and inconsistencies in thumbnail generation when using S3. The player timestamp bug and pagination problems in the 'Followers' console have also been resolved, alongside fixes for webhook creation and mobile chat button display issues.
-
-    Finally, the update removes Matrix URL validation, allowing greater flexibility in URL usage.
-dependencies:
+  Admin-Bereich (/admin, /api/admin) ist jetzt durch den Umbrel-Login geschützt, die Zuschauerseite bleibt öffentlich. Beschreibung, Port und Icon korrigiert.
+dependencies: []
 path: ""
 defaultUsername: "admin"
 defaultPassword: "abc123"

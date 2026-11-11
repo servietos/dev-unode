@@ -13,7 +13,8 @@ description: >-
 
   MySpeed automatically creates tests every hour, which you can view in the dashboard. 
   Tests older than 30 days are automatically deleted to keep the dashboard clean.
-releaseNotes: ""
+releaseNotes: >-
+  MySpeed 1.0.9: Speedtest-Verlauf für bis zu 30 Tage direkt im Umbrel-Dashboard.
 developer: Mathias Wagner
 website: https://myspeed.dev
 repo: https://github.com/gnmyt/myspeed
@@ -25,5 +26,5 @@ gallery:
   - https://raw.githubusercontent.com/servietos/unode/2e960f69e1cb2f6f0814b8a4f142209a45eeb751/gallery/myspeed-1.jpg
   - https://raw.githubusercontent.com/servietos/unode/2e960f69e1cb2f6f0814b8a4f142209a45eeb751/gallery/myspeed-2.jpg
   - https://raw.githubusercontent.com/servietos/unode/2e960f69e1cb2f6f0814b8a4f142209a45eeb751/gallery/myspeed-3.jpg
-submitter: Mathias Wagner
-submission: https://github.com/getumbrel/umbrel-apps/pull/1103
+submitter: servietos
+submission: https://github.com/servietos/dev-unode

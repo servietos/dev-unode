@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small, read-only-by-default Goldcoin JSON-RPC web console."""
+"""Small, read-only Goldcoin JSON-RPC web console."""
 import base64
 import json
 import os
@@ -13,6 +13,13 @@ AUTH = "Basic " + base64.b64encode(
     f"{os.environ['RPC_USER']}:{os.environ['RPC_PASSWORD']}".encode()
 ).decode()
 PORT = int(os.environ.get("PORT", "3000"))
+
+ALLOWED_METHODS = frozenset({
+    "getblockchaininfo", "getnetworkinfo", "getpeerinfo", "getmempoolinfo",
+    "getmininginfo", "uptime", "getblockcount", "getbestblockhash", "getblock",
+    "getblockhash", "getrawmempool", "getdifficulty", "getconnectioncount",
+    "getnettotals", "getchaintips",
+})
 
 PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Goldcoin Core</title>
 <style>body{font:16px system-ui;max-width:860px;margin:3rem auto;padding:0 1rem;background:#10151d;color:#e8edf2}h1{color:#f5c542}input,button{font:inherit;padding:.7rem;margin:.3rem;background:#202a36;color:inherit;border:1px solid #485668;border-radius:5px}button{cursor:pointer}pre{white-space:pre-wrap;background:#1a222d;padding:1rem;border-radius:6px;min-height:8rem}small{color:#9eacba}</style>
@@ -35,11 +42,18 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/rpc":
             self.send_error(404)
             return
+        ctype = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        if ctype != "application/json":
+            self.reply(415, {"error": "Content-Type must be application/json"})
+            return
         try:
             request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
             method = request.get("method", "")
             if not isinstance(method, str) or not method.replace("_", "").isalnum():
                 raise ValueError("Invalid RPC method")
+            if method not in ALLOWED_METHODS:
+                self.reply(403, {"error": "RPC method not allowed: " + method})
+                return
             payload = json.dumps({"jsonrpc": "1.0", "id": "web", "method": method, "params": request.get("params", [])}).encode()
             req = urllib.request.Request(RPC_URL, data=payload, headers={"Authorization": AUTH, "Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -54,6 +68,9 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:
             result = {"error": str(exc)}
             status = 502
+        self.reply(status, result)
+
+    def reply(self, status, result):
         body = json.dumps(result).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")

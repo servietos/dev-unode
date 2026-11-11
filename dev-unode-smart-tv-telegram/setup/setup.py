@@ -9,12 +9,19 @@ import ipaddress
 import os
 import re
 import socket
+import tempfile
+import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CONFIG = os.environ.get("CONFIG_PATH", "/data/config.ini")
 HOST_IP = os.environ.get("HOST_IP", "")
 BOT_PORT = 8350
+MAX_BODY = 20000
+CONFIG_LOCK = threading.Lock()
+# Wird von load() gesetzt; render() zeigt dann einen Hinweis an
+CONFIG_BROKEN = False
+BROKEN_MSG = '<p class="err">config.ini war beschädigt und wurde beim nächsten Speichern neu angelegt.</p>'
 
 DEFAULTS = {
     "mtproto": {"api_id": "", "api_hash": "", "token": "", "session_name": "smart_tv_telegram",
@@ -29,10 +36,38 @@ DEFAULTS = {
 
 
 def load():
+    global CONFIG_BROKEN
     cfg = configparser.ConfigParser(interpolation=None)
     cfg.read_dict(DEFAULTS)
-    cfg.read(CONFIG, encoding="utf-8")
+    try:
+        cfg.read(CONFIG, encoding="utf-8")
+        CONFIG_BROKEN = False
+    except (configparser.Error, UnicodeDecodeError):
+        # Defaults verwenden; die kaputte Datei wird erst beim nächsten Speichern ersetzt
+        CONFIG_BROKEN = True
+        cfg = configparser.ConfigParser(interpolation=None)
+        cfg.read_dict(DEFAULTS)
     return cfg
+
+
+def write_config(cfg):
+    """Atomar schreiben: Temp-Datei im selben Verzeichnis, dann os.replace."""
+    with CONFIG_LOCK:
+        fd, tmp = tempfile.mkstemp(prefix=".config.", dir=os.path.dirname(os.path.abspath(CONFIG)))
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                cfg.write(fh)
+            os.replace(tmp, CONFIG)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+        try:
+            os.chmod(CONFIG, 0o600)
+        except OSError:
+            pass
 
 
 def configured(cfg):
@@ -53,6 +88,8 @@ def bot_running():
 
 def save(form, cfg):
     errors = []
+    if any(c in v for vals in form.values() for v in vals for c in "\r\n\x00"):
+        return ["Zeilenumbrüche sind nicht erlaubt."]
     f = lambda k: (form.get(k, [""])[0]).strip()
     api_id, api_hash, token = f("api_id"), f("api_hash").lower(), f("token")
     # Geheimnisse werden nie an den Browser geschickt: leeres Feld = bisherigen Wert behalten
@@ -84,9 +121,7 @@ def save(form, cfg):
     cfg["web_ui"].update({"enabled": web_ui, "password": pw or cfg["web_ui"]["password"]})
     cfg["discovery"]["upnp_enabled"] = "1" if f("upnp") == "1" else "0"
     cfg["discovery"]["chromecast_enabled"] = "1" if f("chromecast") == "1" else "0"
-    # In-place schreiben: die Datei ist im Bot-Container einzeln eingebunden (gleicher Inode nötig)
-    with open(CONFIG, "w", encoding="utf-8") as fh:
-        cfg.write(fh)
+    write_config(cfg)
     return []
 
 
@@ -205,6 +240,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def render(self, msg="", form=None):
         cfg = load()
+        if CONFIG_BROKEN:
+            msg = BROKEN_MSG + msg
         ok_cfg, running = configured(cfg), bot_running()
         e = lambda s: html.escape(str(s), quote=True)
         admins = ", ".join(re.findall(r"\d+", cfg["bot"]["admins"]))
@@ -216,7 +253,7 @@ class Handler(BaseHTTPRequestHandler):
             return PAGE.format(
                 cfg_cls="ok" if ok_cfg else "bad", cfg_txt="eingerichtet" if ok_cfg else "noch nicht eingerichtet",
                 run_cls="ok" if running else "bad", run_txt="Bot läuft" if running else "Bot läuft nicht",
-                msg=msg, api_id=e(v("api_id")), api_hash=e(v("api_hash")), token=e(v("token")), **secret_hints(cfg),
+                msg=msg, api_id=e(v("api_id")), api_hash="", token="", **secret_hints(cfg),
                 admins=e(v("admins")), listen_host=e(v("listen_host")),
                 upnp=chk("upnp"), chromecast=chk("chromecast"), web_ui=chk("web_ui"),
                 pw_hint="unverändert lassen" if cfg["web_ui"]["password"] else "mindestens 6 Zeichen",
@@ -260,7 +297,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path.split("?")[0] not in ("/save",):
             return self._send("Nicht gefunden", 404)
-        length = min(int(self.headers.get("Content-Length", 0)), 20000)
+        origin = self.headers.get("Origin") or self.headers.get("Referer")
+        if origin and urllib.parse.urlsplit(origin).netloc != (self.headers.get("Host") or ""):
+            return self._send("Ungültige Herkunft", 403)
+        raw_len = (self.headers.get("Content-Length") or "0").strip()
+        if not (raw_len.isascii() and raw_len.isdigit()):
+            return self._send("Ungültige Content-Length", 400)
+        length = int(raw_len)
+        if length > MAX_BODY:
+            return self._send("Anfrage zu groß", 413)
         form = urllib.parse.parse_qs(self.rfile.read(length).decode("utf-8"))
         errors = save(form, load())
         if errors:
@@ -278,6 +323,5 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     if not os.path.exists(CONFIG):
-        with open(CONFIG, "w", encoding="utf-8") as fh:
-            load().write(fh)
+        write_config(load())
     ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
