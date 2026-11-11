@@ -139,12 +139,24 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def render(self, msg=""):
+    def render(self, msg="", form=None):
         cfg = load()
         ok_cfg, running = configured(cfg), bot_running()
         e = lambda s: html.escape(str(s), quote=True)
         admins = ", ".join(re.findall(r"\d+", cfg["bot"]["admins"]))
         webui = ""
+        if form is not None:
+            # Nach einem Fehler die Eingaben stehen lassen (außer dem Passwort)
+            v = lambda k: (form.get(k, [""])[0]).strip()
+            chk = lambda k: "checked" if v(k) == "1" else ""
+            return PAGE.format(
+                cfg_cls="ok" if ok_cfg else "bad", cfg_txt="eingerichtet" if ok_cfg else "noch nicht eingerichtet",
+                run_cls="ok" if running else "bad", run_txt="Bot läuft" if running else "Bot läuft nicht",
+                msg=msg, api_id=e(v("api_id")), api_hash=e(v("api_hash")), token=e(v("token")),
+                admins=e(v("admins")), listen_host=e(v("listen_host")),
+                upnp=chk("upnp"), chromecast=chk("chromecast"), web_ui=chk("web_ui"),
+                pw_hint="unverändert lassen" if cfg["web_ui"]["password"] else "mindestens 6 Zeichen",
+                port=BOT_PORT, webui="")
         if cfg["web_ui"]["enabled"] == "1":
             webui = ('<div class="card"><h2>Weboberfläche des Bots</h2><p class="small">Läuft direkt auf dem Umbrel: '
                      f'<a id="wl" href="#">Port {BOT_PORT} öffnen</a></p></div>'
@@ -164,7 +176,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path.split("?")[0] in ("/", "/index.html"):
-            self._send(self.render())
+            saved = "saved=1" in self.path.partition("?")[2]
+            self._send(self.render('<p class="saved">Gespeichert. Der Bot startet mit den neuen Werten neu '
+                                   '(bis zu einer Minute, dann diese Seite neu laden).</p>' if saved else ""))
         elif self.path == "/health":
             self._send("ok")
         else:
@@ -178,9 +192,12 @@ class Handler(BaseHTTPRequestHandler):
         errors = save(form, load())
         if errors:
             msg = '<p class="err">' + "<br>".join(html.escape(x) for x in errors) + "</p>"
-        else:
-            msg = '<p class="saved">Gespeichert. Der Bot startet mit den neuen Werten neu.</p>'
-        self._send(self.render(msg), 400 if errors else 200)
+            return self._send(self.render(msg, form), 400)
+        # Nach erfolgreichem Speichern zurück zur Startseite (Neuladen sendet nichts erneut)
+        self.send_response(303)
+        self.send_header("Location", "/?saved=1")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def log_message(self, fmt, *args):
         pass
