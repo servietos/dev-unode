@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "2.3.0"
+version: "2.4.0"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -49,9 +49,12 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Darstellung umschaltbar (Auto, Hell, Dunkel), die Wahl merkt sich der Browser. Genre-Auswahl
-  als Liste mit „Alle Genres“; Land oder Genre wechseln startet die Suche sofort. Seit 2.2.0:
-  alle Länder in der Suche und Sender manuell hinzufügen (mit Test und Vorhören).
+  Sicherheit und Stabilität nach Code-Review: Das HTTPS-Relay nimmt nur noch signierte URLs an und
+  keine Ziele im Heimnetz (vorher war es ein offener Proxy im LAN), höchstens 8 Streams gleichzeitig,
+  Container gehärtet. Abruf-Log kann den Receiver-Dienst nicht mehr stören. Beschädigte stations.yml
+  wird mit Hinweis gemeldet statt leerer Oberfläche. Pi-hole-Eingaben werden geprüft. Oberfläche:
+  Sender per ▲/▼ sortieren (auch auf Handy/Tablet), Rückfrage beim Löschen, Konfliktprüfung bei
+  gleichzeitigem Bearbeiten in zwei Tabs, weniger Hintergrundabfragen.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

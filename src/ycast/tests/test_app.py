@@ -69,6 +69,37 @@ class TestWeb(Base):
         self.assertEqual(r.status_code, 400)
         self.assertIn("Ungültige URL", r.get_json()["error"])
 
+    def test_revision_conflict(self):
+        rev = self.client.get("/api/stations").get_json()["revision"]
+        cats = [{"name": "A", "stations": [{"name": "s", "url": "http://x"}]}]
+        self.assertEqual(self.client.put("/api/stations", json={"categories": cats, "revision": rev}).status_code, 200)
+        r = self.client.put("/api/stations", json={"categories": cats, "revision": rev})
+        self.assertEqual(r.status_code, 409)
+        self.assertTrue(r.get_json()["conflict"])
+
+    def test_broken_yaml_and_empty_url(self):
+        self.common.STATIONS_FILE.write_text("Pop:\n  Leer:\n  Eins: http://a\n", encoding="utf-8")
+        cats = self.client.get("/api/stations").get_json()["categories"]
+        self.assertEqual(cats[0]["stations"][0], {"name": "Leer", "url": ""})
+        self.common.STATIONS_FILE.write_text("Pop: [unclosed\n", encoding="utf-8")
+        r = self.client.get("/api/stations")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("stations.yml.bak", r.get_json()["error"])
+
+    def test_pihole_validation(self):
+        self.assertEqual(self.client.put("/api/settings", json={"piholes": ["pihole.local"]}).status_code, 400)
+        self.assertEqual(self.client.put("/api/settings", json={"piholes": "192.168.178.2"}).status_code, 400)
+        self.assertEqual(self.client.put("/api/settings", json={"piholes": None}).status_code, 400)
+
+    def test_search_tolerates_nulls(self):
+        resp = mock.Mock()
+        resp.json.return_value = [{"name": None, "url": "http://a", "tags": None, "codec": None, "bitrate": None},
+                                  {"name": "ohne url", "url": None}]
+        with mock.patch.object(self.web.requests, "get", return_value=resp):
+            res = self.client.get("/api/search?name=x").get_json()["results"]
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["tags"], "")
+
     def test_import_merge_and_export(self):
         self.client.put("/api/stations", json={"categories": [{"name": "A", "stations": [{"name": "s", "url": "http://x"}]}]})
         r = self.client.post("/api/stations/import", json={"mode": "merge", "yaml": "A:\n  s: http://y\n  t: http://z\nB:\n  u: http://u\n"})
@@ -164,8 +195,24 @@ class TestVtuner(Base):
     def test_https_goes_through_relay(self):
         import ycast.vtuner as vtuner
         url = vtuner.strip_https("https://stream.example/live.mp3")
-        self.assertEqual(url, "http://192.168.178.210/relay?url=https%3A%2F%2Fstream.example%2Flive.mp3")
+        self.assertTrue(url.startswith("http://192.168.178.210/relay?url=https%3A%2F%2Fstream.example%2Flive.mp3&sig="))
+        sig = url.rsplit("sig=", 1)[1]
+        self.assertTrue(self.common.verify_url("https://stream.example/live.mp3", sig))
+        self.assertFalse(self.common.verify_url("https://other.example/x", sig))
         self.assertEqual(vtuner.strip_https("http://a/b"), "http://a/b")
+
+    def test_relay_requires_signature_and_public_target(self):
+        self.assertEqual(self.client.get("/relay?url=http://evil/x").status_code, 403)
+        internal = "http://dev-unode-ycast_web_1:8000/api/settings"
+        sig = self.common.sign_url(internal)
+        with mock.patch.object(self.vs.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.21.0.5", 8000))]):
+            self.assertEqual(self.client.get(f"/relay?url={internal}&sig={sig}").status_code, 403)
+        self.assertFalse(self.vs._public_target("http://127.0.0.1/x"))
+
+    def test_log_failure_does_not_break_receiver(self):
+        with mock.patch.object(self.common, "REQUEST_LOG", Path(self.tmp.name, "nope", "requests.log")):
+            r = self.client.get("/ycast/", headers={"Host": "denon.vtuner.com"})
+        self.assertEqual(r.status_code, 200)
 
     def test_receiver_requests_are_logged(self):
         r = self.client.get("/setupapp/marantz/asp/browsexml/loginXML.asp?token=0", headers={"Host": "denon.vtuner.com"})
@@ -180,7 +227,8 @@ class TestVtuner(Base):
         self.assertIn(b"Favoriten", r.data)
 
     def test_relay_rejects_bad_scheme(self):
-        self.assertEqual(self.client.get("/relay?url=file:///etc/passwd").status_code, 400)
+        bad = "file:///etc/passwd"
+        self.assertEqual(self.client.get(f"/relay?url={bad}&sig={self.common.sign_url(bad)}").status_code, 403)
 
 
 if __name__ == "__main__":

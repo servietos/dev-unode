@@ -11,7 +11,7 @@ from . import common
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/2.3.0"}
+UA = {"User-Agent": "YCast-Umbrel/2.4.0"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -38,15 +38,25 @@ def static_file(name):
 
 # ---------- Sender ----------
 
+@app.errorhandler(common.ConflictError)
+def _conflict(e):
+    return jsonify({"error": str(e), "conflict": True}), 409
+
+
+def stations_payload(cats=None):
+    return {"categories": common.load_stations() if cats is None else cats, "revision": common.stations_revision()}
+
+
 @app.get("/api/stations")
 def get_stations():
-    return jsonify({"categories": common.load_stations()})
+    return jsonify(stations_payload())
 
 
 @app.put("/api/stations")
 def put_stations():
     body = request.get_json(silent=True) or {}
-    return jsonify({"categories": common.save_stations(body.get("categories"))})
+    cats = common.save_stations(body.get("categories"), expected_revision=body.get("revision"))
+    return jsonify(stations_payload(cats))
 
 
 @app.get("/api/stations/export")
@@ -70,7 +80,7 @@ def import_stations():
             else:
                 current.append(cat)
         cats = current
-    return jsonify({"categories": common.save_stations(cats)})
+    return jsonify(stations_payload(common.save_stations(cats)))
 
 
 # ---------- Radio Browser ----------
@@ -89,16 +99,16 @@ def search():
     except requests.RequestException as e:
         return err(f"Radio Browser nicht erreichbar: {e}", 502)
     out = [{
-        "name": s.get("name", "").strip(),
-        "url": s.get("url_resolved") or s.get("url"),
-        "favicon": s.get("favicon"),
-        "country": s.get("countrycode"),
-        "tags": s.get("tags", "")[:80],
-        "codec": s.get("codec"),
-        "bitrate": s.get("bitrate"),
-        "votes": s.get("votes"),
+        "name": (s.get("name") or "").strip(),
+        "url": s.get("url_resolved") or s.get("url") or "",
+        "favicon": s.get("favicon") or "",
+        "country": s.get("countrycode") or "",
+        "tags": (s.get("tags") or "")[:80],
+        "codec": s.get("codec") or "",
+        "bitrate": s.get("bitrate") or 0,
+        "votes": s.get("votes") or 0,
         "hls": bool(s.get("hls")),
-    } for s in r.json()]
+    } for s in r.json() if isinstance(s, dict) and (s.get("url_resolved") or s.get("url"))]
     out.sort(key=lambda s: s["hls"])  # HLS kann der Receiver nicht, ans Ende
     return jsonify({"results": out})
 
@@ -235,11 +245,11 @@ def dns_check():
     ip = ip_in_use()
     results = []
     for server in common.load_settings()["piholes"]:
-        res = dns.resolver.Resolver(configure=False)
-        res.nameservers = [server]
-        res.lifetime = 3
         for host in VTUNER_HOSTS:
             try:
+                res = dns.resolver.Resolver(configure=False)
+                res.nameservers = [server]
+                res.lifetime = 3
                 ips = sorted(a.address for a in res.resolve(host, "A"))
                 results.append({"server": server, "host": host, "ips": ips,
                                 "ok": ip in ips})

@@ -43,19 +43,23 @@ function dialog(title, bodyHtml, okLabel = "OK") {
   });
 }
 
+let revision = null; // Stand der Senderliste auf dem Server (Konfliktprüfung bei zwei offenen Tabs)
+
 async function save(msg = "Gespeichert") {
   try {
-    const data = await api("api/stations", { method: "PUT", body: { categories: cats } });
-    cats = data.categories;
+    const data = await api("api/stations", { method: "PUT", body: { categories: cats, revision } });
+    cats = data.categories; revision = data.revision;
     toast(msg);
   } catch (e) {
     toast(e.message, true);
-    await load();
+    try { await load(); } catch (e2) { toast("Senderliste konnte nicht neu geladen werden: " + e2.message, true); }
+  } finally {
+    render();
   }
-  render();
 }
 async function load() {
-  cats = (await api("api/stations")).categories;
+  const data = await api("api/stations");
+  cats = data.categories; revision = data.revision;
   current = Math.min(current, Math.max(0, cats.length - 1));
   render();
 }
@@ -148,6 +152,8 @@ function renderStations() {
       <div class="st-main"><div class="st-name">${esc(s.name)}${s.url.startsWith("https://") ? '<span class="badge">HTTPS · Relay</span>' : ""}${badge(s.url)}</div>
         <div class="st-url" title="${esc(s.url)}">${esc(s.url)}</div></div>
       <div class="st-actions">
+        <button class="icon-btn" data-act="up" title="Nach oben" ${i === 0 ? "disabled" : ""}>▲</button>
+        <button class="icon-btn" data-act="down" title="Nach unten" ${i === list.length - 1 ? "disabled" : ""}>▼</button>
         <button class="icon-btn" data-act="check" title="Stream testen">✓</button>
         <button class="icon-btn" data-act="edit" title="Bearbeiten">✎</button>
         <button class="icon-btn" data-act="del" title="Löschen">✕</button>
@@ -195,7 +201,17 @@ async function stationAction(act, i) {
   const s = arr[i];
   if (act === "play") return play(s.name, s.url);
   if (act === "check") return checkUrl(s.url, s.name);
-  if (act === "del") { arr.splice(i, 1); return save(`„${s.name}“ gelöscht`); }
+  if (act === "up" || act === "down") {
+    const j = act === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return save("Reihenfolge gespeichert");
+  }
+  if (act === "del") {
+    const fd = await dialog("Sender löschen?", `<p>„${esc(s.name)}“ wird aus „${esc(cats[current].name)}“ entfernt.</p>`, "Löschen");
+    if (!fd) return;
+    arr.splice(i, 1); return save(`„${s.name}“ gelöscht`);
+  }
   if (act === "edit") {
     const opts = cats.map((c, ci) => `<option value="${ci}" ${ci === current ? "selected" : ""}>${esc(c.name)}</option>`).join("");
     const fd = await dialog("Sender bearbeiten", `
@@ -234,7 +250,8 @@ $("#btn-import").addEventListener("click", async () => {
     <label>Modus<select name="mode"><option value="merge">Ergänzen (vorhandene bleiben)</option><option value="replace">Ersetzen (alles neu)</option></select></label>`, "Importieren");
   if (!fd) return;
   try {
-    cats = (await api("api/stations/import", { method: "POST", body: { yaml: fd.get("yaml"), mode: fd.get("mode") } })).categories;
+    const data = await api("api/stations/import", { method: "POST", body: { yaml: fd.get("yaml"), mode: fd.get("mode") } });
+    cats = data.categories; revision = data.revision;
     current = 0; render(); toast("Import gespeichert");
   } catch (e) { toast(e.message, true); }
 });
@@ -459,4 +476,8 @@ document.addEventListener("click", (e) => {
 
 load().catch((e) => toast(e.message, true));
 refreshStatus();
-setInterval(refreshStatus, 15000);
+// Status nur abfragen, wenn die Seite sichtbar ist und der Reiter „Status & Einrichtung“ offen ist
+setInterval(() => {
+  if (document.visibilityState === "visible" && !$("#tab-setup").hidden) refreshStatus();
+}, 15000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshStatus(); });

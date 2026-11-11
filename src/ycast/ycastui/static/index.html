@@ -64,8 +64,8 @@ try { const t = localStorage.getItem("ycast-theme"); if (t === "light" || t === 
           </div>
         </div>
         <form id="station-add" class="add-form">
-          <input name="name" placeholder="Sendername" required>
-          <input name="url" placeholder="Stream-URL (http:// oder https://)" required>
+          <input name="name" placeholder="Sendername" aria-label="Sendername" maxlength="120" required>
+          <input name="url" placeholder="Stream-URL (http:// oder https://)" aria-label="Stream-URL" type="url" maxlength="2000" required>
           <button class="btn">Hinzufügen</button>
         </form>
         <ul id="station-list" class="station-list"></ul>
@@ -164,8 +164,8 @@ try { const t = localStorage.getItem("ycast-theme"); if (t === "light" || t === 
         <div class="copy"><code id="dns-env">FTLCONF_misc_dnsmasq_lines: 'address=/vtuner.com/–'</code><button class="btn ghost small" data-copy="dns-env">Kopieren</button></div>
       </details>
       <form id="pihole-form" class="pihole-form">
-        <label>Pi-hole 1 <input name="p0" placeholder="z. B. 192.168.178.2"></label>
-        <label>Pi-hole 2 <input name="p1" placeholder="optional"></label>
+        <label>Pi-hole 1 (IP) <input name="p0" placeholder="z. B. 192.168.178.2" inputmode="decimal"></label>
+        <label>Pi-hole 2 (IP) <input name="p1" placeholder="optional" inputmode="decimal"></label>
         <button class="btn ghost">Speichern</button>
       </form>
       <div id="dns-results"></div>
