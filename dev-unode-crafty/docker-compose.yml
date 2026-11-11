@@ -1,0 +1,52 @@
+version: "3.7"
+
+# Crafty Controller 4: Weboberfläche zum Anlegen und Verwalten von Minecraft-Servern
+# (Java und Bedrock). Crafty spricht nur HTTPS (selbstsigniert); der kleine Caddy-Dienst
+# "web" reicht es als HTTP an den Umbrel-app_proxy weiter.
+#
+# Erster Start: Das Admin-Passwort ist ${APP_PASSWORD} (Umbrel zeigt es beim Öffnen an).
+# Es wird nur bei einer frischen Installation gesetzt, danach in Crafty selbst ändern.
+
+services:
+  app_proxy:
+    environment:
+      APP_HOST: dev-unode-crafty_web_1
+      APP_PORT: 8080
+
+  web:
+    image: caddy:2.11.9-alpine
+    restart: on-failure
+    command: ["caddy", "reverse-proxy", "--from", ":8080", "--to", "https://dev-unode-crafty_crafty_1:8443", "--insecure"]
+    depends_on:
+      - crafty
+
+  crafty:
+    image: arcadiatechnology/crafty-4:4.11.0
+    restart: on-failure
+    stop_grace_period: 1m
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+      CRAFTY_ADMIN_PASSWORD: ${APP_PASSWORD}
+    # Bei frischer Installation: Standardkonfiguration anlegen und Admin-Passwort setzen,
+    # dann den normalen Crafty-Start ausführen.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        cd /crafty
+        if [ ! "$$(ls -A --ignore=.gitkeep ./app/config)" ]; then
+          cp -r ./app/config_original/* ./app/config/
+          printf '{\n  "username": "admin",\n  "password": "%s"\n}\n' "$$CRAFTY_ADMIN_PASSWORD" > ./app/config/default.json
+          chgrp -R root ./app/config && chmod -R g+rw ./app/config
+        fi
+        exec /crafty/docker_launcher.sh -d -i
+    ports:
+      - "25565-25575:25565-25575"   # Java-Server
+      - "19132-19133:19132-19133/udp" # Bedrock-Server
+    volumes:
+      - ${APP_DATA_DIR}/data/app/config:/crafty/app/config
+      - ${APP_DATA_DIR}/data/logs:/crafty/logs
+      - ${APP_DATA_DIR}/data/import:/crafty/import
+      - ${APP_DATA_DIR}/data/backups:/crafty/backups
+      - ${APP_DATA_DIR}/data/servers:/crafty/servers

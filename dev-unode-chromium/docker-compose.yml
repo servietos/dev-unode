@@ -3,15 +3,18 @@ version: "3.7"
 services:
   app_proxy:
     environment:
-      APP_HOST: unode-chromium_server_1
+      APP_HOST: dev-unode-chromium_server_1
       APP_PORT: 3000
 
   server:
-    image: ghcr.io/linuxserver/chromium:latest
+    image: lscr.io/linuxserver/chromium:7b8e918f-ls63
     restart: on-failure
     environment:
-      - PUID=1000
-      - PGID=1000
+      PUID: "1000"
+      PGID: "1000"
+      TZ: ${TZ:-Europe/Berlin}
+    security_opt:
+      - seccomp:unconfined
     volumes:
       - ${APP_DATA_DIR}/data/config:/config
     shm_size: "1gb"
