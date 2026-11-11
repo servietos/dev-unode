@@ -281,7 +281,7 @@ $("#btn-import").addEventListener("click", async () => {
 
 // ---------- Suche ----------
 function renderTargets() {
-  for (const sel of [$("#search-target"), $("#manual-cat")]) {
+  for (const sel of [$("#manual-cat")]) {
     const keep = sel.value;
     sel.innerHTML = cats.map((c, i) => `<option value="${i}">${esc(c.name)}</option>`).join("");
     if (keep && cats[+keep]) sel.value = keep; else sel.value = String(current);
@@ -393,12 +393,42 @@ $("#search-results").addEventListener("click", (e) => {
   const r = results[+b.dataset.i];
   if (b.dataset.act === "marantz") return playOnMarantz(r.name, r.url);
   if (b.dataset.act === "play") return play(r.name, r.url);
-  const ci = +$("#search-target").value;
-  if (!cats[ci]) return toast("Lege zuerst eine Kategorie an", true);
-  let name = r.name.slice(0, 60) || "Sender";
+  addToCategory(r.name, r.url);
+});
+
+// Sender in eine wählbare Kategorie übernehmen (auch neue Kategorie möglich)
+let lastTarget = null;
+async function addToCategory(rawName, url) {
+  const pre = lastTarget ?? current;
+  const opts = cats.map((c, i) => `<option value="${i}" ${i === pre ? "selected" : ""}>${esc(c.name)} (${c.stations.length})</option>`).join("");
+  const fd = await dialog("Zu meinen Sendern", `
+    <label>Name<input name="name" value="${esc((rawName || "").trim().slice(0, 60) || "Sender")}" maxlength="120" required></label>
+    <label>Kategorie<select name="cat" id="dlg-cat">${opts}<option value="new" ${cats.length ? "" : "selected"}>Neue Kategorie …</option></select></label>
+    <label id="dlg-new-wrap" ${cats.length ? "hidden" : ""}>Name der neuen Kategorie<input name="newcat" maxlength="120"></label>`, "Hinzufügen");
+  if (!fd) return;
+  const name = fd.get("name").trim();
+  if (!name) return;
+  let ci;
+  if (fd.get("cat") === "new") {
+    const cname = (fd.get("newcat") || "").trim();
+    if (!cname) return toast("Bitte einen Namen für die neue Kategorie eingeben", true);
+    ci = cats.findIndex((c) => c.name === cname);
+    if (ci < 0) { cats.push({ name: cname, stations: [] }); ci = cats.length - 1; }
+  } else {
+    ci = +fd.get("cat");
+  }
+  if (!cats[ci]) return;
   if (cats[ci].stations.some((s) => s.name === name)) return toast(`„${name}“ ist schon in „${cats[ci].name}“`, true);
-  cats[ci].stations.push({ name, url: r.url });
+  cats[ci].stations.push({ name, url });
+  lastTarget = ci;
   save(`„${name}“ zu „${cats[ci].name}“ hinzugefügt`);
+}
+// Im Dialog: Feld für den Namen der neuen Kategorie nur bei Bedarf zeigen
+document.addEventListener("change", (e) => {
+  if (e.target.id !== "dlg-cat") return;
+  const wrap = $("#dlg-new-wrap");
+  wrap.hidden = e.target.value !== "new";
+  if (!wrap.hidden) wrap.querySelector("input").focus();
 });
 
 // ---------- Player ----------
