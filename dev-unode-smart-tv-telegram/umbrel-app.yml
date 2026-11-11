@@ -3,7 +3,7 @@ id: dev-unode-smart-tv-telegram
 name: Smart TV Telegram
 tagline: Videos aus Telegram per Bot auf Smart-TV, Chromecast oder Kodi abspielen
 category: media
-version: "1.4.0-1"
+version: "1.4.0-1.1"
 port: 8351
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/smart-tv-telegram-icon.svg
 description: >-
@@ -26,8 +26,7 @@ submitter: servietos
 submission: https://github.com/servietos/dev-unode
 gallery: []
 releaseNotes: >-
-  Neue Einrichtungsseite im Umbrel: Zugangsdaten ohne SSH eintragen, IP des Umbrel wird
-  automatisch erkannt. Image fest auf 1.4.0-1, Konfiguration und Telegram-Sitzung bleiben
-  bei Updates erhalten.
+  Einrichtungsseite: Eingaben bleiben nach einem Fehler erhalten, nach dem Speichern zurück zur
+  Startseite mit Bestätigung (Neuladen sendet nichts erneut).
 dependencies: []
 path: ""
