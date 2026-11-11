@@ -17,7 +17,7 @@ Contained apps (alle mit Weboberfläche über das Umbrel-Dashboard, x86 und ARM)
 | openclaude | OpenClaude im Browser-Terminal | 1.0.0 |
 | owncast | Livestream-Server (Zuschauerseite ohne Umbrel-Login, RTMP auf Port 1935) | 0.2.1 |
 | pi-hole | DNS-Server und Werbeblocker (Weboberfläche auf Port 8082) | 2025.05.1 |
-| smart-tv-telegram | Telegram-Videos per Bot auf Smart-TV/Chromecast, mit Einrichtungsseite | 1.4.0-1.1 |
+| smart-tv-telegram | Telegram-Videos per Bot auf Smart-TV/Chromecast, mit Einrichtungsseite | 1.4.0-1.2 |
 | ycast | Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …), HTTPS-Relay, einstellbare IP (Anleitung in `src/ycast/README.md`) | 2.3.0 |
 
 Hinweis: Apps mit Spiele- oder Streaming-Ports (crafty, owncast) brauchen für Zugriffe von außen

@@ -55,6 +55,9 @@ def save(form, cfg):
     errors = []
     f = lambda k: (form.get(k, [""])[0]).strip()
     api_id, api_hash, token = f("api_id"), f("api_hash").lower(), f("token")
+    # Geheimnisse werden nie an den Browser geschickt: leeres Feld = bisherigen Wert behalten
+    api_hash = api_hash or cfg["mtproto"]["api_hash"]
+    token = token or cfg["mtproto"]["token"]
     if not api_id.isdigit():
         errors.append("API-ID muss eine Zahl sein.")
     if not re.fullmatch(r"[0-9a-f]{32}", api_hash):
@@ -87,15 +90,32 @@ def save(form, cfg):
     return []
 
 
+ICON = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#229ed9"/><rect x="10" y="14" width="44" height="28" rx="4" fill="#fff"/><path d="M26 50h12M32 42v8" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/><path d="M20 28.5l22-8.5-4 16-6-4-3 4v-5.5l9-7.5-11 6z" fill="#229ed9"/></svg>"""
+
+
+def tip(text):
+    """Info-Symbol mit Hinweis beim Überfahren (Maus) oder Antippen/Tab (Touch, Tastatur)."""
+    t = html.escape(text, quote=True)
+    return f'<span class="tip" tabindex="0" role="note" aria-label="{t}" data-tip="{t}">i</span>'
+
+
 PAGE = """<!doctype html><html lang="de"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Smart TV Telegram</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<script>try{{var t=localStorage.getItem("stt-theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}}catch(e){{}}</script>
 <style>
-:root{{--bg:#f4f6fa;--card:#fff;--text:#1b1f27;--muted:#5d6675;--line:#dfe3ea;--acc:#229ed9;--ok:#1f9d55;--bad:#d23c3c;color-scheme:light}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#12151b;--card:#1b2029;--text:#eef1f6;--muted:#9aa3b2;--line:#2c3340;color-scheme:dark}}}}
+:root{{--bg:#f4f6fa;--card:#fff;--text:#1b1f27;--muted:#5d6675;--line:#dfe3ea;--acc:#229ed9;--ok:#1f9d55;--bad:#d23c3c;--tipbg:#1b1f27;--tipfg:#fff;color-scheme:light}}
+@media (prefers-color-scheme:dark){{:root:not([data-theme="light"]){{--bg:#12151b;--card:#1b2029;--text:#eef1f6;--muted:#9aa3b2;--line:#2c3340;--tipbg:#eef1f6;--tipfg:#12151b;color-scheme:dark}}}}
+:root[data-theme="dark"]{{--bg:#12151b;--card:#1b2029;--text:#eef1f6;--muted:#9aa3b2;--line:#2c3340;--tipbg:#eef1f6;--tipfg:#12151b;color-scheme:dark}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:24px 16px}}
-main{{max-width:760px;margin:0 auto}}h1{{font-size:1.4rem;margin:0 0 4px}}h2{{font-size:1.05rem;margin:0 0 12px}}
+main{{max-width:760px;margin:0 auto}}h1{{font-size:1.4rem;margin:0}}h2{{font-size:1.05rem;margin:0 0 12px}}
+.top{{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}}.brand{{display:flex;gap:12px;align-items:center}}.brand img{{border-radius:9px}}
+.theme{{display:inline-flex;border:1px solid var(--line);border-radius:999px;background:var(--card);padding:2px}}
+.theme button{{font:inherit;font-size:.82rem;border:0;background:none;color:var(--muted);padding:3px 10px;border-radius:999px;cursor:pointer}}
+.theme button[aria-pressed="true"]{{background:color-mix(in srgb,var(--muted) 18%,transparent);color:var(--text);font-weight:600}}
 .card{{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:16px 0}}
 .muted{{color:var(--muted)}}.small{{font-size:.86rem}}label{{display:grid;gap:4px;margin:10px 0;font-size:.88rem;color:var(--muted)}}
+.lbl{{display:flex;align-items:center;gap:6px}}
 input{{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 10px}}
 .check{{display:flex;gap:8px;align-items:center;color:var(--text)}}.check input{{width:auto}}
 .btn{{font:inherit;font-weight:600;background:var(--acc);color:#fff;border:0;border-radius:10px;padding:9px 16px;cursor:pointer;text-decoration:none;display:inline-block}}
@@ -105,9 +125,19 @@ input{{font:inherit;color:var(--text);background:var(--card);border:1px solid va
 .saved{{background:color-mix(in srgb,var(--ok) 14%,transparent);border-radius:10px;padding:10px 14px}}
 ol{{padding-left:20px}}li{{margin:4px 0}}code{{background:color-mix(in srgb,var(--muted) 18%,transparent);padding:1px 6px;border-radius:6px}}
 .grid{{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}}@media(max-width:600px){{.grid{{grid-template-columns:1fr}}}}
+.tip{{position:relative;display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font:italic 600 11px/1 Georgia,serif;cursor:help;flex:none}}
+.tip:hover,.tip:focus{{color:var(--acc);border-color:var(--acc);outline:none}}
+.tip::after{{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:min(300px,80vw);background:var(--tipbg);color:var(--tipfg);font:400 .82rem/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:8px 10px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .12s;z-index:5;white-space:normal}}
+.tip:hover::after,.tip:focus::after{{opacity:1}}
+.secret{{display:flex;gap:6px}}.secret input{{flex:1;min-width:0}}
+.eye{{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:9px;padding:0 10px;cursor:pointer;font-size:.95rem}}
+.eye[aria-pressed="true"]{{background:color-mix(in srgb,var(--acc) 15%,transparent)}}
 </style></head><body><main>
-<h1>Smart TV Telegram</h1><p class="muted">Videos aus Telegram per Bot auf Smart-TV, Chromecast oder Kodi abspielen.</p>
-<p><span class="pill {cfg_cls}">{cfg_txt}</span> <span class="pill {run_cls}">{run_txt}</span></p>
+<div class="top"><div class="brand"><img src="icon.svg" alt="" width="36" height="36"><div><h1>Smart TV Telegram</h1>
+<p class="muted small" style="margin:2px 0 0">Videos aus Telegram per Bot auf Smart-TV, Chromecast oder Kodi abspielen.</p></div></div>
+<div class="theme" role="group" aria-label="Darstellung"><button type="button" data-t="auto" title="Wie das System">Auto</button><button type="button" data-t="light" title="Hell">☀</button><button type="button" data-t="dark" title="Dunkel">☾</button></div></div>
+<p><span class="pill {cfg_cls}" title="Sind API-ID, API-Hash, Bot-Token und Admins gültig eingetragen?">{cfg_txt}</span>
+<span class="pill {run_cls}" title="Antwortet der Bot auf dem Umbrel (Port {port})? Nach dem Speichern kann das bis zu einer Minute dauern.">{run_txt}</span></p>
 {msg}
 <div class="card"><h2>Was du brauchst</h2><ol class="small">
 <li><b>API-ID und API-Hash:</b> auf <code>my.telegram.org</code> anmelden → <em>API development tools</em> → App anlegen.</li>
@@ -115,19 +145,53 @@ ol{{padding-left:20px}}li{{margin:4px 0}}code{{background:color-mix(in srgb,var(
 <li><b>Deine Telegram-ID:</b> z. B. über <code>@userinfobot</code>. Nur diese IDs dürfen den Bot benutzen.</li>
 </ol><p class="small muted">Danach dem Bot ein Video schicken, er zeigt die gefundenen Geräte zum Abspielen an.</p></div>
 <form class="card" method="post" action="save"><h2>Einrichtung</h2>
-<div class="grid"><label>API-ID<input name="api_id" value="{api_id}" inputmode="numeric" required></label>
-<label>API-Hash<input name="api_hash" value="{api_hash}" required></label></div>
-<label>Bot-Token<input name="token" value="{token}" required></label>
-<label>Telegram-IDs der Admins (mit Komma getrennt)<input name="admins" value="{admins}" required></label>
-<label>IP des Umbrel im Heimnetz (unter dieser Adresse holt der Fernseher den Stream)<input name="listen_host" value="{listen_host}" required></label>
-<label class="check"><input type="checkbox" name="upnp" value="1" {upnp}> UPnP/DLNA-Fernseher suchen</label>
-<label class="check"><input type="checkbox" name="chromecast" value="1" {chromecast}> Chromecast suchen</label>
-<label class="check"><input type="checkbox" name="web_ui" value="1" {web_ui}> Eigene Weboberfläche des Bots aktivieren (Port {port})</label>
-<label>Passwort für die Weboberfläche des Bots<input name="web_ui_password" type="password" placeholder="{pw_hint}" autocomplete="new-password"></label>
+<div class="grid"><label><span class="lbl">API-ID {tip_api_id}</span><input name="api_id" value="{api_id}" inputmode="numeric" required></label>
+<label><span class="lbl">API-Hash {tip_api_hash}</span><span class="secret"><input name="api_hash" type="password" value="{api_hash}" placeholder="{hash_hint}" autocomplete="off" {hash_req}><button type="button" class="eye" title="Eingabe anzeigen/verbergen" aria-label="Eingabe anzeigen">👁</button></span></label></div>
+<label><span class="lbl">Bot-Token {tip_token}</span><span class="secret"><input name="token" type="password" value="{token}" placeholder="{token_hint}" autocomplete="off" {token_req}><button type="button" class="eye" title="Eingabe anzeigen/verbergen" aria-label="Eingabe anzeigen">👁</button></span></label>
+<label><span class="lbl">Telegram-IDs der Admins (mit Komma getrennt) {tip_admins}</span><input name="admins" value="{admins}" required></label>
+<label><span class="lbl">IP des Umbrel im Heimnetz {tip_host}</span><input name="listen_host" value="{listen_host}" required></label>
+<label class="check"><input type="checkbox" name="upnp" value="1" {upnp}> UPnP/DLNA-Fernseher suchen {tip_upnp}</label>
+<label class="check"><input type="checkbox" name="chromecast" value="1" {chromecast}> Chromecast suchen {tip_cc}</label>
+<label class="check"><input type="checkbox" name="web_ui" value="1" {web_ui}> Im Browser abspielen (Web-Player auf Port {port}) {tip_web}</label>
+<label><span class="lbl">Passwort für den Web-Player {tip_pw}</span><input name="web_ui_password" type="password" placeholder="{pw_hint}" autocomplete="new-password"></label>
 <button class="btn">Speichern</button>
 <p class="small muted">Der Bot startet danach von selbst neu (bis zu einer Minute).</p></form>
 {webui}
-</main></body></html>"""
+</main>
+<script>
+function applyTheme(t){{if(t==="light"||t==="dark")document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;
+document.querySelectorAll("[data-t]").forEach(function(b){{b.setAttribute("aria-pressed",String(b.dataset.t===(t||"auto")))}})}}
+var cur="auto";try{{cur=localStorage.getItem("stt-theme")||"auto"}}catch(e){{}}applyTheme(cur);
+document.querySelectorAll("[data-t]").forEach(function(b){{b.addEventListener("click",function(){{var t=b.dataset.t;
+try{{if(t==="auto")localStorage.removeItem("stt-theme");else localStorage.setItem("stt-theme",t)}}catch(e){{}}applyTheme(t)}})}});
+document.querySelectorAll(".eye").forEach(function(b){{b.addEventListener("click",function(){{var i=b.previousElementSibling,show=i.type==="password";
+i.type=show?"text":"password";b.setAttribute("aria-pressed",String(show))}})}});
+</script></body></html>"""
+
+TIPS = {
+    "tip_api_id": "Zahl von my.telegram.org → API development tools. Damit meldet sich die App bei Telegram an.",
+    "tip_api_hash": "32-stellige Zeichenkette von derselben Seite wie die API-ID. Wie ein Passwort behandeln.",
+    "tip_token": "Schlüssel deines Bots von @BotFather (Format 123456789:ABC…). Wie ein Passwort behandeln; bei Bedarf mit /revoke erneuern.",
+    "tip_admins": "Deine Telegram-Benutzer-ID (Zahl, z. B. von @userinfobot). Nur diese Personen dürfen den Bot benutzen. Mehrere mit Komma trennen.",
+    "tip_host": "Unter dieser Adresse holt der Fernseher das Video vom Umbrel ab. Wird automatisch erkannt; nur ändern, wenn sich die IP des Umbrel geändert hat.",
+    "tip_upnp": "Findet Smart-TVs und Mediaplayer im Heimnetz, die DLNA/UPnP können (die meisten Samsung, LG, Sony, Philips …).",
+    "tip_cc": "Findet Chromecast-Geräte und Fernseher mit Google TV / Android TV im Heimnetz.",
+    "tip_web": "Bietet zusätzlich deinen Browser als Abspielgerät an: Web-Player auf PC, Tablet oder Handy öffnen und mit dem Passwort anmelden – danach erscheint er im Bot neben den Fernsehern.",
+    "tip_pw": "Schützt den Web-Player. Nur nötig, wenn „Im Browser abspielen“ aktiv ist. Leer lassen, um das bisherige Passwort zu behalten.",
+}
+
+
+def secret_hints(cfg):
+    """Gespeicherte Geheimnisse nie ausgeben, nur anzeigen, ob schon etwas hinterlegt ist."""
+    has_hash = re.fullmatch(r"[0-9a-fA-F]{32}", cfg["mtproto"]["api_hash"] or "") is not None
+    has_token = re.fullmatch(r"\d+:[\w-]{30,}", cfg["mtproto"]["token"] or "") is not None
+    kept = "gespeichert – leer lassen zum Behalten"
+    return {
+        "hash_hint": kept if has_hash else "32 Zeichen von my.telegram.org",
+        "token_hint": kept if has_token else "123456789:ABC… von @BotFather",
+        "hash_req": "" if has_hash else "required",
+        "token_req": "" if has_token else "required",
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -152,33 +216,42 @@ class Handler(BaseHTTPRequestHandler):
             return PAGE.format(
                 cfg_cls="ok" if ok_cfg else "bad", cfg_txt="eingerichtet" if ok_cfg else "noch nicht eingerichtet",
                 run_cls="ok" if running else "bad", run_txt="Bot läuft" if running else "Bot läuft nicht",
-                msg=msg, api_id=e(v("api_id")), api_hash=e(v("api_hash")), token=e(v("token")),
+                msg=msg, api_id=e(v("api_id")), api_hash=e(v("api_hash")), token=e(v("token")), **secret_hints(cfg),
                 admins=e(v("admins")), listen_host=e(v("listen_host")),
                 upnp=chk("upnp"), chromecast=chk("chromecast"), web_ui=chk("web_ui"),
                 pw_hint="unverändert lassen" if cfg["web_ui"]["password"] else "mindestens 6 Zeichen",
-                port=BOT_PORT, webui="")
+                port=BOT_PORT, webui="", **{k: tip(v) for k, v in TIPS.items()})
         if cfg["web_ui"]["enabled"] == "1":
-            webui = ('<div class="card"><h2>Weboberfläche des Bots</h2><p class="small">Läuft direkt auf dem Umbrel: '
-                     f'<a id="wl" href="#">Port {BOT_PORT} öffnen</a></p></div>'
-                     f'<script>document.getElementById("wl").href=location.protocol+"//"+location.hostname+":{BOT_PORT}/"</script>')
+            webui = ('<div class="card"><h2>Web-Player</h2><p class="small">Auf dem Gerät öffnen, auf dem du schauen willst '
+                     '(PC, Tablet, Handy), mit dem Passwort anmelden und offen lassen. Schickst du dem Bot dann ein Video, '
+                     'erscheint dieser Browser als Abspielgerät.</p>'
+                     '<p><a class="btn" id="wl" href="#" target="_blank" rel="noopener">Web-Player öffnen</a></p></div>'
+                     f'<script>document.getElementById("wl").href="http://"+location.hostname+":{BOT_PORT}/static/index.html"</script>')
         return PAGE.format(
             cfg_cls="ok" if ok_cfg else "bad", cfg_txt="eingerichtet" if ok_cfg else "noch nicht eingerichtet",
             run_cls="ok" if running else "bad", run_txt="Bot läuft" if running else "Bot läuft nicht",
             msg=msg, api_id=e(cfg["mtproto"]["api_id"] if cfg["mtproto"]["api_id"].isdigit() else ""),
-            api_hash=e(cfg["mtproto"]["api_hash"] if re.fullmatch(r"[0-9a-fA-F]{32}", cfg["mtproto"]["api_hash"]) else ""),
-            token=e(cfg["mtproto"]["token"] if ":" in cfg["mtproto"]["token"] else ""),
+            api_hash="", token="", **secret_hints(cfg),
             admins=e(admins), listen_host=e(cfg["http"]["listen_host"] if cfg["http"]["listen_host"] != "0.0.0.0" else HOST_IP),
             upnp="checked" if cfg["discovery"]["upnp_enabled"] == "1" else "",
             chromecast="checked" if cfg["discovery"]["chromecast_enabled"] == "1" else "",
             web_ui="checked" if cfg["web_ui"]["enabled"] == "1" else "",
             pw_hint="unverändert lassen" if cfg["web_ui"]["password"] else "mindestens 6 Zeichen",
-            port=BOT_PORT, webui=webui)
+            port=BOT_PORT, webui=webui, **{k: tip(v) for k, v in TIPS.items()})
 
     def do_GET(self):
         if self.path.split("?")[0] in ("/", "/index.html"):
             saved = "saved=1" in self.path.partition("?")[2]
             self._send(self.render('<p class="saved">Gespeichert. Der Bot startet mit den neuen Werten neu '
                                    '(bis zu einer Minute, dann diese Seite neu laden).</p>' if saved else ""))
+        elif self.path == "/icon.svg":
+            data = ICON.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml")
+            self.send_header("Cache-Control", "max-age=86400")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
         elif self.path == "/health":
             self._send("ok")
         else:
