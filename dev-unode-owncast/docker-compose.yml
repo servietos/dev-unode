@@ -5,8 +5,10 @@ services:
     environment:
       APP_HOST: dev-unode-owncast_owncast_1
       APP_PORT: 8080
-      # Zuschauerseite ohne Umbrel-Login; der Admin-Bereich /admin hat ein eigenes Passwort
+      # Zuschauerseite ohne Umbrel-Login; Admin-Pfade siehe PROXY_AUTH_BLACKLIST
       PROXY_AUTH_ADD: "false"
+      # Admin-Oberfläche und Admin-API nur mit Umbrel-Login
+      PROXY_AUTH_BLACKLIST: "/admin/*,/api/admin/*"
 
   owncast:
     image: owncast/owncast:0.2.1@sha256:0df31c934eade2ca9275db374318a32088e1a060bdb3853716d6343a5d5c8d42
