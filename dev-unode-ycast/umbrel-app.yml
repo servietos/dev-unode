@@ -1,30 +1,41 @@
 manifestVersion: 1
 id: dev-unode-ycast
 name: YCast
-version: "1.0.1"
-repo: https://github.com/milaq/YCast
-support: https://github.com/milaq/YCast/issues
+tagline: Internetradio für Marantz, Denon & Co. ohne vTuner
 category: media
-tagline: Selbstgehosteter vTuner-Ersatz für Internet-Radio
-icon: https://raw.githubusercontent.com/milaq/YCast/master/ycast/static/favicon.png
-screenshots:
-  - https://raw.githubusercontent.com/milaq/YCast/master/screenshot.png
-
+version: "2.0.0"
+port: 3848
+icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
-  YCast ist ein selbstgehosteter Ersatz für den vTuner Internet-Radio-Dienst. 
-  Perfekt für AV-Receiver (Denon, Marantz, Onkyo, Pioneer etc.), die vTuner unterstützen.
+  YCast ersetzt den eingestellten vTuner-Dienst, den viele AV-Receiver und Netzwerk-Player
+  (z. B. Marantz M-CR510, Denon) für Internetradio nutzen. Der Receiver findet deine Sender
+  unter „My Stations“ und kann zusätzlich den Community Radio Browser durchsuchen.
 
-website: https://github.com/milaq/YCast
-port: 8080
-torOnly: false
+
+  Die Weboberfläche verwaltet alles: Kategorien und Sender anlegen, sortieren (Drag & Drop),
+  im Browser vorhören, Streams testen, Sender aus dem Radio Browser suchen und übernehmen,
+  Import/Export der stations.yml. Unter „Status & Einrichtung“ siehst du, wann dein Receiver
+  zuletzt angefragt hat, und kannst die DNS-Umleitung deiner Pi-holes prüfen.
+
+
+  HTTPS-Streams, die der Receiver selbst nicht abspielen kann, leitet YCast automatisch über
+  ein internes Relay als HTTP weiter.
+
+
+  Einrichtung: Der Receiver-Dienst bekommt eine eigene LAN-IP (Standard 192.168.178.210, Port 80).
+  Im Pi-hole 6 unter misc.dnsmasq_lines die Zeile address=/vtuner.com/192.168.178.210 eintragen.
+developer: servietos
+website: https://github.com/servietos/dev-unode/tree/master/src/ycast
+repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
+support: https://github.com/servietos/dev-unode/issues
+gallery: []
+releaseNotes: >-
+  Komplett neu: eigenes Image auf Basis von YCast 1.1.0, Receiver-Dienst auf eigener LAN-IP
+  (Port 80, macvlan), neue Weboberfläche für Sender, Suche, Stream-Test, DNS-Prüfung und
+  Abruf-Log, HTTPS-Relay für moderne Streams.
 dependencies: []
-
-umbrel:
-  version: "1.0"
-  app:
-    config:
-      - name: config
-        path: /config
-        template: |
-          # YCast Konfiguration
-          # Die meisten Einstellungen können über die Weboberfläche vorgenommen werden.
+submitter: servietos
+submission: https://github.com/servietos/dev-unode
+path: ""
+defaultUsername: ""
+defaultPassword: ""

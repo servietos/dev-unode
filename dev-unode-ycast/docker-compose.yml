@@ -1,22 +1,58 @@
 version: "3.7"
 
+# Zwei Dienste aus einem Image (gebaut von .github/workflows/ycast-image.yml aus src/ycast):
+#   web    – Weboberfläche, über das Umbrel-Dashboard (app_proxy)
+#   ycast  – vTuner-Dienst für den Receiver auf Port 80 einer eigenen LAN-IP (macvlan),
+#            weil Port 80 des Umbrel vom Dashboard belegt ist.
+# Pi-hole: address=/vtuner.com/192.168.178.210
+#
+# Anpassen bei anderem Netz: YCAST_IP, ipv4_address, subnet, gateway, ip_range und parent.
+
 services:
-  ycast:
-    image: netraams/ycast-docker:latest
-    container_name: ycast
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ${APP_DATA_DIR}/data/config:/config
-      - ${APP_DATA_DIR}/data/stations:/stations
+  app_proxy:
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Berlin
-    ports:
-      - "8080:8080"   # Falls du nicht network_mode: host willst
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      APP_HOST: dev-unode-ycast_web_1
+      APP_PORT: 8000
+
+  web:
+    image: ghcr.io/servietos/ycast:2.0.0
+    user: "1000:1000"
+    restart: on-failure
+    stop_grace_period: 10s
+    environment:
+      YCASTUI_MODE: web
+      TZ: ${TZ:-Europe/Berlin}
+      YCAST_IP: 192.168.178.210
+      YCAST_URL: http://dev-unode-ycast_ycast_1
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+
+  ycast:
+    image: ghcr.io/servietos/ycast:2.0.0
+    user: "1000:1000"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+    environment:
+      YCASTUI_MODE: vtuner
+      TZ: ${TZ:-Europe/Berlin}
+      YCAST_IP: 192.168.178.210
+      RELAY_HTTPS: "on"
+    volumes:
+      - ${APP_DATA_DIR}/data:/data
+    networks:
+      default: {}
+      lan:
+        ipv4_address: 192.168.178.210
+
+networks:
+  lan:
+    driver: macvlan
+    driver_opts:
+      parent: enp1s0
+    ipam:
+      config:
+        - subnet: 192.168.178.0/24
+          gateway: 192.168.178.1
+          ip_range: 192.168.178.210/32

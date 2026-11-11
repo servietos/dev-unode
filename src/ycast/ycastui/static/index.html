@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YCast</title>
+<link rel="icon" href="static/icon.svg">
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <img src="static/icon.svg" alt="" width="34" height="34">
+    <div>
+      <h1>YCast</h1>
+      <p class="sub">Internetradio für deinen Marantz</p>
+    </div>
+  </div>
+  <div class="pills">
+    <span class="pill" id="pill-ycast">YCast …</span>
+    <span class="pill" id="pill-avr">Receiver …</span>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button role="tab" class="tab active" data-tab="stations">Meine Sender</button>
+  <button role="tab" class="tab" data-tab="search">Sender suchen</button>
+  <button role="tab" class="tab" data-tab="setup">Status &amp; Einrichtung</button>
+</nav>
+
+<main>
+  <!-- Meine Sender -->
+  <section id="tab-stations" class="panel">
+    <div class="grid-stations">
+      <aside class="card cats">
+        <div class="card-head">
+          <h2>Kategorien</h2>
+          <button class="btn small" id="cat-add">+ Neu</button>
+        </div>
+        <ul id="cat-list" class="cat-list"></ul>
+        <div class="cat-tools">
+          <button class="btn ghost small" id="btn-export">Export</button>
+          <button class="btn ghost small" id="btn-import">Import</button>
+        </div>
+      </aside>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2 id="cat-title">–</h2>
+            <p class="muted small" id="cat-meta"></p>
+          </div>
+          <div class="row">
+            <button class="btn ghost small" id="cat-rename">Umbenennen</button>
+            <button class="btn ghost small danger" id="cat-delete">Löschen</button>
+          </div>
+        </div>
+        <form id="station-add" class="add-form">
+          <input name="name" placeholder="Sendername" required>
+          <input name="url" placeholder="Stream-URL (http:// oder https://)" required>
+          <button class="btn">Hinzufügen</button>
+        </form>
+        <ul id="station-list" class="station-list"></ul>
+        <p class="empty muted" id="station-empty" hidden>Noch keine Sender in dieser Kategorie. Füge oben einen hinzu oder nutze „Sender suchen“.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Suchen -->
+  <section id="tab-search" class="panel" hidden>
+    <div class="card">
+      <form id="search-form" class="search-form">
+        <input name="name" placeholder="Name, z. B. Bayern 3, Antenne, Jazz …">
+        <select name="countrycode">
+          <option value="DE">Deutschland</option>
+          <option value="AT">Österreich</option>
+          <option value="CH">Schweiz</option>
+          <option value="">Alle Länder</option>
+        </select>
+        <input name="tag" placeholder="Genre (optional)">
+        <button class="btn">Suchen</button>
+      </form>
+      <p class="muted small">Quelle: Community Radio Browser. Hinzugefügte Sender landen in der Kategorie:
+        <select id="search-target"></select></p>
+      <div id="search-results" class="results"></div>
+    </div>
+  </section>
+
+  <!-- Einrichtung -->
+  <section id="tab-setup" class="panel" hidden>
+    <div class="grid-2">
+      <div class="card">
+        <h2>Dienst</h2>
+        <dl class="kv" id="svc-info"></dl>
+      </div>
+      <div class="card">
+        <h2>Receiver</h2>
+        <dl class="kv" id="avr-info"></dl>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>DNS über Pi-hole</h2>
+        <button class="btn small" id="dns-check">DNS prüfen</button>
+      </div>
+      <p>Der Marantz fragt <code>denon.vtuner.com</code> ab. Deine Pi-holes müssen alle <code>*.vtuner.com</code>-Namen auf
+        <strong class="ip">–</strong> umleiten.</p>
+      <ol class="steps">
+        <li>Pi-hole 6 öffnen → <em>Settings</em> → <em>All settings</em> → Reiter <em>Miscellaneous</em> → Expertenmodus einschalten.</li>
+        <li>Bei <code>misc.dnsmasq_lines</code> diese Zeile eintragen und speichern:
+          <div class="copy"><code id="dns-line">address=/vtuner.com/–</code><button class="btn ghost small" data-copy="dns-line">Kopieren</button></div></li>
+        <li>Auf jedem Pi-hole wiederholen.</li>
+        <li>Der Marantz muss einen Pi-hole als DNS nutzen (per DHCP der Fritzbox oder fest im Receiver). Danach den Marantz einmal komplett stromlos machen.</li>
+      </ol>
+      <form id="pihole-form" class="pihole-form">
+        <label>Pi-hole 1 <input name="p0" placeholder="z. B. 192.168.178.2"></label>
+        <label>Pi-hole 2 <input name="p1" placeholder="optional"></label>
+        <button class="btn ghost">Speichern</button>
+      </form>
+      <div id="dns-results"></div>
+    </div>
+
+    <div class="card">
+      <h2>Letzte Abrufe</h2>
+      <div class="table-wrap"><table class="log"><thead><tr><th>Zeit</th><th>Gerät</th><th>Anfrage</th></tr></thead><tbody id="log-body"></tbody></table></div>
+    </div>
+  </section>
+</main>
+
+<div class="player" id="player" hidden>
+  <button class="btn round" id="player-stop" aria-label="Stopp">■</button>
+  <div class="player-text"><strong id="player-name"></strong><span class="muted small" id="player-state"></span></div>
+  <audio id="audio" preload="none"></audio>
+</div>
+
+<dialog id="dlg">
+  <form method="dialog" id="dlg-form">
+    <h3 id="dlg-title"></h3>
+    <div id="dlg-body"></div>
+    <div class="row end">
+      <button class="btn ghost" value="cancel">Abbrechen</button>
+      <button class="btn" value="ok" id="dlg-ok">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+<script src="static/app.js"></script>
+</body>
+</html>
