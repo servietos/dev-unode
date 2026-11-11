@@ -351,9 +351,18 @@ manual.addEventListener("submit", (e) => {
 });
 let results = [];
 // Land oder Genre gewechselt: sofort neu suchen
-for (const id of ["#search-country", "#search-tag"]) {
+for (const id of ["#search-country", "#search-tag", "#search-order"]) {
   $(id).addEventListener("change", () => $("#search-form").requestSubmit());
 }
+// Live-Suche: beim Tippen nach kurzer Pause, ab 2 Zeichen (leeres Feld zeigt die Top-Sender des Landes)
+let liveTimer;
+$('#search-form [name="name"]').addEventListener("input", (e) => {
+  clearTimeout(liveTimer);
+  const q = e.target.value.trim();
+  if (q.length === 1) return;
+  liveTimer = setTimeout(() => $("#search-form").requestSubmit(), 350);
+});
+let searchSeq = 0;
 
 // Darstellung: Auto / Hell / Dunkel, im Browser gemerkt
 function applyTheme(t) {
@@ -373,12 +382,22 @@ document.querySelectorAll("[data-theme-set]").forEach((b) => b.addEventListener(
 
 $("#search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  clearTimeout(liveTimer);
   const params = new URLSearchParams([...new FormData(e.target)].filter(([, v]) => v));
   const box = $("#search-results");
-  box.innerHTML = `<p class="muted">Suche …</p>`;
+  const seq = ++searchSeq;            // nur die Antwort auf die letzte Suche anzeigen
+  box.setAttribute("aria-busy", "true");
+  if (!results.length) box.innerHTML = `<p class="muted">Suche …</p>`;
+  let found;
   try {
-    results = (await api("api/search?" + params)).results;
-  } catch (err) { box.innerHTML = `<p class="muted">${esc(err.message)}</p>`; return; }
+    found = (await api("api/search?" + params)).results;
+  } catch (err) {
+    if (seq === searchSeq) { box.removeAttribute("aria-busy"); box.innerHTML = `<p class="muted">${esc(err.message)}</p>`; }
+    return;
+  }
+  if (seq !== searchSeq) return;
+  box.removeAttribute("aria-busy");
+  results = found;
   if (!results.length) { box.innerHTML = `<p class="muted">Nichts gefunden.</p>`; return; }
   box.innerHTML = results.map((r, i) => `<div class="result">
       ${r.favicon ? `<img src="${esc(r.favicon)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph'}))">` : '<div class="ph"></div>'}
