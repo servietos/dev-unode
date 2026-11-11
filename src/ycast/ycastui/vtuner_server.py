@@ -52,7 +52,7 @@ def _log_receiver():
 
 @app.route("/health")
 def health():
-    return {"ok": True, "my_stations": server.my_stations_enabled, "relay": RELAY_HTTPS}
+    return {"ok": True, "my_stations": server.my_stations_enabled, "relay": RELAY_HTTPS, "ip": common.YCAST_IP}
 
 
 @app.route("/relay")

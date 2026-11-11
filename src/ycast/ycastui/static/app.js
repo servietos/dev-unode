@@ -315,11 +315,40 @@ async function refreshStatus() {
   $("#log-body").innerHTML = s.requests.slice(0, 30).map((r) =>
     `<tr><td>${new Date(r.t * 1000).toLocaleTimeString("de-DE")}</td><td>${esc(r.client)}</td><td>${esc(r.path)}</td></tr>`).join("")
     || `<tr><td colspan="3" class="muted">Noch keine Abrufe.</td></tr>`;
+  renderNetwork(s.network);
   const form = $("#pihole-form");
   if (document.activeElement?.form !== form) {
     form.p0.value = s.settings.piholes[0] || ""; form.p1.value = s.settings.piholes[1] || "";
   }
 }
+
+function renderNetwork(n) {
+  if (!n) return;
+  const a = n.active;
+  $("#net-info").innerHTML = `
+    <dt>Aktive IP</dt><dd><strong>${esc(a.ip || "–")}</strong>${n.saved ? "" : " (Standard)"}</dd>
+    <dt>Netz</dt><dd>${esc(a.subnet || "–")} · Gateway ${esc(a.gateway || "–")}</dd>
+    <dt>Adapter</dt><dd>${esc(a.parent || "–")}${a.host_ip ? " · Umbrel " + esc(a.host_ip) : ""}</dd>`;
+  $("#net-note").hidden = !a.note;
+  $("#net-note").textContent = a.note || "";
+  const want = n.saved || n.default;
+  $("#net-pending").hidden = !n.pending;
+  $("#net-pending").innerHTML = n.pending ? `Gespeichert: <strong>${esc(want)}</strong>. Gilt nach einem Neustart der App
+    (Umbrel-Dashboard: YCast-Symbol gedrückt halten bzw. Rechtsklick → <em>Neu starten</em>).
+    Danach die Local DNS Records in den Pi-holes auf ${esc(want)} ändern.` : "";
+  const inp = $("#net-ip");
+  if (document.activeElement !== inp) inp.value = n.saved || "";
+  inp.placeholder = n.default ? `Standard: ${n.default}` : "z. B. 192.168.178.210";
+}
+
+async function saveNetwork(ip) {
+  try {
+    renderNetwork(await api("api/network", { method: "PUT", body: { ip } }));
+    toast(ip ? "IP gespeichert, Neustart der App nötig" : "Standard-IP gespeichert");
+  } catch (err) { toast(err.message, true); }
+}
+$("#net-form").addEventListener("submit", (e) => { e.preventDefault(); saveNetwork($("#net-ip").value.trim()); });
+$("#net-default").addEventListener("click", () => { $("#net-ip").value = ""; saveNetwork(""); });
 
 $("#pihole-form").addEventListener("submit", async (e) => {
   e.preventDefault();

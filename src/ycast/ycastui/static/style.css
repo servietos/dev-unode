@@ -89,6 +89,8 @@ textarea { width: 100%; min-height: 220px; font-family: ui-monospace, Consolas, 
 .kv dt { color: var(--muted); } .kv dd { margin: 0; overflow-wrap: anywhere; }
 .steps { padding-left: 20px; } .steps li { margin-bottom: 8px; }
 .copy { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.notice { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: .9rem; }
+.notice.warn { background: color-mix(in srgb, var(--accent-2) 18%, transparent); }
 .alt { margin: 4px 0 8px; } .alt summary { cursor: pointer; color: var(--muted); }
 .alt p { margin: 10px 0 0; }
 .pihole-form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin: 12px 0; }

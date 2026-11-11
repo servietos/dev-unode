@@ -89,6 +89,55 @@ class TestWeb(Base):
         self.assertEqual(s["ip"], "192.168.178.210")
 
 
+class TestNetwork(Base):
+    ENV = {"YCAST_IP": "192.168.178.210", "YCAST_SUBNET": "192.168.178.0/24", "YCAST_GATEWAY": "192.168.178.1",
+           "YCAST_PARENT": "enp1s0", "YCAST_HOST_IP": "192.168.178.4", "YCAST_NET_NOTE": ""}
+
+    def setUp(self):
+        super().setUp()
+        self.env = mock.patch.dict(os.environ, self.ENV)
+        self.env.start()
+        import ycastui.web as web
+        self.web = importlib.reload(web)
+        self.client = self.web.app.test_client()
+        self.down = mock.patch.object(self.web.requests, "get", side_effect=self.web.requests.ConnectionError())
+        self.down.start()
+
+    def tearDown(self):
+        self.down.stop()
+        self.env.stop()
+        super().tearDown()
+
+    def test_default_ip(self):
+        self.assertEqual(self.common.default_ip("192.168.178.0/24"), "192.168.178.210")
+        self.assertEqual(self.common.default_ip("10.0.0.0/25"), "10.0.0.126")
+
+    def test_save_and_pending(self):
+        n = self.client.get("/api/network").get_json()
+        self.assertFalse(n["pending"])
+        self.assertEqual(n["active"]["ip"], "192.168.178.210")
+        n = self.client.put("/api/network", json={"ip": "192.168.178.220"}).get_json()
+        self.assertEqual(n["saved"], "192.168.178.220")
+        self.assertTrue(n["pending"])
+        self.assertEqual(Path(self.tmp.name, "network.conf").read_text(), "YCAST_IP=192.168.178.220\n")
+        n = self.client.put("/api/network", json={"ip": ""}).get_json()
+        self.assertEqual(n["saved"], "")
+        self.assertFalse(n["pending"])
+        self.assertFalse(Path(self.tmp.name, "network.conf").exists())
+
+    def test_rejects_bad_ips(self):
+        for ip in ("abc", "10.0.0.5", "192.168.178.1", "192.168.178.4", "192.168.178.255", "192.168.178.0"):
+            self.assertEqual(self.client.put("/api/network", json={"ip": ip}).status_code, 400, ip)
+
+    def test_ip_reported_by_running_service_wins(self):
+        self.down.stop()
+        resp = mock.Mock()
+        resp.json.return_value = {"ok": True, "ip": "192.168.178.230"}
+        with mock.patch.object(self.web.requests, "get", return_value=resp):
+            self.assertEqual(self.client.get("/api/status").get_json()["ip"], "192.168.178.230")
+        self.down.start()
+
+
 class TestVtuner(Base):
     def setUp(self):
         super().setUp()

@@ -4,9 +4,10 @@ version: "3.7"
 #   web    – Weboberfläche, über das Umbrel-Dashboard (app_proxy)
 #   ycast  – vTuner-Dienst für den Receiver auf Port 80 einer eigenen LAN-IP (macvlan),
 #            weil Port 80 des Umbrel vom Dashboard belegt ist.
-# Pi-hole: Local DNS Records denon.vtuner.com + denon2.vtuner.com -> 192.168.178.210
 #
-# Anpassen bei anderem Netz: YCAST_IP, ipv4_address, subnet, gateway, ip_range und parent.
+# Die APP_YCAST_*-Werte setzt exports.sh beim Start: Adapter, Netz und Gateway werden
+# erkannt, die IP kommt aus der Weboberfläche (data/network.conf), Standard ist <Netz>.210.
+# Die Werte hinter ":-" greifen nur, falls exports.sh nicht ausgeführt wurde.
 
 services:
   app_proxy:
@@ -15,20 +16,25 @@ services:
       APP_PORT: 8000
 
   web:
-    image: ghcr.io/servietos/ycast:2.0.1
+    image: ghcr.io/servietos/ycast:2.1.0
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 10s
     environment:
       YCASTUI_MODE: web
       TZ: ${TZ:-Europe/Berlin}
-      YCAST_IP: 192.168.178.210
+      YCAST_IP: ${APP_YCAST_IP:-192.168.178.210}
+      YCAST_SUBNET: ${APP_YCAST_SUBNET:-192.168.178.0/24}
+      YCAST_GATEWAY: ${APP_YCAST_GATEWAY:-192.168.178.1}
+      YCAST_PARENT: ${APP_YCAST_PARENT:-enp1s0}
+      YCAST_HOST_IP: ${APP_YCAST_HOST_IP:-}
+      YCAST_NET_NOTE: ${APP_YCAST_NOTE:-}
       YCAST_URL: http://dev-unode-ycast_ycast_1
     volumes:
       - ${APP_DATA_DIR}/data:/data
 
   ycast:
-    image: ghcr.io/servietos/ycast:2.0.1
+    image: ghcr.io/servietos/ycast:2.1.0
     user: "1000:1000"
     restart: unless-stopped
     stop_grace_period: 10s
@@ -37,22 +43,22 @@ services:
     environment:
       YCASTUI_MODE: vtuner
       TZ: ${TZ:-Europe/Berlin}
-      YCAST_IP: 192.168.178.210
+      YCAST_IP: ${APP_YCAST_IP:-192.168.178.210}
       RELAY_HTTPS: "on"
     volumes:
       - ${APP_DATA_DIR}/data:/data
     networks:
       default: {}
       lan:
-        ipv4_address: 192.168.178.210
+        ipv4_address: ${APP_YCAST_IP:-192.168.178.210}
 
 networks:
   lan:
     driver: macvlan
     driver_opts:
-      parent: enp1s0
+      parent: ${APP_YCAST_PARENT:-enp1s0}
     ipam:
       config:
-        - subnet: 192.168.178.0/24
-          gateway: 192.168.178.1
-          ip_range: 192.168.178.210/32
+        - subnet: ${APP_YCAST_SUBNET:-192.168.178.0/24}
+          gateway: ${APP_YCAST_GATEWAY:-192.168.178.1}
+          ip_range: ${APP_YCAST_IP:-192.168.178.210}/32
