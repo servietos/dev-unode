@@ -69,17 +69,39 @@
   <!-- Suchen -->
   <section id="tab-search" class="panel" hidden>
     <div class="card">
+      <div class="card-head">
+        <div>
+          <h2>Sender manuell hinzufügen</h2>
+          <p class="muted small">Für Sender, die der Radio Browser nicht kennt. Die Stream-URL findest du meist auf der Website des Senders (oft mit .mp3, .aac oder /stream).</p>
+        </div>
+      </div>
+      <form id="manual-form" class="manual-form">
+        <label>Name<input name="name" placeholder="z. B. Mein Lokalradio" required></label>
+        <label>Stream-URL<input name="url" placeholder="http://… oder https://…" required></label>
+        <label>Kategorie<select name="cat" id="manual-cat"></select></label>
+        <div class="row">
+          <button class="btn ghost" type="button" id="manual-test">Testen</button>
+          <button class="btn ghost" type="button" id="manual-play">▶ Vorhören</button>
+          <button class="btn">Hinzufügen</button>
+        </div>
+      </form>
+      <p class="muted small" id="manual-result"></p>
+    </div>
+
+    <div class="card">
+      <h2>Im Radio Browser suchen</h2>
       <form id="search-form" class="search-form">
         <input name="name" placeholder="Name, z. B. Bayern 3, Antenne, Jazz …">
-        <select name="countrycode">
+        <select name="countrycode" id="search-country" aria-label="Land">
           <option value="DE">Deutschland</option>
           <option value="AT">Österreich</option>
           <option value="CH">Schweiz</option>
           <option value="">Alle Länder</option>
         </select>
-        <input name="tag" placeholder="Genre (optional)">
+        <input name="tag" placeholder="Genre (optional)" list="tag-list">
         <button class="btn">Suchen</button>
       </form>
+      <datalist id="tag-list"></datalist>
       <p class="muted small">Quelle: Community Radio Browser. Hinzugefügte Sender landen in der Kategorie:
         <select id="search-target"></select></p>
       <div id="search-results" class="results"></div>

@@ -78,6 +78,20 @@ class TestWeb(Base):
         self.assertIn("t: http://z", self.client.get("/api/stations/export").get_data(as_text=True))
         self.assertEqual(self.client.post("/api/stations/import", json={"yaml": "- liste"}).status_code, 400)
 
+    def test_countries_merged_and_cached(self):
+        resp = mock.Mock()
+        resp.json.return_value = [
+            {"name": "Germany", "iso_3166_1": "DE", "stationcount": 100},
+            {"name": "Deutschland", "iso_3166_1": "de", "stationcount": 5},
+            {"name": "Nowhere", "iso_3166_1": "", "stationcount": 3},
+            {"name": "Austria", "iso_3166_1": "AT", "stationcount": 0},
+        ]
+        with mock.patch.object(self.web.requests, "get", return_value=resp) as get:
+            data = self.client.get("/api/countries").get_json()["countries"]
+            self.client.get("/api/countries")
+        self.assertEqual(data, [{"code": "DE", "name": "Germany", "count": 105}])
+        self.assertEqual(get.call_count, 1)
+
     def test_settings_and_status(self):
         self.client.put("/api/settings", json={"piholes": ["192.168.178.2", " ", "192.168.178.3"]})
         self.assertEqual(self.client.get("/api/settings").get_json()["piholes"], ["192.168.178.2", "192.168.178.3"])

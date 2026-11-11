@@ -11,7 +11,7 @@ from . import common
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/2.1.0"}
+UA = {"User-Agent": "YCast-Umbrel/2.2.0"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -101,6 +101,47 @@ def search():
     } for s in r.json()]
     out.sort(key=lambda s: s["hls"])  # HLS kann der Receiver nicht, ans Ende
     return jsonify({"results": out})
+
+
+_cache = {}
+CACHE_SECONDS = 24 * 3600
+
+
+def cached_rb(key, path, params):
+    hit = _cache.get(key)
+    if hit and time.time() - hit[0] < CACHE_SECONDS:
+        return hit[1]
+    r = requests.get(f"{RADIOBROWSER_API}/json/{path}", params=params, headers=UA, timeout=10)
+    r.raise_for_status()
+    _cache[key] = (time.time(), r.json())
+    return _cache[key][1]
+
+
+@app.get("/api/countries")
+def countries():
+    """Alle Länder mit Sendern (ISO-Code + Anzahl); deutsche Namen setzt der Browser."""
+    try:
+        data = cached_rb("countries", "countries", {"hidebroken": "true"})
+    except requests.RequestException as e:
+        return err(f"Radio Browser nicht erreichbar: {e}", 502)
+    out = {}
+    for c in data:
+        code = (c.get("iso_3166_1") or "").upper()
+        if len(code) == 2 and c.get("stationcount"):
+            prev = out.get(code, {"code": code, "name": c.get("name", code), "count": 0})
+            prev["count"] += c["stationcount"]
+            out[code] = prev
+    return jsonify({"countries": sorted(out.values(), key=lambda c: c["name"])})
+
+
+@app.get("/api/tags")
+def tags():
+    try:
+        data = cached_rb("tags", "tags", {"order": "stationcount", "reverse": "true", "limit": 200,
+                                          "hidebroken": "true"})
+    except requests.RequestException as e:
+        return err(f"Radio Browser nicht erreichbar: {e}", 502)
+    return jsonify({"tags": [t["name"] for t in data if t.get("name")]})
 
 
 # ---------- Stream-Test ----------

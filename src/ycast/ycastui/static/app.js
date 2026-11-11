@@ -241,10 +241,71 @@ $("#btn-import").addEventListener("click", async () => {
 
 // ---------- Suche ----------
 function renderTargets() {
-  const sel = $("#search-target"), keep = sel.value;
-  sel.innerHTML = cats.map((c, i) => `<option value="${i}">${esc(c.name)}</option>`).join("");
-  if (keep && cats[+keep]) sel.value = keep; else sel.value = String(current);
+  for (const sel of [$("#search-target"), $("#manual-cat")]) {
+    const keep = sel.value;
+    sel.innerHTML = cats.map((c, i) => `<option value="${i}">${esc(c.name)}</option>`).join("");
+    if (keep && cats[+keep]) sel.value = keep; else sel.value = String(current);
+  }
 }
+
+// Länder und Genres aus dem Radio Browser (einmal pro Seitenaufruf)
+let listsLoaded = false;
+async function loadLists() {
+  if (listsLoaded) return;
+  listsLoaded = true;
+  const dn = (() => { try { return new Intl.DisplayNames(["de"], { type: "region" }); } catch { return null; } })();
+  const deName = (c) => { try { return (dn && dn.of(c.code)) || c.name; } catch { return c.name; } };
+  try {
+    const { countries } = await api("api/countries");
+    const list = countries.map((c) => ({ ...c, de: deName(c) })).sort((a, b) => a.de.localeCompare(b.de, "de"));
+    const opt = (c) => `<option value="${esc(c.code)}">${esc(c.de)} (${c.count})</option>`;
+    const top = ["DE", "AT", "CH"].map((code) => list.find((c) => c.code === code)).filter(Boolean);
+    const sel = $("#search-country"), keep = sel.value;
+    sel.innerHTML = `<optgroup label="Häufig">${top.map(opt).join("")}</optgroup>
+      <option value="">Alle Länder</option>
+      <optgroup label="Alle Länder A–Z (${list.length})">${list.map(opt).join("")}</optgroup>`;
+    sel.value = keep;
+  } catch (e) { listsLoaded = false; toast("Länderliste: " + e.message, true); }
+  try {
+    const { tags } = await api("api/tags");
+    $("#tag-list").innerHTML = tags.map((t) => `<option value="${esc(t)}">`).join("");
+  } catch { /* Genre-Vorschläge sind optional */ }
+}
+document.querySelector('.tab[data-tab="search"]').addEventListener("click", loadLists);
+
+// Manuell hinzufügen
+const manual = $("#manual-form");
+function manualValues() {
+  return { name: manual.name.value.trim(), url: manual.url.value.trim(), ci: +manual.cat.value };
+}
+$("#manual-test").addEventListener("click", async () => {
+  const { url } = manualValues();
+  const out = $("#manual-result");
+  if (!/^https?:\/\//.test(url)) { out.textContent = "Bitte eine URL mit http:// oder https:// eingeben."; return; }
+  out.textContent = "Teste …";
+  try {
+    const d = (await api("api/check", { method: "POST", body: { url } })).direct;
+    out.textContent = d.ok
+      ? `Stream erreichbar: ${[d.name, d.bitrate && d.bitrate + " kbit/s", d.type.split(";")[0]].filter(Boolean).join(" · ")}`
+        + (url.startsWith("https://") ? " · läuft am Marantz über das HTTPS-Relay" : "")
+      : `Nicht erreichbar (${d.status ? "HTTP " + d.status : d.error || "keine Daten"}). Hinzufügen geht trotzdem.`;
+    if (d.ok && d.name && !manual.name.value.trim()) manual.name.value = d.name.slice(0, 60);
+  } catch (e) { out.textContent = e.message; }
+});
+$("#manual-play").addEventListener("click", () => {
+  const { name, url } = manualValues();
+  if (/^https?:\/\//.test(url)) play(name || url, url);
+});
+manual.addEventListener("submit", (e) => {
+  e.preventDefault();
+  const { name, url, ci } = manualValues();
+  if (!cats[ci]) return toast("Lege zuerst eine Kategorie an", true);
+  if (!/^https?:\/\//.test(url)) return toast("URL muss mit http:// oder https:// beginnen", true);
+  if (cats[ci].stations.some((s) => s.name === name)) return toast(`„${name}“ ist schon in „${cats[ci].name}“`, true);
+  cats[ci].stations.push({ name, url });
+  manual.reset(); $("#manual-result").textContent = "";
+  save(`„${name}“ zu „${cats[ci].name}“ hinzugefügt`);
+});
 let results = [];
 $("#search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
