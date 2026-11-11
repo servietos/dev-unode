@@ -11,7 +11,7 @@ from . import common
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/2.0"}
+UA = {"User-Agent": "YCast-Umbrel/2.0.1"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")

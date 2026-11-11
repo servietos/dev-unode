@@ -30,14 +30,24 @@ Beide Dienste teilen sich `/data`:
 
 ## Pi-hole 6
 
-*Settings → All settings → Miscellaneous* (Expertenmodus) → `misc.dnsmasq_lines`:
+*Settings → Local DNS Records*, auf allen Pi-holes:
+
+| Domain | IP |
+|---|---|
+| `denon.vtuner.com` | `192.168.178.210` |
+| `denon2.vtuner.com` | `192.168.178.210` |
+
+Der Receiver muss einen Pi-hole als DNS nutzen und danach einmal stromlos gemacht werden.
+
+Alternative für alle `*.vtuner.com`: `misc.dnsmasq_lines` lässt sich in Pi-hole 6 nicht über
+die Weboberfläche setzen, nur so:
 
 ```
-address=/vtuner.com/192.168.178.210
+# direkt installiert
+sudo pihole-FTL --config misc.dnsmasq_lines '["address=/vtuner.com/192.168.178.210"]'
+# Docker (Umgebungsvariable, danach Container neu starten)
+FTLCONF_misc_dnsmasq_lines: 'address=/vtuner.com/192.168.178.210'
 ```
-
-Auf allen Pi-holes eintragen. Der Receiver muss einen Pi-hole als DNS nutzen und danach einmal
-stromlos gemacht werden.
 
 ## Entwicklung
 
