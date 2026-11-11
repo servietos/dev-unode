@@ -1,0 +1,43 @@
+manifestVersion: 1
+id: dev-unode-crafty
+name: Crafty Controller
+tagline: Minecraft-Server (Java & Bedrock) im Browser anlegen und verwalten
+icon: https://docs.craftycontrol.com/img/favicon.ico
+category: gaming
+version: "4.11.0"
+port: 8443
+description: >-
+  Crafty Controller ist eine Weboberfläche für Minecraft-Server: Server anlegen (Vanilla,
+  Paper, Forge, Fabric, Bedrock …), starten und stoppen, Konsole, Spieler, Backups,
+  Zeitpläne und Benutzerrechte.
+
+
+  Anmeldung beim ersten Öffnen: Benutzer „admin“, das Passwort zeigt Umbrel an. Ändere es
+  danach in Crafty unter Benutzerverwaltung.
+
+
+  Spieler verbinden sich mit der IP deines Umbrel: Java-Server auf den Ports 25565–25575
+  (TCP), Bedrock-Server auf 19132–19133 (UDP). Lege neue Server in Crafty auf diesen Ports an.
+  Für Spieler außerhalb deines Heimnetzes musst du den jeweiligen Port im Router freigeben.
+
+
+  Läuft auf x86 und ARM (z. B. Raspberry Pi 5). Minecraft-Server brauchen je nach Größe
+  2–4 GB RAM pro Server.
+developer: Arcadia Technology
+website: https://craftycontrol.com
+repo: https://gitlab.com/crafty-controller/crafty-4
+support: https://discord.gg/9VJPhCE
+submitter: servietos
+submission: https://github.com/servietos/dev-unode
+gallery:
+  - https://docs.craftycontrol.com/img/page-assets/user-guide/server-creation/minecraft/dashboard-server-running.png
+  - https://docs.craftycontrol.com/img/page-assets/user-guide/server-creation/minecraft/server-builder.png
+  - https://docs.craftycontrol.com/img/page-assets/user-guide/server-configuration/minecraft-config-overview.png
+  - https://docs.craftycontrol.com/img/page-assets/user-guide/backup-manager/backup-manager-overview.png
+releaseNotes: >-
+  Neu aufgesetzt: Crafty Controller 4.11.0 statt des Bedrock-Images, Weboberfläche über
+  Umbrel, Admin-Passwort wird bei der Installation erzeugt (kein festes Passwort mehr).
+dependencies: []
+path: ""
+defaultUsername: "admin"
+deterministicPassword: true

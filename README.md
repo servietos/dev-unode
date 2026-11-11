@@ -2,20 +2,26 @@
 
 This repository is created based on template at https://github.com/getumbrel/umbrel-community-app-store.
 
-Contained apps:
+Contained apps (alle mit Weboberfläche über das Umbrel-Dashboard, x86 und ARM):
 
-chromium        Browser (working, Version: latest)
+| App | Zweck | Version |
+|---|---|---|
+| broking | Aktien-Screen, Thesen-Journal, Handel über Alpaca Paper-Trading (Quellcode in `src/broking`) | 0.2.0 |
+| chromium | Browser im Browser (linuxserver/chromium) | 7b8e918f-ls63 |
+| claude-code | Claude Code im Browser-Terminal | 1.1.1 |
+| crafty | Crafty Controller: Minecraft-Server (Java & Bedrock) anlegen und verwalten | 4.11.0 |
+| freshrss | RSS-Reader | 1.30.4 |
+| goldcoin-core | Goldcoin-Fullnode mit Statusseite | 0.1.3 |
+| hello-world | Beispiel-App aus der Umbrel-Vorlage | 1.0.0 |
+| myspeed | Speedtest-Verlauf | 1.0.9 |
+| openclaude | OpenClaude im Browser-Terminal | 1.0.0 |
+| owncast | Livestream-Server (Zuschauerseite ohne Umbrel-Login, RTMP auf Port 1935) | 0.2.1 |
+| pi-hole | DNS-Server und Werbeblocker (Weboberfläche auf Port 8082) | 2025.05.1 |
+| smart-tv-telegram | Telegram-Videos per Bot auf Smart-TV/Chromecast, mit Einrichtungsseite | 1.4.0-1 |
+| ycast | Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …), HTTPS-Relay, einstellbare IP (Anleitung in `src/ycast/README.md`) | 2.2.0 |
 
-hello-world     from template (working)
-
-pi-hole         DNS server and add blocker (working, Version 5.18.2/2024.03.2)
-
-invidious       add free youtube access (not working, Version latest)
-
-broking         Aktien-Screen, Thesen-Journal, Handel über Alpaca Paper-Trading (Version 0.2.0, Quellcode in src/broking)
-
-ycast           Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …) mit Weboberfläche,
-                HTTPS-Relay und einstellbarer IP (working, Version 2.2.0, Anleitung und Quellcode in src/ycast/README.md)
+Hinweis: Apps mit Spiele- oder Streaming-Ports (crafty, owncast) brauchen für Zugriffe von außen
+eine Portfreigabe im Router; pi-hole kollidiert mit dem offiziellen Pi-hole aus dem Umbrel-Store.
 
 ## How to use (description from Umbrel's template):
 

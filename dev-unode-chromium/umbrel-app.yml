@@ -3,7 +3,7 @@ id: dev-unode-chromium
 icon: https://raw.githubusercontent.com/servietos/unode/38efff66a9e0013b3be886b804c436ed4cfcf790/gallery/Chromium_Logo.svg
 category: networking
 name: Chromium
-version: "c0d313e5-ls99"
+version: "7b8e918f-ls63"
 tagline: Chromium is a free and open-source web browser
 description: >-
   Chromium is an open-source browser project that aims to build a safer, faster, and more stable way for all Internet users to experience the web. 
@@ -22,5 +22,5 @@ gallery:
 path: ""
 deterministicPassword: false
 torOnly: false
-submitter: serv
-submission: x
+submitter: servietos
+submission: https://github.com/servietos/dev-unode

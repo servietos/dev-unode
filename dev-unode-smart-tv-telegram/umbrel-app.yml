@@ -1,47 +1,33 @@
 manifestVersion: 1
 id: dev-unode-smart-tv-telegram
 name: Smart TV Telegram
-version: "1.4.0"
+tagline: Videos aus Telegram per Bot auf Smart-TV, Chromecast oder Kodi abspielen
+category: media
+version: "1.4.0-1"
+port: 8351
+icon: https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/smart-tv-telegram-icon.svg
+description: >-
+  Ein Telegram-Bot, der Videos und Filme aus Telegram ohne Download direkt auf deinen
+  Fernseher streamt: UPnP/DLNA-Smart-TVs, Chromecast, Kodi oder VLC im Heimnetz.
+
+
+  Einrichtung über die App-Seite im Umbrel: API-ID und API-Hash (my.telegram.org), Bot-Token
+  (@BotFather) und deine Telegram-ID eintragen und speichern. Die IP des Umbrel wird automatisch
+  vorgeschlagen. Danach dem Bot ein Video schicken und ein Gerät auswählen.
+
+
+  Der Bot läuft im Host-Netz auf Port 8350, damit er Fernseher im Heimnetz findet. Die eigene
+  Weboberfläche des Bots kann optional mit Passwort eingeschaltet werden.
+developer: andrew-ld
+website: https://github.com/andrew-ld/smart-tv-telegram
 repo: https://github.com/andrew-ld/smart-tv-telegram
 support: https://github.com/andrew-ld/smart-tv-telegram/issues
-category: media
-tagline: Telegram Videos direkt auf Smart TV streamen
-icon: https://raw.githubusercontent.com/andrew-ld/smart-tv-telegram/master/smart_tv_telegram/static/icon.png
-screenshots:
-  - https://raw.githubusercontent.com/andrew-ld/smart-tv-telegram/master/screenshot.jpg
-
-description: >-
-  Mit diesem Bot kannst du Videos und Filme aus Telegram direkt auf dein Smart TV, Chromecast, Kodi oder VLC streamen – ohne Download.
-
-website: https://github.com/andrew-ld/smart-tv-telegram
-port: 8350
-torOnly: false
+submitter: servietos
+submission: https://github.com/servietos/dev-unode
+gallery: []
+releaseNotes: >-
+  Neue Einrichtungsseite im Umbrel: Zugangsdaten ohne SSH eintragen, IP des Umbrel wird
+  automatisch erkannt. Image fest auf 1.4.0-1, Konfiguration und Telegram-Sitzung bleiben
+  bei Updates erhalten.
 dependencies: []
-
-umbrel:
-  version: "1.0"
-  app:
-    config:
-      - name: config.ini
-        path: /app/config.ini
-        template: |
-          [mtproto]
-          api_id=REPLACE_WITH_YOUR_API_ID
-          api_hash=REPLACE_WITH_YOUR_API_HASH
-          token=REPLACE_WITH_YOUR_BOT_TOKEN
-          session_name=smart_tv_telegram
-
-          [bot]
-          admins=[REPLACE_WITH_YOUR_TELEGRAM_USER_ID]
-
-          [http]
-          listen_host=0.0.0.0
-          listen_port=8350
-
-          [web_ui]
-          enabled=1
-          password=umbrel123
-
-          [discovery]
-          upnp_enabled=1
-          chromecast_enabled=1
+path: ""

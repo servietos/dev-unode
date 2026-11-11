@@ -1,18 +1,37 @@
 version: "3.7"
 
+# setup – Einrichtungsseite (über Umbrel), schreibt data/config.ini
+# bot   – Smart TV Telegram im Host-Netz (nötig, um Fernseher per UPnP/Chromecast zu finden),
+#         Port 8350; startet neu, bis die Konfiguration gültig ist.
+
 services:
-  smart-tv-telegram:
-    image: andrewhyphenld/smart-tv-telegram:latest
-    container_name: smart-tv-telegram
+  app_proxy:
+    environment:
+      APP_HOST: dev-unode-smart-tv-telegram_setup_1
+      APP_PORT: 8080
+
+  setup:
+    image: python:3.13-alpine
+    user: "1000:1000"
+    restart: on-failure
+    command: ["python", "/app/setup.py"]
+    environment:
+      CONFIG_PATH: /data/config.ini
+      HOST_IP: ${APP_SMARTTV_HOST_IP:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ${APP_DATA_DIR}/setup/setup.py:/app/setup.py:ro
+      - ${APP_DATA_DIR}/data:/data
+
+  bot:
+    image: andrewhyphenld/smart-tv-telegram:1.4.0-1
+    user: "1000:1000"
     restart: unless-stopped
     network_mode: host
+    working_dir: /data
+    command: ["smart_tv_telegram", "-c", "/data/config.ini"]
     volumes:
-      - ${APP_DATA_DIR}/data/config.ini:/app/config.ini:ro
-    environment:
-      - CONFIG_PATH=/app/config.ini
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8350/health" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      - ${APP_DATA_DIR}/data:/data
+    depends_on:
+      - setup
