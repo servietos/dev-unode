@@ -11,7 +11,7 @@ from . import common
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/2.0.1"}
+UA = {"User-Agent": "YCast-Umbrel/2.1.0"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -137,29 +137,61 @@ def check_stream():
 
 # ---------- Status, DNS, Einstellungen ----------
 
+def ycast_health():
+    try:
+        return {"ok": True, **requests.get(f"{YCAST_URL}/health", timeout=3).json()}
+    except (requests.RequestException, ValueError) as e:
+        return {"ok": False, "error": type(e).__name__}
+
+
+def ip_in_use(health=None):
+    """IP, die der laufende vTuner-Dienst meldet; sonst die Startkonfiguration."""
+    health = health if health is not None else ycast_health()
+    return health.get("ip") or common.active_network()["ip"]
+
+
 @app.get("/api/status")
 def status():
-    try:
-        h = requests.get(f"{YCAST_URL}/health", timeout=3).json()
-        ycast = {"ok": True, **h}
-    except (requests.RequestException, ValueError) as e:
-        ycast = {"ok": False, "error": type(e).__name__}
+    ycast = ycast_health()
     reqs = common.read_requests(60)
     return jsonify({
         "ycast": ycast,
-        "ip": common.YCAST_IP,
+        "ip": ip_in_use(ycast),
         "requests": reqs,
         "last_receiver": next((r for r in reqs if not r["path"].startswith("/relay")), None),
         "settings": common.load_settings(),
+        "network": network_info(ycast),
         "counts": {"categories": len(cats := common.load_stations()),
                    "stations": sum(len(c["stations"]) for c in cats)},
     })
+
+
+def network_info(health=None):
+    active = common.active_network()
+    active["ip"] = ip_in_use(health)
+    saved = common.saved_ip()
+    default = common.default_ip(active["subnet"])
+    wanted = saved or default
+    return {"active": active, "saved": saved, "default": default,
+            "pending": bool(wanted) and wanted != active["ip"] and not active["note"]}
+
+
+@app.get("/api/network")
+def get_network():
+    return jsonify(network_info())
+
+
+@app.put("/api/network")
+def put_network():
+    common.save_ip((request.get_json(silent=True) or {}).get("ip", ""))
+    return jsonify(network_info())
 
 
 @app.get("/api/dns")
 def dns_check():
     import dns.resolver
 
+    ip = ip_in_use()
     results = []
     for server in common.load_settings()["piholes"]:
         res = dns.resolver.Resolver(configure=False)
@@ -169,11 +201,11 @@ def dns_check():
             try:
                 ips = sorted(a.address for a in res.resolve(host, "A"))
                 results.append({"server": server, "host": host, "ips": ips,
-                                "ok": common.YCAST_IP in ips})
+                                "ok": ip in ips})
             except Exception as e:  # noqa: BLE001 - jeder DNS-Fehler wird angezeigt
                 results.append({"server": server, "host": host, "ips": [], "ok": False,
                                 "error": type(e).__name__})
-    return jsonify({"ip": common.YCAST_IP, "results": results})
+    return jsonify({"ip": ip, "results": results})
 
 
 @app.get("/api/settings")

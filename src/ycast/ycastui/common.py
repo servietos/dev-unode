@@ -136,6 +136,76 @@ def save_settings(data):
     return settings
 
 
+# ---------- Netzwerk (IP des vTuner-Dienstes, wird beim App-Start von exports.sh gelesen) ----------
+
+NETWORK_FILE = DATA_DIR / "network.conf"
+
+
+def active_network():
+    """Werte, mit denen die App gestartet wurde (von exports.sh über die Umgebung)."""
+    env = os.environ
+    return {
+        "ip": env.get("YCAST_IP", ""),
+        "subnet": env.get("YCAST_SUBNET", ""),
+        "gateway": env.get("YCAST_GATEWAY", ""),
+        "parent": env.get("YCAST_PARENT", ""),
+        "host_ip": env.get("YCAST_HOST_IP", ""),
+        "note": env.get("YCAST_NET_NOTE", ""),
+    }
+
+
+def saved_ip():
+    try:
+        for line in NETWORK_FILE.read_text(encoding="utf-8").splitlines():
+            if line.startswith("YCAST_IP="):
+                return line.split("=", 1)[1].strip()
+    except FileNotFoundError:
+        pass
+    return ""
+
+
+def default_ip(subnet):
+    """Wie exports.sh: Netzadresse + 210, bei kleinen Netzen die letzte nutzbare Adresse."""
+    import ipaddress
+
+    if not subnet:
+        return ""
+    network = ipaddress.IPv4Network(subnet, strict=False)
+    ip = network.network_address + 210
+    return str(ip if ip < network.broadcast_address else network.broadcast_address - 1)
+
+
+def validate_ip(value, net=None):
+    """Dieselben Regeln wie exports.sh, damit nur Werte gespeichert werden, die beim Start greifen."""
+    import ipaddress
+
+    net = net or active_network()
+    try:
+        ip = ipaddress.IPv4Address(str(value).strip())
+    except ValueError:
+        raise ValidationError(f"„{value}“ ist keine gültige IPv4-Adresse") from None
+    if net["subnet"]:
+        network = ipaddress.IPv4Network(net["subnet"], strict=False)
+        if ip not in network:
+            raise ValidationError(f"{ip} liegt nicht im Netz {network}")
+        if ip in (network.network_address, network.broadcast_address):
+            raise ValidationError(f"{ip} ist Netz- oder Broadcast-Adresse")
+    if str(ip) in (net["gateway"], net["host_ip"]):
+        raise ValidationError(f"{ip} gehört dem Router oder dem Umbrel")
+    return str(ip)
+
+
+def save_ip(value):
+    """Leerer Wert = zurück zum Standard (<Netz>.210)."""
+    ensure_data()
+    if not str(value or "").strip():
+        NETWORK_FILE.unlink(missing_ok=True)
+        return ""
+    ip = validate_ip(value)
+    NETWORK_FILE.write_text(f"YCAST_IP={ip}\n", encoding="utf-8")
+    return ip
+
+
 # ---------- Abruf-Log (welche Geräte fragen YCast an) ----------
 
 def log_request(client, host, path, agent):

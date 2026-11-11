@@ -100,6 +100,20 @@
     </div>
 
     <div class="card">
+      <h2>Netzwerk</h2>
+      <p class="muted small">Der Receiver-Dienst braucht eine eigene, freie IP in deinem Heimnetz (Port 80). Wähle eine Adresse
+        außerhalb des DHCP-Bereichs deines Routers. Adapter, Netz und Gateway erkennt die App beim Start selbst.</p>
+      <dl class="kv" id="net-info"></dl>
+      <div class="notice" id="net-note" hidden></div>
+      <div class="notice warn" id="net-pending" hidden></div>
+      <form id="net-form" class="pihole-form">
+        <label>IP für YCast <input name="ip" id="net-ip" inputmode="decimal" autocomplete="off"></label>
+        <button class="btn">Speichern</button>
+        <button class="btn ghost" type="button" id="net-default">Standard</button>
+      </form>
+    </div>
+
+    <div class="card">
       <div class="card-head">
         <h2>DNS über Pi-hole</h2>
         <button class="btn small" id="dns-check">DNS prüfen</button>

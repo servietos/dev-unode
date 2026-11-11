@@ -1,39 +1,59 @@
 manifestVersion: 1
 id: dev-unode-ycast
 name: YCast
-tagline: Internetradio für Marantz, Denon & Co. ohne vTuner
+tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "2.0.1"
+version: "2.1.0"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
   YCast ersetzt den eingestellten vTuner-Dienst, den viele AV-Receiver und Netzwerk-Player
-  (z. B. Marantz M-CR510, Denon) für Internetradio nutzen. Der Receiver findet deine Sender
-  unter „My Stations“ und kann zusätzlich den Community Radio Browser durchsuchen.
+  (ca. 2011–2017, z. B. Marantz, Denon, Yamaha, Onkyo, Pioneer, Grundig) für Internetradio nutzen.
+  Der Receiver zeigt deine eigenen Sender unter „My Stations“ und kann den Community Radio
+  Browser durchsuchen. Getestet mit einem Marantz M-CR510.
 
 
-  Die Weboberfläche verwaltet alles: Kategorien und Sender anlegen, sortieren (Drag & Drop),
-  im Browser vorhören, Streams testen, Sender aus dem Radio Browser suchen und übernehmen,
-  Import/Export der stations.yml. Unter „Status & Einrichtung“ siehst du, wann dein Receiver
-  zuletzt angefragt hat, und kannst die DNS-Umleitung deiner Pi-holes prüfen.
+  Weboberfläche: Kategorien und Sender verwalten (Drag & Drop), im Browser vorhören, Streams
+  testen, Sender im Radio Browser suchen und übernehmen, stations.yml importieren/exportieren,
+  Abruf-Log des Receivers, DNS-Prüfung und Netzwerk-Einstellung. HTTPS-Streams, die Receiver
+  nicht abspielen können, leitet YCast über ein internes Relay als HTTP weiter.
 
 
-  HTTPS-Streams, die der Receiver selbst nicht abspielen kann, leitet YCast automatisch über
-  ein internes Relay als HTTP weiter.
+  Voraussetzungen und Einrichtung:
 
 
-  Einrichtung: Der Receiver-Dienst bekommt eine eigene LAN-IP (Standard 192.168.178.210, Port 80).
-  Im Pi-hole 6 unter Settings → Local DNS Records denon.vtuner.com und denon2.vtuner.com
-  auf 192.168.178.210 eintragen.
+  1. Eine freie IP im Heimnetz außerhalb des DHCP-Bereichs deines Routers. Der Receiver-Dienst
+  läuft darauf auf Port 80 (eigene LAN-IP per macvlan, weil Port 80 des Umbrel belegt ist).
+  Standard ist <dein Netz>.210, z. B. 192.168.178.210. Adapter, Netz und Gateway erkennt die App
+  selbst; die IP kannst du unter „Status & Einrichtung → Netzwerk“ ändern (gilt nach Neustart der
+  App). Ist die gespeicherte IP ungültig, startet die App mit dem Standard und zeigt einen Hinweis.
+
+
+  2. Ein DNS-Server, den du selbst pflegen kannst (z. B. Pi-hole, AdGuard Home oder ein Router
+  mit eigenen DNS-Einträgen). Dort den vTuner-Namen deines Receivers auf die YCast-IP zeigen
+  lassen, bei Pi-hole 6 unter Settings → Local DNS Records. Denon/Marantz: denon.vtuner.com und
+  denon2.vtuner.com; Yamaha: radioyamaha.vtuner.com; Onkyo: onkyo.vtuner.com; Grundig:
+  grundig.vtuner.com und grundig.radiosetup.com.
+
+
+  3. Der Receiver muss diesen DNS-Server nutzen. Danach einmal stromlos machen und Internetradio
+  öffnen; unter „Status & Einrichtung“ erscheint er dann als „Receiver gesehen“.
+
+
+  Hinweis: Der Umbrel selbst erreicht die YCast-IP nicht (Eigenschaft von macvlan), alle
+  anderen Geräte im Netz schon. Kein WLAN-only-Umbrel: macvlan braucht in der Regel einen
+  kabelgebundenen Netzwerkadapter.
 developer: servietos
 website: https://github.com/servietos/dev-unode/tree/master/src/ycast
 repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Pi-hole-Anleitung aktualisiert: Einrichtung über Local DNS Records (denon.vtuner.com,
-  denon2.vtuner.com), weil misc.dnsmasq_lines in Pi-hole 6 nicht über die Weboberfläche
-  gesetzt werden kann. Der Weg über dnsmasq_lines steht als Alternative (CLI/Docker) in der App.
+  IP des Receiver-Dienstes ist jetzt in der Weboberfläche einstellbar (Status & Einrichtung →
+  Netzwerk, gilt nach Neustart der App). Adapter, Netz und Gateway werden beim Start automatisch
+  erkannt, die App läuft damit auch in anderen Netzen als 192.168.178.x. Ungültige Einstellungen
+  fallen sicher auf <Netz>.210 zurück. Die Oberfläche zeigt überall die IP, die YCast tatsächlich
+  verwendet.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

@@ -14,6 +14,9 @@ invidious       add free youtube access (not working, Version latest)
 
 broking         Aktien-Screen, Thesen-Journal, Handel über Alpaca Paper-Trading (Version 0.2.0, Quellcode in src/broking)
 
+ycast           Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …) mit Weboberfläche,
+                HTTPS-Relay und einstellbarer IP (working, Version 2.1.0, Anleitung und Quellcode in src/ycast/README.md)
+
 ## How to use (description from Umbrel's template):
 
 1. Start by clicking the "Use this template" button located above.
