@@ -269,11 +269,58 @@ class TestMarantz(Base):
         self.assertEqual(r.get_json()["mime"], "audio/mp4")
         self.assertNotIn("audio/aac:", "".join(b for _, _, b in self.fake.soap))
 
-    def test_unsupported_format_is_reported(self):
+    def test_hls_station_plays_via_ffmpeg_endpoint_and_is_remembered(self):
+        self.stream_type = "application/vnd.apple.mpegurl"
+        with mock.patch.object(self.web.hls, "available", return_value=True), \
+             mock.patch.object(self.web.hls, "probe", return_value=(1, "aac")):
+            r = self.client.post("/api/marantz/play", json={"name": "Bayern 3 HLS", "url": "https://br.example/b3.m3u8"})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertEqual(r.get_json()["via"], "hls")
+        body = self.fake.soap[0][2]
+        self.assertIn("http://192.168.178.210/hls?url=https%3A%2F%2Fbr.example%2Fb3.m3u8&amp;sig=", body)
+        self.assertIn(":audio/x-mp4:", body)
+        recent = self.client.get("/api/recent").get_json()["items"]
+        self.assertEqual(recent[0]["name"], "Bayern 3 HLS")
+
+    def test_sleep_timer(self):
+        r = self.client.put("/api/marantz/sleep", json={"minutes": 30}).get_json()
+        self.assertTrue(1790 <= r["sleep_left"] <= 1800)
+        self.assertGreater(self.client.get("/api/marantz").get_json()["sleep_left"], 0)
+        self.assertEqual(self.client.put("/api/marantz/sleep", json={"minutes": 0}).get_json()["sleep_left"], 0)
+        self.assertEqual(self.client.put("/api/marantz/sleep", json={"minutes": 999}).status_code, 400)
+        # Ein alter Timer darf einen neu gesetzten nicht zurücksetzen
+        self.client.put("/api/marantz/sleep", json={"minutes": 15})
+        current = self.web._sleep["timer"]
+        self.web._sleep_fire(object())
+        self.assertIs(self.web._sleep["timer"], current)
+        self.assertEqual(self.client.get("/api/marantz").get_json()["sleep_minutes"], 15)
+        current.cancel()
+        self.web._sleep_fire(current)
+        self.assertEqual(self.fake.calls[-1], "PWSTANDBY")
+        self.assertEqual(self.web.sleep_info()["sleep_left"], 0)
+
+    def test_recent_keeps_unique_latest(self):
+        for n in ("A", "B", "A"):
+            self.web.remember(n, f"http://x/{n}")
+        self.assertEqual([r["name"] for r in self.client.get("/api/recent").get_json()["items"]], ["A", "B"])
+        self.assertEqual(self.client.delete("/api/recent").get_json()["items"], [])
+
+    def test_unsupported_format_is_reported_without_ffmpeg(self):
         self.stream_type = "application/ogg"
-        r = self.client.post("/api/marantz/play", json={"name": "X", "url": "http://x.example/stream"})
+        with mock.patch.object(self.web.hls, "available", return_value=False):
+            r = self.client.post("/api/marantz/play", json={"name": "X", "url": "http://x.example/stream"})
         self.assertEqual(r.status_code, 502)
         self.assertIn("Ogg", r.get_json()["error"])
+
+    def test_ogg_is_converted_with_ffmpeg(self):
+        self.stream_type = "audio/ogg"
+        with mock.patch.object(self.web.hls, "available", return_value=True), \
+             mock.patch.object(self.web.hls, "probe", return_value=(0, "opus")):
+            r = self.client.post("/api/marantz/play", json={"name": "DLF Opus", "url": "https://dlf.example/dlf.opus"})
+        self.assertEqual(r.status_code, 200, r.get_json())
+        self.assertEqual(r.get_json()["via"], "convert")
+        self.assertIn("/hls?url=", self.fake.soap[0][2])
+        self.assertIn(":audio/mpeg:", self.fake.soap[0][2])
 
     def test_status(self):
         s = self.client.get("/api/marantz").get_json()
@@ -282,6 +329,19 @@ class TestMarantz(Base):
         self.assertEqual(s["volume"], 3)
         self.assertEqual(s["lines"], ["Now Playing", "Bayern 3", "Musik"])
         self.assertEqual(s["source"], "IRADIO")
+
+    def test_volume_dashes_mean_zero(self):
+        orig = self.fake.get
+
+        def get(url, timeout=None, **kw):
+            r = orig(url, timeout=timeout)
+            if "MainZoneXmlStatusLite" in url:
+                r.text = r.text.replace(f"{self.fake.volume - 80}.0", "--")
+            return r
+
+        with mock.patch.object(self.m.requests, "get", side_effect=get):
+            s = self.client.get("/api/marantz").get_json()
+        self.assertEqual(s["volume"], 0)
 
     def test_commands_and_volume_limit(self):
         self.client.post("/api/marantz/cmd", json={"cmd": "power_on"})
@@ -331,6 +391,65 @@ class TestMarantz(Base):
             self.assertEqual(self.client.get(f"/static/{icon}").status_code, 200, icon)
 
 
+class TestHls(Base):
+    def setUp(self):
+        super().setUp()
+        import ycastui.hls as hls
+        self.hls = importlib.reload(hls)
+
+    def test_detection(self):
+        self.assertTrue(self.hls.is_hls("https://a.example/live/master.m3u8?token=1"))
+        self.assertTrue(self.hls.is_hls("http://a.example/stream", "application/vnd.apple.mpegurl"))
+        self.assertTrue(self.hls.is_hls("http://a.example/x", "audio/x-mpegurl"))
+        self.assertFalse(self.hls.is_hls("http://a.example/stream.mp3", "audio/mpeg"))
+
+    def test_probe_picks_highest_variant(self):
+        out = ('{"streams":[{"index":0,"codec_type":"audio","codec_name":"aac","tags":{"variant_bitrate":"64000"}},'
+               '{"index":1,"codec_type":"video","codec_name":"h264"},'
+               '{"index":2,"codec_type":"audio","codec_name":"aac","tags":{"variant_bitrate":"192000"}}]}')
+        with mock.patch.object(self.hls, "available", return_value=True), \
+             mock.patch.object(self.hls, "check_playlist", return_value="http://x/master.m3u8") as chk, \
+             mock.patch.object(self.hls.subprocess, "run", return_value=mock.Mock(stdout=out.encode(), stderr=b"")) as run:
+            self.assertEqual(self.hls.probe("http://x/master.m3u8"), (2, "aac"))
+            self.assertEqual(self.hls.probe("http://x/master.m3u8"), (2, "aac"))   # aus dem Zwischenspeicher
+        chk.assert_called_once()
+        run.assert_called_once()
+        self.assertIn("-rw_timeout", run.call_args.args[0])
+
+    def test_playlist_with_private_addresses_is_rejected(self):
+        """Eine fremde Playlist darf ffmpeg nicht ins Heimnetz oder Docker-Netz lenken."""
+        public = {"cdn.example": True, "evil.example": True, "192.168.178.1": False, "dev-unode-ycast_web_1": False}
+
+        def is_public(url):
+            return public.get(self.hls.urlparse(url).hostname, False)
+
+        def get(url, **kw):
+            text = {
+                "https://cdn.example/master.m3u8": "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nhi/index.m3u8\n",
+                "https://cdn.example/hi/index.m3u8": "#EXTM3U\n#EXTINF:6,\nseg1.aac\n",
+                "https://evil.example/a.m3u8": '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="http://192.168.178.1/key"\n#EXTINF:6,\nseg.ts\n',
+                "https://evil.example/b.m3u8": "#EXTM3U\n#EXTINF:6,\nhttp://dev-unode-ycast_web_1:8000/api/settings\n",
+            }[url]
+            return mock.Mock(ok=True, is_redirect=False, text=text)
+
+        with mock.patch.object(self.hls, "is_public", side_effect=is_public), \
+             mock.patch.object(self.hls.requests, "get", side_effect=get):
+            self.assertEqual(self.hls.check_playlist("https://cdn.example/master.m3u8"), "https://cdn.example/master.m3u8")
+            for bad in ("https://evil.example/a.m3u8", "https://evil.example/b.m3u8"):
+                with self.assertRaises(self.hls.HlsError):
+                    self.hls.check_playlist(bad)
+        self.assertFalse(self.hls.is_hls("http://x/list.m3u"))
+
+    def test_command_copies_aac_and_mp3_transcodes_others(self):
+        cmd, ct = self.hls.command("http://x/a.m3u8", 2, "aac")
+        self.assertEqual(ct, "audio/aac")
+        self.assertIn("copy", cmd); self.assertIn("adts", cmd); self.assertIn("0:2", cmd)
+        cmd, ct = self.hls.command("http://x/a.m3u8", 0, "opus")
+        self.assertEqual(ct, "audio/mpeg"); self.assertIn("libmp3lame", cmd)
+        self.assertEqual(self.hls.mime_candidates("aac")[0], "audio/x-mp4")
+        self.assertEqual(self.hls.mime_candidates("opus"), ["audio/mpeg"])
+
+
 class TestVtuner(Base):
     def setUp(self):
         super().setUp()
@@ -356,6 +475,33 @@ class TestVtuner(Base):
         with mock.patch.object(self.vs.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.21.0.5", 8000))]):
             self.assertEqual(self.client.get(f"/relay?url={internal}&sig={sig}").status_code, 403)
         self.assertFalse(self.vs._public_target("http://127.0.0.1/x"))
+
+    def test_hls_urls_are_routed_through_ffmpeg(self):
+        import ycast.vtuner as vtuner
+        with mock.patch.object(self.vs.hls, "available", return_value=True):
+            url = vtuner.strip_https("http://br.example/live/b3.m3u8")
+        self.assertTrue(url.startswith("http://192.168.178.210/hls?url=http%3A%2F%2Fbr.example%2Flive%2Fb3.m3u8&sig="))
+
+    def test_hls_endpoint_streams_ffmpeg_output_and_kills_it(self):
+        src = "https://br.example/live/b3.m3u8"
+        proc = mock.Mock()
+        proc.stdout.read.side_effect = [b"\xff\xf1" + b"a" * 10, b"b" * 10, b""]
+        proc.poll.return_value = None      # ffmpeg läuft noch, als der Stream endet
+        with mock.patch.object(self.vs.hls, "available", return_value=True), \
+             mock.patch.object(self.vs.hls, "probe", return_value=(0, "aac")), \
+             mock.patch.object(self.vs.hls, "is_public", return_value=True), \
+             mock.patch.object(self.vs.subprocess, "Popen", return_value=proc) as popen:
+            r = self.client.get(f"/hls?url={src}&sig={self.common.sign_url(src)}")
+            body = r.get_data()
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers["Content-Type"], "audio/aac")
+        self.assertEqual(body, b"\xff\xf1" + b"a" * 10 + b"b" * 10)
+        self.assertIn("adts", popen.call_args.args[0])
+        proc.kill.assert_called_once()
+        self.assertEqual(self.vs._relay_active, 0)  # Platz wieder freigegeben
+
+    def test_hls_requires_signature(self):
+        self.assertEqual(self.client.get("/hls?url=http://x/a.m3u8&sig=falsch").status_code, 403)
 
     def test_log_failure_does_not_break_receiver(self):
         with mock.patch.object(self.common, "REQUEST_LOG", Path(self.tmp.name, "nope", "requests.log")):

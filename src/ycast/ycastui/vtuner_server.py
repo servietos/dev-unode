@@ -7,6 +7,7 @@ import ipaddress
 import logging
 import os
 import socket
+import subprocess
 import threading
 from urllib.parse import quote, urlparse
 
@@ -17,7 +18,7 @@ import ycast.radiobrowser as radiobrowser
 import ycast.server as server
 import ycast.vtuner as vtuner
 
-from . import common
+from . import common, hls
 
 RELAY_HTTPS = os.environ.get("RELAY_HTTPS", "on").lower() not in ("0", "off", "false", "no")
 RELAY_MAX = int(os.environ.get("RELAY_MAX", "8"))        # gleichzeitige Relay-Streams
@@ -33,13 +34,22 @@ _relay_active = 0
 _relay_lock = threading.Lock()
 
 
+def _base():
+    return f"http://{common.YCAST_IP}" if common.YCAST_IP else request.host_url.rstrip("/")
+
+
 def relay_url(url):
-    base = f"http://{common.YCAST_IP}" if common.YCAST_IP else request.host_url.rstrip("/")
-    return f"{base}/relay?url={quote(url, safe='')}&sig={common.sign_url(url)}"
+    return f"{_base()}/relay?url={quote(url, safe='')}&sig={common.sign_url(url)}"
+
+
+def hls_url(url):
+    return f"{_base()}/hls?url={quote(url, safe='')}&sig={common.sign_url(url)}"
 
 
 def relay_or_strip(url):
-    """Receiver können kein HTTPS. Statt https→http (klappt oft nicht) über das Relay leiten."""
+    """Receiver können weder HTTPS noch HLS: HLS über ffmpeg, HTTPS über das Relay leiten."""
+    if url and hls.is_hls(url) and hls.available():
+        return hls_url(url)
     if RELAY_HTTPS and url and url.startswith("https://"):
         return relay_url(url)
     return _original_strip_https(url)
@@ -83,7 +93,7 @@ def _open_upstream(url, headers):
 
 @app.before_request
 def _log_receiver():
-    if request.path.startswith(("/relay", "/health")):
+    if request.path.startswith(("/relay", "/hls", "/health")):
         return
     common.log_request(
         request.remote_addr,
@@ -96,18 +106,18 @@ def _log_receiver():
 @app.route("/health")
 def health():
     return {"ok": True, "my_stations": server.my_stations_enabled, "relay": RELAY_HTTPS,
-            "ip": common.YCAST_IP, "relay_active": _relay_active, "relay_max": RELAY_MAX}
+            "ip": common.YCAST_IP, "relay_active": _relay_active, "relay_max": RELAY_MAX,
+            "hls": hls.available()}
 
 
-@app.route("/relay")
-def relay():
+def _take_slot():
+    """Einen der begrenzten Stream-Plätze belegen; liefert die Freigabe-Funktion."""
     global _relay_active
-    url = request.args.get("url", "")
-    if not common.verify_url(url, request.args.get("sig", "")):
-        abort(403)
     if not _relay_slots.acquire(blocking=False):
         logging.warning("Relay ausgelastet (%d Streams), Anfrage abgewiesen", RELAY_MAX)
         abort(503)
+    with _relay_lock:
+        _relay_active += 1
     released = False
 
     def release():
@@ -119,8 +129,68 @@ def relay():
             with _relay_lock:
                 _relay_active -= 1
 
-    with _relay_lock:
-        _relay_active += 1
+    return release
+
+
+@app.route("/hls")
+def hls_stream():
+    """HLS (.m3u8) per ffmpeg als durchgehenden Stream ausgeben."""
+    url = request.args.get("url", "")
+    if not common.verify_url(url, request.args.get("sig", "")) or not hls.is_public(url):
+        abort(403)
+    if not hls.available():
+        abort(501)
+    release = _take_slot()
+    try:
+        index, codec = hls.probe(url)
+        cmd, content_type = hls.command(url, index, codec)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+    except hls.HlsError as e:
+        release()
+        logging.warning("HLS fehlgeschlagen für %s: %s", url.split("?")[0], e)
+        abort(502)
+    except Exception:
+        release()
+        raise
+    logging.info("Umwandlung gestartet (%s, Spur %d): %s", codec, index, url.split("?")[0])
+    done = False
+
+    def cleanup():
+        """Idempotent: ffmpeg beenden und Platz freigeben, egal wie der Stream endet."""
+        nonlocal done
+        if done:
+            return
+        done = True
+        if proc.poll() is None:
+            proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        release()
+
+    def generate():
+        try:
+            while True:
+                chunk = proc.stdout.read(RELAY_CHUNK)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            cleanup()
+
+    resp = Response(stream_with_context(generate()), headers={"Content-Type": content_type},
+                    direct_passthrough=True)
+    resp.call_on_close(cleanup)   # auch wenn der Client trennt, bevor der erste Block gesendet wurde
+    return resp
+
+
+@app.route("/relay")
+def relay():
+    url = request.args.get("url", "")
+    if not common.verify_url(url, request.args.get("sig", "")):
+        abort(403)
+    release = _take_slot()
     headers = {k: v for k, v in request.headers.items() if k.lower() in _FORWARD_REQ}
     headers.setdefault("User-Agent", "YCast-Relay")
     try:

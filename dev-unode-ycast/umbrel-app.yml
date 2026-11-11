@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.0.4"
+version: "3.1.0"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -16,6 +16,10 @@ description: >-
   Fernbedienung für Denon/Marantz-Netzwerkgeräte: einschalten, Lautstärke, Stumm und jeden
   Sender per Klick direkt auf dem Gerät abspielen (UPnP/DLNA), mit rundem Display für den
   laufenden Titel. Auf dem iPhone über „Zum Home-Bildschirm“ als App nutzbar.
+
+
+  HLS-Sender (.m3u8) und Ogg/Opus-Streams, die Receiver nicht selbst abspielen können, wandelt
+  YCast mit ffmpeg um: AAC/MP3 nur umverpackt (ohne Qualitätsverlust), andere Formate nach MP3.
 
 
   Weboberfläche: Kategorien und Sender verwalten (Drag & Drop), im Browser vorhören, Streams
@@ -54,8 +58,11 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Sender suchen: Live-Suche beim Tippen und Sortierung nach Beliebtheit, Name, Bitrate oder
-  Bewertungen (direkt beim Radio Browser). Seit 3.0.3: Kategorie beim Übernehmen wählen.
+  HLS- und Ogg/Opus-Sender laufen jetzt auch auf dem Marantz (Umwandlung mit ffmpeg, auch im
+  Internet-Radio-Menü des Geräts). Neu: „Zuletzt gespielt“ als Schnellwahl unter dem Display und
+  ein Ausschalt-Timer (15/30/60/90 min). Oberfläche dezent plastisch mit Hover- und Druckeffekten,
+  Suchleiste bleibt beim Scrollen sichtbar, beim Öffnen erscheinen gleich die beliebtesten Sender.
+  iPhone: Eingabefelder zoomen nicht mehr. Lautstärke „--“ wird als 0 angezeigt.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

@@ -1,18 +1,20 @@
 """Weboberfläche (über das Umbrel-Dashboard erreichbar) zur Bedienung von YCast."""
+import json
 import logging
 import os
+import threading
 import time
 
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 
-from . import common, marantz
+from . import common, hls, marantz
 from urllib.parse import quote
 
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/3.0.4"}
+UA = {"User-Agent": "YCast-Umbrel/3.1.0"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -130,7 +132,6 @@ def search():
         "votes": s.get("votes") or 0,
         "hls": bool(s.get("hls")),
     } for s in r.json() if isinstance(s, dict) and (s.get("url_resolved") or s.get("url"))]
-    out.sort(key=lambda s: s["hls"])  # HLS kann der Receiver nicht, ans Ende
     return jsonify({"results": out})
 
 
@@ -230,7 +231,8 @@ def status():
         "ycast": ycast,
         "ip": ip_in_use(ycast),
         "requests": reqs,
-        "last_receiver": next((r for r in reqs if not r["path"].startswith("/relay")), None),
+        # Nur echte Abrufe über vtuner.com zählen (die Fritzbox fragt YCast auch direkt per IP ab)
+        "last_receiver": next((r for r in reqs if str(r.get("host", "")).endswith("vtuner.com")), None),
         "settings": common.load_settings(),
         "network": network_info(ycast),
         "counts": {"categories": len(cats := common.load_stations()),
@@ -325,12 +327,95 @@ def marantz_ip():
 @app.get("/api/marantz")
 def marantz_status():
     ip, how = marantz_ip()
+    sleep = sleep_info()
     if not ip:
-        return jsonify({"configured": False, "ip": "", "how": ""})
+        return jsonify({"configured": False, "ip": "", "how": "", **sleep})
     try:
-        return jsonify({"configured": True, "how": how, "reachable": True, **marantz.status(ip)})
+        return jsonify({"configured": True, "how": how, "reachable": True, **sleep, **marantz.status(ip)})
     except marantz.MarantzError as e:
-        return jsonify({"configured": True, "how": how, "ip": ip, "reachable": False, "error": str(e)})
+        return jsonify({"configured": True, "how": how, "ip": ip, "reachable": False, "error": str(e), **sleep})
+
+
+# Einschlaf-Timer: schaltet den Marantz nach Ablauf in Standby (läuft im Web-Dienst)
+_sleep = {"until": 0.0, "timer": None, "minutes": 0}
+_sleep_lock = threading.Lock()
+
+
+def sleep_info():
+    left = max(0, int(_sleep["until"] - time.time())) if _sleep["until"] else 0
+    return {"sleep_left": left, "sleep_minutes": _sleep["minutes"] if left else 0}
+
+
+def _sleep_fire(timer=None):
+    with _sleep_lock:
+        # Nur der aktuelle Timer darf schalten (ein neu gesetzter Timer bleibt unberührt)
+        if timer is not None and _sleep["timer"] is not timer:
+            return
+        _sleep.update(until=0.0, timer=None, minutes=0)
+    ip, _ = marantz_ip()
+    if ip:
+        try:
+            marantz.command(ip, "standby")
+            logging.info("Einschlaf-Timer: Marantz in Standby geschaltet")
+        except marantz.MarantzError as e:
+            logging.warning("Einschlaf-Timer: %s", e)
+
+
+@app.put("/api/marantz/sleep")
+def marantz_sleep():
+    try:
+        minutes = int((request.get_json(silent=True) or {}).get("minutes", 0))
+    except (TypeError, ValueError):
+        return err("Minuten müssen eine Zahl sein")
+    if not 0 <= minutes <= 240:
+        return err("Der Timer geht bis höchstens 240 Minuten")
+    with _sleep_lock:
+        if _sleep["timer"]:
+            _sleep["timer"].cancel()
+        _sleep.update(until=0.0, timer=None, minutes=0)
+        if minutes:
+            t = threading.Timer(minutes * 60, lambda: _sleep_fire(t))
+            t.daemon = True
+            _sleep.update(until=time.time() + minutes * 60, timer=t, minutes=minutes)
+            t.start()
+    return jsonify(sleep_info())
+
+
+# Zuletzt gespielt (für die Schnellwahl unter dem Display)
+RECENT_FILE = common.DATA_DIR / "recent.json"
+RECENT_MAX = 8
+
+
+def load_recent():
+    try:
+        data = json.loads(RECENT_FILE.read_text(encoding="utf-8"))
+        return [r for r in data if isinstance(r, dict) and r.get("url")][:RECENT_MAX] if isinstance(data, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+_recent_lock = threading.Lock()
+
+
+def remember(name, url):
+    with _recent_lock:
+        items = [r for r in load_recent() if r.get("url") != url]
+        items.insert(0, {"name": name, "url": url, "t": int(time.time())})
+        try:
+            common._atomic_write(RECENT_FILE, json.dumps(items[:RECENT_MAX], ensure_ascii=False, indent=1))
+        except OSError as e:
+            logging.warning("Zuletzt gespielt nicht gespeichert: %s", e)
+
+
+@app.get("/api/recent")
+def recent():
+    return jsonify({"items": load_recent()})
+
+
+@app.delete("/api/recent")
+def recent_clear():
+    RECENT_FILE.unlink(missing_ok=True)
+    return jsonify({"items": []})
 
 
 @app.post("/api/marantz/cmd")
@@ -343,11 +428,25 @@ def marantz_cmd():
     return jsonify({"ok": True})
 
 
-def stream_for_marantz(url):
-    """HTTPS kann der Marantz nicht: über das signierte Relay des vTuner-Dienstes leiten."""
-    if url.startswith("https://") and common.YCAST_IP:
-        return f"http://{common.YCAST_IP}/relay?url={quote(url, safe='')}&sig={common.sign_url(url)}"
+def stream_for_marantz(url, is_hls=False):
+    """Der Marantz kann weder HTTPS noch HLS: über den vTuner-Dienst (signiert) leiten."""
+    if not common.YCAST_IP:
+        return url
+    signed = f"url={quote(url, safe='')}&sig={common.sign_url(url)}"
+    if is_hls:
+        return f"http://{common.YCAST_IP}/hls?{signed}"
+    if url.startswith("https://"):
+        return f"http://{common.YCAST_IP}/relay?{signed}"
     return url
+
+
+def probe_for_conversion(url):
+    """Codec für die Umwandlung ermitteln; Fehlerdetails nur ins Log."""
+    try:
+        return hls.probe(url)[1]
+    except hls.HlsError as e:
+        logging.warning("Umwandlung nicht möglich für %s: %s", url.split("?")[0], e)
+        return None
 
 
 @app.post("/api/marantz/play")
@@ -362,9 +461,31 @@ def marantz_play():
         return err("Ungültige Stream-URL")
     # Tatsächliches Format beim Sender abfragen (Endung allein ist oft irreführend)
     info = probe(url)
-    mimes = marantz.mime_candidates(info.get("type", ""), url)
+    if hls.is_hls(url, info.get("type", "")):
+        if not hls.available():
+            return err("HLS-Sender brauchen ffmpeg, das in diesem Image fehlt", 501)
+        codec = probe_for_conversion(url)
+        if codec is None:
+            return err("Dieser HLS-Stream lässt sich nicht umwandeln (nicht erreichbar oder ohne Audio)", 502)
+        used = marantz.play_url(ip, stream_for_marantz(url, is_hls=True), name, hls.mime_candidates(codec))
+        remember(name, url)
+        return jsonify({"ok": True, "via": "hls", "codec": codec, "mime": used})
+    try:
+        mimes = marantz.mime_candidates(info.get("type", ""), url)
+    except marantz.MarantzError:
+        # Ogg/Opus & Co.: kann der Marantz nicht, ffmpeg wandelt nach MP3 (gleicher Weg wie HLS)
+        if not hls.available():
+            raise
+        codec = probe_for_conversion(url)
+        if codec is None:
+            return err("Dieser Stream lässt sich nicht umwandeln (nicht erreichbar oder ohne Audio)", 502)
+        used = marantz.play_url(ip, stream_for_marantz(url, is_hls=True), name, hls.mime_candidates(codec))
+        remember(name, url)
+        return jsonify({"ok": True, "via": "convert", "codec": codec, "mime": used})
     used = marantz.play_url(ip, stream_for_marantz(url), name, mimes)
-    return jsonify({"ok": True, "via_relay": url.startswith("https://"), "mime": used})
+    remember(name, url)
+    return jsonify({"ok": True, "via": "relay" if url.startswith("https://") else "direct",
+                    "via_relay": url.startswith("https://"), "mime": used})
 
 
 @app.put("/api/marantz/settings")
