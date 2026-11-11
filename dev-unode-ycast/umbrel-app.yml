@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "2.1.0"
+version: "2.2.0"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
