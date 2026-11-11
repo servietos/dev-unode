@@ -3,7 +3,7 @@ id: dev-unode-smart-tv-telegram
 name: Smart TV Telegram
 tagline: Videos aus Telegram per Bot auf Smart-TV, Chromecast oder Kodi abspielen
 category: media
-version: "1.4.0-1.1"
+version: "1.4.0-1.2"
 port: 8351
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/smart-tv-telegram-icon.svg
 description: >-
@@ -26,7 +26,9 @@ submitter: servietos
 submission: https://github.com/servietos/dev-unode
 gallery: []
 releaseNotes: >-
-  Einrichtungsseite: Eingaben bleiben nach einem Fehler erhalten, nach dem Speichern zurück zur
-  Startseite mit Bestätigung (Neuladen sendet nichts erneut).
+  Einrichtungsseite: Bot-Token und API-Hash werden nicht mehr angezeigt (Feld leer lassen behält
+  den gespeicherten Wert, Auge-Knopf zum Prüfen der eigenen Eingabe), Info-Hinweise beim
+  Überfahren der Felder, Dark Mode (Auto/Hell/Dunkel), Icon im Browser-Tab. „Im Browser
+  abspielen“ (Web-Player) erklärt und richtig verlinkt.
 dependencies: []
 path: ""
