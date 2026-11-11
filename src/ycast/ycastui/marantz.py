@@ -156,18 +156,55 @@ def _didl(title, url, mime):
             f'<res protocolInfo="http-get:*:{mime}:*">{xml_escape(url)}</res></item></DIDL-Lite>')
 
 
-def play_url(ip, url, title, mime="audio/mpeg", power_on=True):
-    """Schaltet bei Bedarf ein und spielt die Stream-Adresse per UPnP ab."""
+# Vom M-CR510 per GetProtocolInfo gemeldet: audio/mpeg, audio/mp4, audio/x-mp4, audio/x-m4a, audio/3gpp,
+# audio/flac, audio/wav, audio/x-ms-wma, L16. „audio/aac“ lehnt er mit UPnP-Fehler 714 ab.
+MIME_CANDIDATES = {
+    "mpeg": ["audio/mpeg"],
+    "aac": ["audio/x-mp4", "audio/mp4", "audio/3gpp", "audio/mpeg"],
+    "flac": ["audio/flac", "audio/x-flac"],
+    "wma": ["audio/x-ms-wma"],
+    "wav": ["audio/wav", "audio/x-wav"],
+}
+UNSUPPORTED = ("ogg", "opus", "vorbis", "mpegurl", "x-scpls", "dash")
+
+
+def mime_candidates(content_type, url=""):
+    """Reihenfolge der MIME-Typen, mit denen der Stream dem Gerät angekündigt wird."""
+    ct = (content_type or "").lower()
+    low = url.lower().split("?")[0]
+    if any(x in ct for x in UNSUPPORTED) or low.endswith((".ogg", ".opus", ".m3u8")):
+        raise MarantzError("Dieses Stream-Format (Ogg/Opus/HLS) kann der Marantz nicht abspielen")
+    if "aac" in ct or "mp4" in ct or "m4a" in ct or low.endswith((".aac", ".aacp", ".m4a")):
+        return MIME_CANDIDATES["aac"]
+    for key in ("flac", "wma", "wav"):
+        if key in ct:
+            return MIME_CANDIDATES[key]
+    return MIME_CANDIDATES["mpeg"]
+
+
+def play_url(ip, url, title, mimes=("audio/mpeg",), power_on=True):
+    """Schaltet bei Bedarf ein und spielt die Stream-Adresse per UPnP ab.
+
+    Lehnt das Gerät den MIME-Typ ab (UPnP 714), wird der nächste Kandidat versucht."""
     ip = check_ip(ip)
     if power_on and not status(ip)["power"]:
         command(ip, "power_on")
         if not wait_power_on(ip):
             raise MarantzError("Der Marantz ist nicht rechtzeitig eingeschaltet (Netzwerk-Standby aktiv?)")
-    meta = _didl(title, url, mime)
-    _soap(ip, "SetAVTransportURI",
-          f"<CurrentURI>{xml_escape(url)}</CurrentURI><CurrentURIMetaData>{xml_escape(meta)}</CurrentURIMetaData>")
-    _soap(ip, "Play", "<Speed>1</Speed>")
-    return True
+    last = None
+    for mime in mimes:
+        meta = _didl(title, url, mime)
+        try:
+            _soap(ip, "SetAVTransportURI",
+                  f"<CurrentURI>{xml_escape(url)}</CurrentURI><CurrentURIMetaData>{xml_escape(meta)}</CurrentURIMetaData>")
+        except MarantzError as e:
+            if "UPnP 714" in str(e):
+                last = e
+                continue
+            raise
+        _soap(ip, "Play", "<Speed>1</Speed>")
+        return mime
+    raise MarantzError("Der Marantz nimmt dieses Stream-Format nicht an") from last
 
 
 def transport_state(ip):

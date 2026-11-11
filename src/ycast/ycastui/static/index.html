@@ -38,8 +38,10 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
     <div class="porthole-wrap">
       <div class="porthole" id="porthole" data-state="unknown">
         <svg class="dial" viewBox="0 0 200 200" aria-hidden="true">
-          <circle class="dial-track" cx="100" cy="100" r="92"/>
-          <circle class="dial-level" id="dial-level" cx="100" cy="100" r="92"/>
+          <g transform="rotate(135 100 100)">
+            <circle class="dial-track" cx="100" cy="100" r="92"/>
+            <circle class="dial-level" id="dial-level" cx="100" cy="100" r="92"/>
+          </g>
         </svg>
         <div class="glass">
           <p class="ph-source" id="ph-source">Marantz</p>
@@ -231,6 +233,7 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
 <div class="player" id="player" hidden>
   <button class="knob small" id="player-stop" aria-label="Vorhören beenden">■</button>
   <div class="player-text"><strong id="player-name"></strong><span class="muted small" id="player-state"></span></div>
+  <button class="btn small" id="player-send" type="button" title="Diesen Sender auf dem Marantz abspielen">Auf dem Marantz</button>
   <audio id="audio" preload="none"></audio>
 </div>
 
