@@ -299,7 +299,8 @@ async function refreshStatus() {
   setPill($("#pill-avr"), last ? (Date.now() / 1000 - last.t < 86400) : null, last ? `Receiver ${ago(last.t)}` : "Receiver noch nie gesehen");
 
   document.querySelectorAll(".ip").forEach((el) => (el.textContent = s.ip || "–"));
-  $("#dns-line").textContent = `address=/vtuner.com/${s.ip || "?"}`;
+  $("#dns-cli").textContent = `sudo pihole-FTL --config misc.dnsmasq_lines '["address=/vtuner.com/${s.ip || "?"}"]'`;
+  $("#dns-env").textContent = `FTLCONF_misc_dnsmasq_lines: 'address=/vtuner.com/${s.ip || "?"}'`;
   $("#svc-info").innerHTML = `
     <dt>vTuner-Dienst</dt><dd>${s.ycast.ok ? "läuft" : "nicht erreichbar (" + esc(s.ycast.error || "") + ")"}</dd>
     <dt>LAN-IP</dt><dd>${esc(s.ip || "nicht gesetzt")} · Port 80</dd>

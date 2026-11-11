@@ -104,15 +104,22 @@
         <h2>DNS über Pi-hole</h2>
         <button class="btn small" id="dns-check">DNS prüfen</button>
       </div>
-      <p>Der Marantz fragt <code>denon.vtuner.com</code> ab. Deine Pi-holes müssen alle <code>*.vtuner.com</code>-Namen auf
+      <p>Der Marantz fragt <code>denon.vtuner.com</code> ab. Deine Pi-holes müssen diesen Namen auf
         <strong class="ip">–</strong> umleiten.</p>
       <ol class="steps">
-        <li>Pi-hole 6 öffnen → <em>Settings</em> → <em>All settings</em> → Reiter <em>Miscellaneous</em> → Expertenmodus einschalten.</li>
-        <li>Bei <code>misc.dnsmasq_lines</code> diese Zeile eintragen und speichern:
-          <div class="copy"><code id="dns-line">address=/vtuner.com/–</code><button class="btn ghost small" data-copy="dns-line">Kopieren</button></div></li>
+        <li>Pi-hole 6 öffnen → <em>Settings</em> → <em>Local DNS Records</em>.</li>
+        <li>Zwei Einträge anlegen, jeweils mit der IP <strong class="ip">–</strong>:
+          <div class="copy"><code>denon.vtuner.com</code><code>denon2.vtuner.com</code></div></li>
         <li>Auf jedem Pi-hole wiederholen.</li>
         <li>Der Marantz muss einen Pi-hole als DNS nutzen (per DHCP der Fritzbox oder fest im Receiver). Danach den Marantz einmal komplett stromlos machen.</li>
       </ol>
+      <details class="alt">
+        <summary>Alternative: alle <code>*.vtuner.com</code> umleiten (nicht über die Weboberfläche möglich)</summary>
+        <p>Pi-hole direkt installiert, per SSH:</p>
+        <div class="copy"><code id="dns-cli">sudo pihole-FTL --config misc.dnsmasq_lines '["address=/vtuner.com/–"]'</code><button class="btn ghost small" data-copy="dns-cli">Kopieren</button></div>
+        <p>Pi-hole im Docker-Container, als Umgebungsvariable (danach Container neu starten):</p>
+        <div class="copy"><code id="dns-env">FTLCONF_misc_dnsmasq_lines: 'address=/vtuner.com/–'</code><button class="btn ghost small" data-copy="dns-env">Kopieren</button></div>
+      </details>
       <form id="pihole-form" class="pihole-form">
         <label>Pi-hole 1 <input name="p0" placeholder="z. B. 192.168.178.2"></label>
         <label>Pi-hole 2 <input name="p1" placeholder="optional"></label>
