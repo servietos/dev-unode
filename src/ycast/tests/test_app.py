@@ -295,10 +295,23 @@ class TestMarantz(Base):
         self.assertEqual(self.client.put("/api/marantz/settings", json={"ip": "localhost"}).status_code, 400)
 
     def test_ip_autodetect_from_log(self):
+        """Wie im echten Log: Marantz, iPhone-App und die Fritzbox fragen YCast ab; nur der Marantz zählt."""
         self.common.save_setting("marantz_ip", "")
-        self.common.log_request("192.168.178.77", "denon.vtuner.com", "/ycast/", "Marantz")
-        self.assertEqual(self.client.get("/api/marantz").get_json()["how"], "erkannt")
-        self.assertEqual(self.web.marantz_ip()[0], "192.168.178.77")
+        self.web._detected.update(ip="", at=0)
+        self.common.log_request("192.168.178.56", "denon.vtuner.com", "/setupapp/denon/asp/browsexm2/loginXML.asp", "Mozilla/4.0")
+        self.common.log_request("192.168.178.92", "denon.vtuner.com", "/setupapp/denon/asp/browsexm2/navXML.asp", "Wizz App")
+        self.common.log_request("192.168.178.1", "192.168.178.210", "/ycast/", "")
+        receivers = {"192.168.178.56"}
+
+        def get(url, timeout=None, **kw):
+            if "Deviceinfo.xml" in url:
+                ok = any(f"//{ip}/" in url for ip in receivers)
+                return mock.Mock(ok=ok, status_code=200 if ok else 404, text="<Device_Info></Device_Info>" if ok else "")
+            return self.fake.get(url, timeout=timeout)
+
+        with mock.patch.object(self.m.requests, "get", side_effect=get):
+            self.assertEqual(self.web.marantz_ip(), ("192.168.178.56", "erkannt"))
+            self.assertEqual(self.client.get("/api/marantz").get_json()["how"], "erkannt")
 
     def test_manifest_and_icons(self):
         mf = self.client.get("/manifest.webmanifest").get_json()

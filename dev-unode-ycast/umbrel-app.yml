@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.0.1"
+version: "3.0.2"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -54,10 +54,10 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  AAC-Sender (z. B. FIP) lassen sich jetzt auf dem Marantz abspielen: Das Format wird beim Sender
-  abgefragt und so angekündigt, wie der Marantz es annimmt (vorher Fehler „UPnP 714: Illegal
-  MIME-type“). Player: „Auf dem Marantz“ übernimmt den Sender aus dem Vorhören. iPhone: Seite
-  ragt nicht mehr über den Rand, Senderzeilen kompakt mit ▶-Knopf.
+  Marantz wird zuverlässig erkannt: Es zählen nur Geräte, die YCast über vtuner.com abfragen und
+  sich als Denon/Marantz ausweisen. Vorher konnte die Fritzbox (192.168.178.1) oder die Handy-App
+  fälschlich als Receiver gelten. Seit 3.0.1: AAC-Sender (FIP) auf dem Marantz, Player sendet an
+  den Marantz, iPhone-Layout.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode
