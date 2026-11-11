@@ -268,7 +268,10 @@ async function loadLists() {
   } catch (e) { listsLoaded = false; toast("Länderliste: " + e.message, true); }
   try {
     const { tags } = await api("api/tags");
-    $("#tag-list").innerHTML = tags.map((t) => `<option value="${esc(t)}">`).join("");
+    const sel = $("#search-tag"), keep = sel.value;
+    const sorted = [...tags].sort((a, b) => a.localeCompare(b, "de"));
+    sel.innerHTML = `<option value="">Alle Genres</option>` + sorted.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+    sel.value = keep;
   } catch { /* Genre-Vorschläge sind optional */ }
 }
 document.querySelector('.tab[data-tab="search"]').addEventListener("click", loadLists);
@@ -307,6 +310,27 @@ manual.addEventListener("submit", (e) => {
   save(`„${name}“ zu „${cats[ci].name}“ hinzugefügt`);
 });
 let results = [];
+// Land oder Genre gewechselt: sofort neu suchen
+for (const id of ["#search-country", "#search-tag"]) {
+  $(id).addEventListener("change", () => $("#search-form").requestSubmit());
+}
+
+// Darstellung: Auto / Hell / Dunkel, im Browser gemerkt
+function applyTheme(t) {
+  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  else delete document.documentElement.dataset.theme;
+  document.querySelectorAll("[data-theme-set]").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.themeSet === (t || "auto"))));
+}
+let savedTheme = "auto";
+try { savedTheme = localStorage.getItem("ycast-theme") || "auto"; } catch { /* privat */ }
+applyTheme(savedTheme);
+document.querySelectorAll("[data-theme-set]").forEach((b) => b.addEventListener("click", () => {
+  const t = b.dataset.themeSet;
+  try { if (t === "auto") localStorage.removeItem("ycast-theme"); else localStorage.setItem("ycast-theme", t); } catch { /* privat */ }
+  applyTheme(t);
+}));
+
 $("#search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const params = new URLSearchParams([...new FormData(e.target)].filter(([, v]) => v));
