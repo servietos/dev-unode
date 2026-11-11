@@ -12,7 +12,7 @@ from urllib.parse import quote
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/3.0.0"}
+UA = {"User-Agent": "YCast-Umbrel/3.0.1"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -337,10 +337,11 @@ def marantz_play():
     name = str(body.get("name", "")).strip()[:120] or "YCast"
     if not url.startswith(("http://", "https://")):
         return err("Ungültige Stream-URL")
-    low = url.lower().split("?")[0]
-    mime = "audio/aac" if low.endswith((".aac", ".aacp")) else "audio/ogg" if low.endswith(".ogg") else "audio/mpeg"
-    marantz.play_url(ip, stream_for_marantz(url), name, mime)
-    return jsonify({"ok": True, "via_relay": url.startswith("https://")})
+    # Tatsächliches Format beim Sender abfragen (Endung allein ist oft irreführend)
+    info = probe(url)
+    mimes = marantz.mime_candidates(info.get("type", ""), url)
+    used = marantz.play_url(ip, stream_for_marantz(url), name, mimes)
+    return jsonify({"ok": True, "via_relay": url.startswith("https://"), "mime": used})
 
 
 @app.put("/api/marantz/settings")

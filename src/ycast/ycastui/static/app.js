@@ -151,7 +151,7 @@ function renderStations() {
       <div class="st-main"><div class="st-name">${esc(s.name)}${badge(s.url)}</div>
         <div class="st-url" title="${esc(s.url)}">${s.url.startsWith("https://") ? "HTTPS über Relay · " : ""}${esc(s.url)}</div></div>
       <div class="st-actions">
-        <button class="btn small st-play" data-act="marantz" title="Auf dem Marantz abspielen"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z"/></svg>Abspielen</button>
+        <button class="btn small st-play" data-act="marantz" title="Auf dem Marantz abspielen"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z"/></svg><span class="st-play-label">Abspielen</span></button>
         <span class="more">
           <button class="icon-btn" data-act="menu" title="Weitere Aktionen" aria-haspopup="true" aria-expanded="false">⋯</button>
           <span class="more-menu" hidden>
@@ -403,7 +403,9 @@ $("#search-results").addEventListener("click", (e) => {
 
 // ---------- Player ----------
 const audio = $("#audio");
+let localStream = null;   // was gerade im Browser läuft
 function play(name, url) {
+  localStream = { name, url };
   $("#player").hidden = false;
   $("#player-name").textContent = name;
   $("#player-state").textContent = "verbinde …";
@@ -412,7 +414,14 @@ function play(name, url) {
 }
 audio.addEventListener("playing", () => ($("#player-state").textContent = "läuft im Browser"));
 audio.addEventListener("error", () => ($("#player-state").textContent = "Stream nicht abspielbar"));
-$("#player-stop").addEventListener("click", () => { audio.pause(); audio.removeAttribute("src"); audio.load(); $("#player").hidden = true; });
+function stopLocal() { audio.pause(); audio.removeAttribute("src"); audio.load(); $("#player").hidden = true; localStream = null; }
+$("#player-stop").addEventListener("click", stopLocal);
+$("#player-send").addEventListener("click", () => {
+  if (!localStream) return;
+  const { name, url } = localStream;
+  stopLocal();
+  playOnMarantz(name, url);
+});
 
 // ---------- Status & Einrichtung ----------
 function setPill(el, ok, text) {

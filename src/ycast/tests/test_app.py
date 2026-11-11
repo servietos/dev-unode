@@ -228,14 +228,41 @@ class TestMarantz(Base):
         self.p1 = mock.patch.object(self.m.requests, "get", side_effect=self.fake.get)
         self.p2 = mock.patch.object(self.m.requests, "post", side_effect=self.fake.post)
         self.p3 = mock.patch.object(self.m.time, "sleep", lambda s: None)
-        for p in (self.p1, self.p2, self.p3):
+        self.stream_type = "audio/mpeg"
+        self.p4 = mock.patch.object(self.web, "probe", side_effect=lambda url: {"ok": True, "type": self.stream_type})
+        for p in (self.p1, self.p2, self.p3, self.p4):
             p.start()
         self.common.save_setting("marantz_ip", "192.168.178.56")
 
     def tearDown(self):
-        for p in (self.p1, self.p2, self.p3):
+        for p in (self.p1, self.p2, self.p3, self.p4):
             p.stop()
         super().tearDown()
+
+    def test_aac_falls_back_when_mime_rejected(self):
+        """Wie am echten M-CR510: audio/aac gibt es nicht; lehnt er audio/x-mp4 ab, folgt audio/mp4."""
+        self.stream_type = "audio/aacp"
+        rejected = {"audio/x-mp4"}
+
+        def post(url, data=None, headers=None, timeout=None):
+            body = data.decode()
+            self.fake.soap.append((url, headers["SOAPACTION"], body))
+            if "SetAVTransportURI" in headers["SOAPACTION"] and any(f":{m}:" in body for m in rejected):
+                return mock.Mock(ok=False, status_code=500,
+                                 text="<errorCode>714</errorCode><errorDescription>Illegal MIME-type</errorDescription>")
+            return mock.Mock(ok=True, status_code=200, text="<ok/>")
+
+        with mock.patch.object(self.m.requests, "post", side_effect=post):
+            r = self.client.post("/api/marantz/play", json={"name": "FIP", "url": "http://icecast.radiofrance.fr/fipjazz-hifi.aac"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json()["mime"], "audio/mp4")
+        self.assertNotIn("audio/aac:", "".join(b for _, _, b in self.fake.soap))
+
+    def test_unsupported_format_is_reported(self):
+        self.stream_type = "application/ogg"
+        r = self.client.post("/api/marantz/play", json={"name": "X", "url": "http://x.example/stream"})
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("Ogg", r.get_json()["error"])
 
     def test_status(self):
         s = self.client.get("/api/marantz").get_json()
