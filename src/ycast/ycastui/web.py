@@ -6,12 +6,13 @@ import time
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 
-from . import common
+from . import common, marantz
+from urllib.parse import quote
 
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/2.3.0"}
+UA = {"User-Agent": "YCast-Umbrel/3.0.0"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -26,9 +27,25 @@ def _validation(e):
     return err(str(e))
 
 
+@app.errorhandler(marantz.MarantzError)
+def _marantz_error(e):
+    return err(str(e), 502)
+
+
 @app.get("/")
 def index():
     return send_from_directory(STATIC, "index.html")
+
+
+@app.get("/manifest.webmanifest")
+def webmanifest():
+    """Für „Zum Home-Bildschirm“ (iPhone, Android): startet im Vollbild wie eine App."""
+    return jsonify({
+        "name": "YCast", "short_name": "YCast", "start_url": "./", "scope": "./", "display": "standalone",
+        "background_color": "#1d1e21", "theme_color": "#1d1e21", "lang": "de",
+        "icons": [{"src": "static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                  {"src": "static/icon-512.png", "sizes": "512x512", "type": "image/png"}],
+    })
 
 
 @app.get("/static/<path:name>")
@@ -38,15 +55,25 @@ def static_file(name):
 
 # ---------- Sender ----------
 
+@app.errorhandler(common.ConflictError)
+def _conflict(e):
+    return jsonify({"error": str(e), "conflict": True}), 409
+
+
+def stations_payload(cats=None):
+    return {"categories": common.load_stations() if cats is None else cats, "revision": common.stations_revision()}
+
+
 @app.get("/api/stations")
 def get_stations():
-    return jsonify({"categories": common.load_stations()})
+    return jsonify(stations_payload())
 
 
 @app.put("/api/stations")
 def put_stations():
     body = request.get_json(silent=True) or {}
-    return jsonify({"categories": common.save_stations(body.get("categories"))})
+    cats = common.save_stations(body.get("categories"), expected_revision=body.get("revision"))
+    return jsonify(stations_payload(cats))
 
 
 @app.get("/api/stations/export")
@@ -70,7 +97,7 @@ def import_stations():
             else:
                 current.append(cat)
         cats = current
-    return jsonify({"categories": common.save_stations(cats)})
+    return jsonify(stations_payload(common.save_stations(cats)))
 
 
 # ---------- Radio Browser ----------
@@ -89,16 +116,16 @@ def search():
     except requests.RequestException as e:
         return err(f"Radio Browser nicht erreichbar: {e}", 502)
     out = [{
-        "name": s.get("name", "").strip(),
-        "url": s.get("url_resolved") or s.get("url"),
-        "favicon": s.get("favicon"),
-        "country": s.get("countrycode"),
-        "tags": s.get("tags", "")[:80],
-        "codec": s.get("codec"),
-        "bitrate": s.get("bitrate"),
-        "votes": s.get("votes"),
+        "name": (s.get("name") or "").strip(),
+        "url": s.get("url_resolved") or s.get("url") or "",
+        "favicon": s.get("favicon") or "",
+        "country": s.get("countrycode") or "",
+        "tags": (s.get("tags") or "")[:80],
+        "codec": s.get("codec") or "",
+        "bitrate": s.get("bitrate") or 0,
+        "votes": s.get("votes") or 0,
         "hls": bool(s.get("hls")),
-    } for s in r.json()]
+    } for s in r.json() if isinstance(s, dict) and (s.get("url_resolved") or s.get("url"))]
     out.sort(key=lambda s: s["hls"])  # HLS kann der Receiver nicht, ans Ende
     return jsonify({"results": out})
 
@@ -235,11 +262,11 @@ def dns_check():
     ip = ip_in_use()
     results = []
     for server in common.load_settings()["piholes"]:
-        res = dns.resolver.Resolver(configure=False)
-        res.nameservers = [server]
-        res.lifetime = 3
         for host in VTUNER_HOSTS:
             try:
+                res = dns.resolver.Resolver(configure=False)
+                res.nameservers = [server]
+                res.lifetime = 3
                 ips = sorted(a.address for a in res.resolve(host, "A"))
                 results.append({"server": server, "host": host, "ips": ips,
                                 "ok": ip in ips})
@@ -257,6 +284,75 @@ def get_settings():
 @app.put("/api/settings")
 def put_settings():
     return jsonify(common.save_settings(request.get_json(silent=True) or {}))
+
+
+# ---------- Marantz-Fernbedienung ----------
+
+def marantz_ip():
+    """Gespeicherte IP, sonst das Gerät, das zuletzt YCast abgefragt hat."""
+    ip = common.load_settings().get("marantz_ip") or ""
+    if ip:
+        return ip, "gespeichert"
+    for r in common.read_requests(300):
+        if not r.get("path", "").startswith("/relay") and r.get("client"):
+            return r["client"], "erkannt"
+    return "", ""
+
+
+@app.get("/api/marantz")
+def marantz_status():
+    ip, how = marantz_ip()
+    if not ip:
+        return jsonify({"configured": False, "ip": "", "how": ""})
+    try:
+        return jsonify({"configured": True, "how": how, "reachable": True, **marantz.status(ip)})
+    except marantz.MarantzError as e:
+        return jsonify({"configured": True, "how": how, "ip": ip, "reachable": False, "error": str(e)})
+
+
+@app.post("/api/marantz/cmd")
+def marantz_cmd():
+    ip, _ = marantz_ip()
+    if not ip:
+        return err("Kein Marantz bekannt. IP unter „Einrichtung“ eintragen.")
+    body = request.get_json(silent=True) or {}
+    marantz.command(ip, str(body.get("cmd", "")), body.get("value"))
+    return jsonify({"ok": True})
+
+
+def stream_for_marantz(url):
+    """HTTPS kann der Marantz nicht: über das signierte Relay des vTuner-Dienstes leiten."""
+    if url.startswith("https://") and common.YCAST_IP:
+        return f"http://{common.YCAST_IP}/relay?url={quote(url, safe='')}&sig={common.sign_url(url)}"
+    return url
+
+
+@app.post("/api/marantz/play")
+def marantz_play():
+    ip, _ = marantz_ip()
+    if not ip:
+        return err("Kein Marantz bekannt. IP unter „Einrichtung“ eintragen.")
+    body = request.get_json(silent=True) or {}
+    url = str(body.get("url", "")).strip()
+    name = str(body.get("name", "")).strip()[:120] or "YCast"
+    if not url.startswith(("http://", "https://")):
+        return err("Ungültige Stream-URL")
+    low = url.lower().split("?")[0]
+    mime = "audio/aac" if low.endswith((".aac", ".aacp")) else "audio/ogg" if low.endswith(".ogg") else "audio/mpeg"
+    marantz.play_url(ip, stream_for_marantz(url), name, mime)
+    return jsonify({"ok": True, "via_relay": url.startswith("https://")})
+
+
+@app.put("/api/marantz/settings")
+def marantz_settings():
+    ip = str((request.get_json(silent=True) or {}).get("ip", "")).strip()
+    if ip:
+        try:
+            ip = marantz.check_ip(ip)
+        except marantz.MarantzError as e:
+            return err(str(e))
+    common.save_setting("marantz_ip", ip)
+    return jsonify({"ip": ip or marantz_ip()[0]})
 
 
 def run():

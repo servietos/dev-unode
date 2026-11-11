@@ -43,19 +43,23 @@ function dialog(title, bodyHtml, okLabel = "OK") {
   });
 }
 
+let revision = null; // Stand der Senderliste auf dem Server (Konfliktprüfung bei zwei offenen Tabs)
+
 async function save(msg = "Gespeichert") {
   try {
-    const data = await api("api/stations", { method: "PUT", body: { categories: cats } });
-    cats = data.categories;
+    const data = await api("api/stations", { method: "PUT", body: { categories: cats, revision } });
+    cats = data.categories; revision = data.revision;
     toast(msg);
   } catch (e) {
     toast(e.message, true);
-    await load();
+    try { await load(); } catch (e2) { toast("Senderliste konnte nicht neu geladen werden: " + e2.message, true); }
+  } finally {
+    render();
   }
-  render();
 }
 async function load() {
-  cats = (await api("api/stations")).categories;
+  const data = await api("api/stations");
+  cats = data.categories; revision = data.revision;
   current = Math.min(current, Math.max(0, cats.length - 1));
   render();
 }
@@ -136,27 +140,38 @@ function badge(url) {
 function renderStations() {
   const c = cats[current];
   $("#cat-title").textContent = c ? c.name : "Keine Kategorie";
-  $("#cat-meta").textContent = c ? `${c.stations.length} Sender · erscheint am Marantz unter „My Stations“` : "Lege links eine Kategorie an.";
+  $("#cat-meta").textContent = c ? `${c.stations.length} Sender · erscheint am Marantz unter „My Stations“` : "Lege oben eine neue Kategorie an.";
   $("#station-add").hidden = !c;
   $("#cat-rename").hidden = $("#cat-delete").hidden = !c;
   const ul = $("#station-list");
   const list = c ? c.stations : [];
   $("#station-empty").hidden = !c || list.length > 0;
-  ul.innerHTML = list.map((s, i) => `<li class="station" draggable="true" data-i="${i}">
+  ul.innerHTML = list.map((s, i) => `<li class="station${playingUrl === s.url ? " playing" : ""}" draggable="true" data-i="${i}">
       <span class="grip" title="Ziehen zum Sortieren oder auf eine Kategorie">⋮⋮</span>
-      <button class="icon-btn play" data-act="play" title="Im Browser vorhören">▶</button>
-      <div class="st-main"><div class="st-name">${esc(s.name)}${s.url.startsWith("https://") ? '<span class="badge">HTTPS · Relay</span>' : ""}${badge(s.url)}</div>
-        <div class="st-url" title="${esc(s.url)}">${esc(s.url)}</div></div>
+      <div class="st-main"><div class="st-name">${esc(s.name)}${badge(s.url)}</div>
+        <div class="st-url" title="${esc(s.url)}">${s.url.startsWith("https://") ? "HTTPS über Relay · " : ""}${esc(s.url)}</div></div>
       <div class="st-actions">
-        <button class="icon-btn" data-act="check" title="Stream testen">✓</button>
-        <button class="icon-btn" data-act="edit" title="Bearbeiten">✎</button>
-        <button class="icon-btn" data-act="del" title="Löschen">✕</button>
+        <button class="btn small st-play" data-act="marantz" title="Auf dem Marantz abspielen"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z"/></svg>Abspielen</button>
+        <span class="more">
+          <button class="icon-btn" data-act="menu" title="Weitere Aktionen" aria-haspopup="true" aria-expanded="false">⋯</button>
+          <span class="more-menu" hidden>
+            <button data-act="play">Im Browser vorhören</button>
+            <button data-act="check">Stream testen</button>
+            <button data-act="up" ${i === 0 ? "disabled" : ""}>Nach oben</button>
+            <button data-act="down" ${i === list.length - 1 ? "disabled" : ""}>Nach unten</button>
+            <button data-act="edit">Bearbeiten</button>
+            <button data-act="del" class="danger">Löschen</button>
+          </span>
+        </span>
       </div></li>`).join("");
   ul.querySelectorAll(".station").forEach((li) => {
     const i = +li.dataset.i;
     li.addEventListener("click", (e) => {
-      const act = e.target.closest("[data-act]")?.dataset.act;
-      if (act) stationAction(act, i);
+      const btn = e.target.closest("[data-act]");
+      if (!btn || btn.disabled) return;
+      if (btn.dataset.act === "menu") return toggleMenu(btn);
+      closeMenus();
+      stationAction(btn.dataset.act, i);
     });
     li.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/station", i); li.classList.add("dragging"); });
     li.addEventListener("dragend", () => li.classList.remove("dragging"));
@@ -190,12 +205,36 @@ async function checkUrl(url, name) {
   renderStations();
 }
 
+function closeMenus() {
+  document.querySelectorAll(".more-menu").forEach((m) => { m.hidden = true; });
+  document.querySelectorAll('[data-act="menu"]').forEach((b) => b.setAttribute("aria-expanded", "false"));
+}
+function toggleMenu(btn) {
+  const menu = btn.nextElementSibling, open = menu.hidden;
+  closeMenus();
+  menu.hidden = !open; btn.setAttribute("aria-expanded", String(open));
+  if (open) menu.querySelector("button:not([disabled])")?.focus();
+}
+document.addEventListener("click", (e) => { if (!e.target.closest(".more")) closeMenus(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus(); });
+
 async function stationAction(act, i) {
   const arr = cats[current].stations;
   const s = arr[i];
+  if (act === "marantz") return playOnMarantz(s.name, s.url);
   if (act === "play") return play(s.name, s.url);
   if (act === "check") return checkUrl(s.url, s.name);
-  if (act === "del") { arr.splice(i, 1); return save(`„${s.name}“ gelöscht`); }
+  if (act === "up" || act === "down") {
+    const j = act === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    return save("Reihenfolge gespeichert");
+  }
+  if (act === "del") {
+    const fd = await dialog("Sender löschen?", `<p>„${esc(s.name)}“ wird aus „${esc(cats[current].name)}“ entfernt.</p>`, "Löschen");
+    if (!fd) return;
+    arr.splice(i, 1); return save(`„${s.name}“ gelöscht`);
+  }
   if (act === "edit") {
     const opts = cats.map((c, ci) => `<option value="${ci}" ${ci === current ? "selected" : ""}>${esc(c.name)}</option>`).join("");
     const fd = await dialog("Sender bearbeiten", `
@@ -234,7 +273,8 @@ $("#btn-import").addEventListener("click", async () => {
     <label>Modus<select name="mode"><option value="merge">Ergänzen (vorhandene bleiben)</option><option value="replace">Ersetzen (alles neu)</option></select></label>`, "Importieren");
   if (!fd) return;
   try {
-    cats = (await api("api/stations/import", { method: "POST", body: { yaml: fd.get("yaml"), mode: fd.get("mode") } })).categories;
+    const data = await api("api/stations/import", { method: "POST", body: { yaml: fd.get("yaml"), mode: fd.get("mode") } });
+    cats = data.categories; revision = data.revision;
     current = 0; render(); toast("Import gespeichert");
   } catch (e) { toast(e.message, true); }
 });
@@ -317,17 +357,17 @@ for (const id of ["#search-country", "#search-tag"]) {
 
 // Darstellung: Auto / Hell / Dunkel, im Browser gemerkt
 function applyTheme(t) {
-  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
-  else delete document.documentElement.dataset.theme;
+  const theme = ["light", "auto"].includes(t) ? t : "dark";   // Standard: dunkel wie das Gerät
+  document.documentElement.dataset.theme = theme;
   document.querySelectorAll("[data-theme-set]").forEach((b) =>
-    b.setAttribute("aria-pressed", String(b.dataset.themeSet === (t || "auto"))));
+    b.setAttribute("aria-pressed", String(b.dataset.themeSet === theme)));
 }
-let savedTheme = "auto";
-try { savedTheme = localStorage.getItem("ycast-theme") || "auto"; } catch { /* privat */ }
+let savedTheme = "dark";
+try { savedTheme = localStorage.getItem("ycast-theme") || "dark"; } catch { /* privat */ }
 applyTheme(savedTheme);
 document.querySelectorAll("[data-theme-set]").forEach((b) => b.addEventListener("click", () => {
   const t = b.dataset.themeSet;
-  try { if (t === "auto") localStorage.removeItem("ycast-theme"); else localStorage.setItem("ycast-theme", t); } catch { /* privat */ }
+  try { localStorage.setItem("ycast-theme", t); } catch { /* privat */ }
   applyTheme(t);
 }));
 
@@ -344,12 +384,14 @@ $("#search-form").addEventListener("submit", async (e) => {
       ${r.favicon ? `<img src="${esc(r.favicon)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph'}))">` : '<div class="ph"></div>'}
       <div><strong>${esc(r.name)}</strong>${r.hls ? '<span class="badge bad" title="HLS-Streams spielt der Marantz nicht ab">HLS · nicht am Marantz</span>' : ""}
         <div class="meta">${esc([r.country, r.codec, r.bitrate ? r.bitrate + " kbit/s" : "", r.tags].filter(Boolean).join(" · "))}</div>
-        <div class="row"><button class="btn ghost small" data-i="${i}" data-act="play">▶ Vorhören</button>
-          <button class="btn small" data-i="${i}" data-act="add">+ Hinzufügen</button></div></div></div>`).join("");
+        <div class="row"><button class="btn small" data-i="${i}" data-act="marantz" ${r.hls ? "disabled" : ""}>Auf dem Marantz abspielen</button>
+          <button class="btn ghost small" data-i="${i}" data-act="play">Vorhören</button>
+          <button class="btn ghost small" data-i="${i}" data-act="add">Zu meinen Sendern</button></div></div></div>`).join("");
 });
 $("#search-results").addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const r = results[+b.dataset.i];
+  if (b.dataset.act === "marantz") return playOnMarantz(r.name, r.url);
   if (b.dataset.act === "play") return play(r.name, r.url);
   const ci = +$("#search-target").value;
   if (!cats[ci]) return toast("Lege zuerst eine Kategorie an", true);
@@ -373,15 +415,19 @@ audio.addEventListener("error", () => ($("#player-state").textContent = "Stream 
 $("#player-stop").addEventListener("click", () => { audio.pause(); audio.removeAttribute("src"); audio.load(); $("#player").hidden = true; });
 
 // ---------- Status & Einrichtung ----------
-function setPill(el, ok, text) { el.className = "pill " + (ok === null ? "" : ok ? "ok" : "bad"); el.textContent = text; }
+function setPill(el, ok, text) {
+  el.className = "dot" + (ok === null ? "" : ok ? " ok" : " bad");
+  const label = $("#" + el.id + "-text");
+  if (label) label.textContent = text;
+}
 
 async function refreshStatus() {
   let s;
-  try { s = await api("api/status"); } catch { setPill($("#pill-ycast"), false, "Weboberfläche getrennt"); return; }
+  try { s = await api("api/status"); } catch { setPill($("#pill-ycast"), false, "getrennt"); return; }
   ycastIp = s.ip;
-  setPill($("#pill-ycast"), s.ycast.ok, s.ycast.ok ? `YCast läuft · ${s.ip}` : "YCast nicht erreichbar");
+  setPill($("#pill-ycast"), s.ycast.ok, s.ycast.ok ? `läuft auf ${s.ip}` : "nicht erreichbar");
   const last = s.last_receiver;
-  setPill($("#pill-avr"), last ? (Date.now() / 1000 - last.t < 86400) : null, last ? `Receiver ${ago(last.t)}` : "Receiver noch nie gesehen");
+  setPill($("#pill-avr"), last ? (Date.now() / 1000 - last.t < 86400) : null, last ? `gesehen ${ago(last.t)}` : "noch nie gesehen");
 
   document.querySelectorAll(".ip").forEach((el) => (el.textContent = s.ip || "–"));
   $("#dns-cli").textContent = `sudo pihole-FTL --config misc.dnsmasq_lines '["address=/vtuner.com/${s.ip || "?"}"]'`;
@@ -457,6 +503,139 @@ document.addEventListener("click", (e) => {
   navigator.clipboard?.writeText($("#" + b.dataset.copy).textContent).then(() => toast("Kopiert"), () => toast("Bitte manuell kopieren", true));
 });
 
+// ---------- Marantz: Display und Fernbedienung ----------
+const SOURCES = { IRADIO: "Internet Radio", DLNA: "Medienserver", SERVER: "Medienserver", USB: "USB", NET: "Netzwerk",
+  BT: "Bluetooth", CD: "CD", TUNER: "Radio", FM: "UKW", DAB: "DAB", AUX: "AUX", "AUX1": "AUX", OPTICAL: "Optisch", AIRPLAY: "AirPlay", SPOTIFY: "Spotify" };
+const DIAL_LEN = 433.5;         // Länge des Lautstärke-Bogens (270°) im SVG
+let mz = null;                  // letzter Status
+let playingUrl = "";
+let mzBusy = false;
+let volTimer;
+
+function sourceName(s) {
+  const key = (s.source || s.input || "").toUpperCase();
+  return SOURCES[key] || s.source || s.input || "";
+}
+
+function renderMarantz() {
+  const ph = $("#porthole"), title = $("#ph-title"), sub = $("#ph-sub"), src = $("#ph-source"), vol = $("#ph-vol");
+  const power = $("#btn-power"), mute = $("#btn-mute"), range = $("#vol-range"), note = $("#deck-note");
+  const controls = [power, mute, range, $("#btn-vol-up"), $("#btn-vol-down")];
+  if (!mz || !mz.configured) {
+    ph.dataset.state = "offline"; src.textContent = "Marantz"; title.textContent = "Nicht verbunden";
+    sub.textContent = "IP unter Einrichtung eintragen"; vol.textContent = "";
+    controls.forEach((c) => (c.disabled = true)); note.textContent = ""; setDial(0); return;
+  }
+  if (!mz.reachable) {
+    ph.dataset.state = "offline"; src.textContent = "Marantz"; title.textContent = "Nicht erreichbar";
+    sub.textContent = mz.ip; vol.textContent = "";
+    controls.forEach((c) => (c.disabled = true)); note.textContent = "Ist der Marantz am Strom und im Netz?"; setDial(0); return;
+  }
+  controls.forEach((c) => (c.disabled = false));
+  power.setAttribute("aria-pressed", String(mz.power));
+  power.setAttribute("aria-label", mz.power ? "In Standby schalten" : "Einschalten");
+  mute.setAttribute("aria-pressed", String(mz.mute));
+  range.max = mz.volume_max || 60;
+  if (document.activeElement !== range && mz.volume != null) range.value = mz.volume;
+  if (!mz.power) {
+    ph.dataset.state = "standby"; src.textContent = "Marantz"; title.textContent = "Standby";
+    sub.textContent = ""; vol.textContent = ""; note.textContent = "Tippe auf Abspielen bei einem Sender, der Marantz schaltet sich dann ein.";
+    [mute, range, $("#btn-vol-up"), $("#btn-vol-down")].forEach((c) => (c.disabled = true));
+    setDial(0); return;
+  }
+  ph.dataset.state = "on";
+  const lines = (mz.lines || []).filter((l) => l && !/^now playing$/i.test(l));
+  src.textContent = sourceName(mz);
+  title.textContent = lines[0] || sourceName(mz) || "Bereit";
+  sub.textContent = lines.slice(1, 3).join(" · ");
+  vol.textContent = mz.mute ? "Stumm" : `Lautstärke ${mz.volume ?? "–"}`;
+  note.textContent = "";
+  setDial(mz.mute ? 0 : (mz.volume || 0) / (mz.volume_max || 60));
+}
+
+function setDial(fraction) {
+  const f = Math.max(0, Math.min(1, fraction));
+  $("#dial-level").style.strokeDasharray = `${(DIAL_LEN * f).toFixed(1)} 578`;
+}
+
+async function refreshMarantz() {
+  if (mzBusy) return;
+  try { mz = await api("api/marantz"); } catch (e) { mz = { configured: true, reachable: false, ip: "" }; }
+  renderMarantz();
+  renderMzSettings();
+}
+
+async function mzCommand(cmd, value) {
+  try {
+    await api("api/marantz/cmd", { method: "POST", body: { cmd, value } });
+    setTimeout(refreshMarantz, cmd === "power_on" ? 2500 : 400);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function playOnMarantz(name, url) {
+  if (mzBusy) return;
+  mzBusy = true;
+  const wasOff = mz && mz.reachable && !mz.power;
+  $("#porthole").dataset.state = "on";
+  $("#ph-source").textContent = "Starte";
+  $("#ph-title").textContent = name;
+  $("#ph-sub").textContent = wasOff ? "Marantz wird eingeschaltet …" : "";
+  try {
+    const r = await api("api/marantz/play", { method: "POST", body: { name, url } });
+    playingUrl = url; renderStations();
+    toast(`„${name}“ läuft auf dem Marantz${r.via_relay ? " (über das HTTPS-Relay)" : ""}`);
+  } catch (e) { toast(e.message, true); }
+  finally {
+    mzBusy = false;
+    setTimeout(refreshMarantz, 1500);
+  }
+}
+
+$("#btn-power").addEventListener("click", () => mzCommand(mz && mz.power ? "standby" : "power_on"));
+$("#btn-mute").addEventListener("click", () => mzCommand(mz && mz.mute ? "mute_off" : "mute_on"));
+$("#btn-vol-up").addEventListener("click", () => mzCommand("vol_up"));
+$("#btn-vol-down").addEventListener("click", () => mzCommand("vol_down"));
+$("#vol-range").addEventListener("input", (e) => {
+  const v = +e.target.value;
+  setDial(v / (+e.target.max || 60));
+  $("#ph-vol").textContent = `Lautstärke ${v}`;
+  clearTimeout(volTimer);
+  volTimer = setTimeout(() => mzCommand("volume", v), 250);
+});
+
+// Einrichtung: Marantz-IP
+function renderMzSettings() {
+  if (!mz) return;
+  const how = { gespeichert: "fest eingetragen", erkannt: "aus den Abrufen erkannt" }[mz.how] || "";
+  $("#mz-info").innerHTML = mz.configured ? `
+    <dt>Adresse</dt><dd>${esc(mz.ip)}${how ? " (" + how + ")" : ""}</dd>
+    <dt>Zustand</dt><dd>${mz.reachable ? (mz.power ? "eingeschaltet" : "Standby") : "nicht erreichbar"}</dd>` :
+    `<dt>Adresse</dt><dd>noch unbekannt: öffne einmal Internet Radio am Marantz oder trage die IP ein</dd>`;
+  const inp = $("#mz-ip");
+  if (document.activeElement !== inp) inp.value = mz.how === "gespeichert" ? mz.ip : "";
+  inp.placeholder = mz.how === "erkannt" ? `erkannt: ${mz.ip}` : "z. B. 192.168.178.56";
+}
+async function saveMz(ip) {
+  try {
+    await api("api/marantz/settings", { method: "PUT", body: { ip } });
+    toast(ip ? "Marantz-Adresse gespeichert" : "Marantz wird automatisch erkannt");
+    refreshMarantz();
+  } catch (e) { toast(e.message, true); }
+}
+$("#mz-form").addEventListener("submit", (e) => { e.preventDefault(); saveMz($("#mz-ip").value.trim()); });
+$("#mz-auto").addEventListener("click", () => { $("#mz-ip").value = ""; saveMz(""); });
+
 load().catch((e) => toast(e.message, true));
 refreshStatus();
-setInterval(refreshStatus, 15000);
+refreshMarantz();
+// Abfragen nur bei sichtbarer Seite: Marantz alle 5 s, Dienststatus alle 15 s (im Reiter Einrichtung) bzw. 60 s
+let tick = 0;
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+  tick += 1;
+  refreshMarantz();
+  if ((!$("#tab-setup").hidden && tick % 3 === 0) || tick % 12 === 0) refreshStatus();
+}, 5000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { refreshMarantz(); refreshStatus(); }
+});

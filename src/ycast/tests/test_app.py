@@ -69,6 +69,37 @@ class TestWeb(Base):
         self.assertEqual(r.status_code, 400)
         self.assertIn("Ungültige URL", r.get_json()["error"])
 
+    def test_revision_conflict(self):
+        rev = self.client.get("/api/stations").get_json()["revision"]
+        cats = [{"name": "A", "stations": [{"name": "s", "url": "http://x"}]}]
+        self.assertEqual(self.client.put("/api/stations", json={"categories": cats, "revision": rev}).status_code, 200)
+        r = self.client.put("/api/stations", json={"categories": cats, "revision": rev})
+        self.assertEqual(r.status_code, 409)
+        self.assertTrue(r.get_json()["conflict"])
+
+    def test_broken_yaml_and_empty_url(self):
+        self.common.STATIONS_FILE.write_text("Pop:\n  Leer:\n  Eins: http://a\n", encoding="utf-8")
+        cats = self.client.get("/api/stations").get_json()["categories"]
+        self.assertEqual(cats[0]["stations"][0], {"name": "Leer", "url": ""})
+        self.common.STATIONS_FILE.write_text("Pop: [unclosed\n", encoding="utf-8")
+        r = self.client.get("/api/stations")
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("stations.yml.bak", r.get_json()["error"])
+
+    def test_pihole_validation(self):
+        self.assertEqual(self.client.put("/api/settings", json={"piholes": ["pihole.local"]}).status_code, 400)
+        self.assertEqual(self.client.put("/api/settings", json={"piholes": "192.168.178.2"}).status_code, 400)
+        self.assertEqual(self.client.put("/api/settings", json={"piholes": None}).status_code, 400)
+
+    def test_search_tolerates_nulls(self):
+        resp = mock.Mock()
+        resp.json.return_value = [{"name": None, "url": "http://a", "tags": None, "codec": None, "bitrate": None},
+                                  {"name": "ohne url", "url": None}]
+        with mock.patch.object(self.web.requests, "get", return_value=resp):
+            res = self.client.get("/api/search?name=x").get_json()["results"]
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["tags"], "")
+
     def test_import_merge_and_export(self):
         self.client.put("/api/stations", json={"categories": [{"name": "A", "stations": [{"name": "s", "url": "http://x"}]}]})
         r = self.client.post("/api/stations/import", json={"mode": "merge", "yaml": "A:\n  s: http://y\n  t: http://z\nB:\n  u: http://u\n"})
@@ -152,6 +183,103 @@ class TestNetwork(Base):
         self.down.start()
 
 
+class FakeMarantz:
+    """Simuliert die Webschnittstelle und UPnP des M-CR510."""
+
+    def __init__(self):
+        self.power, self.volume, self.mute, self.calls, self.soap = "STANDBY", 3, "off", [], []
+
+    def get(self, url, timeout=None, **kw):
+        r = mock.Mock(ok=True, status_code=200)
+        r.raise_for_status = lambda: None
+        if "formiPhoneAppDirect.xml?" in url:
+            code = url.split("?", 1)[1]
+            self.calls.append(code)
+            if code == "PWON":
+                self.power = "ON"
+            elif code.startswith("MV") and code[2:].isdigit():
+                self.volume = int(code[2:])
+            r.text = ""
+        elif "MainZoneXmlStatusLite" in url:
+            r.text = (f"<item><Power><value>{self.power}</value></Power><InputFuncSelect><value>NET</value></InputFuncSelect>"
+                      f"<MasterVolume><value>{self.volume - 80}.0</value></MasterVolume><Mute><value>{self.mute}</value></Mute></item>")
+        elif "NetAudio_StatusXml" in url:
+            r.text = ("<item><szLine><value>Now Playing</value><value>Bayern 3</value><value>Musik</value><value></value></szLine>"
+                      "<NetFuncSelect><value>IRADIO</value></NetFuncSelect></item>")
+        elif "description.xml" in url:
+            r.text = ("<root><service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>"
+                      "<controlURL>/AVTransport/ctrl</controlURL></service></root>")
+        return r
+
+    def post(self, url, data=None, headers=None, timeout=None):
+        self.soap.append((url, headers["SOAPACTION"], data.decode()))
+        return mock.Mock(ok=True, status_code=200, text="<ok/>")
+
+
+class TestMarantz(Base):
+    def setUp(self):
+        super().setUp()
+        import ycastui.marantz as marantz
+        import ycastui.web as web
+        self.m = importlib.reload(marantz)
+        self.web = importlib.reload(web)
+        self.client = self.web.app.test_client()
+        self.fake = FakeMarantz()
+        self.p1 = mock.patch.object(self.m.requests, "get", side_effect=self.fake.get)
+        self.p2 = mock.patch.object(self.m.requests, "post", side_effect=self.fake.post)
+        self.p3 = mock.patch.object(self.m.time, "sleep", lambda s: None)
+        for p in (self.p1, self.p2, self.p3):
+            p.start()
+        self.common.save_setting("marantz_ip", "192.168.178.56")
+
+    def tearDown(self):
+        for p in (self.p1, self.p2, self.p3):
+            p.stop()
+        super().tearDown()
+
+    def test_status(self):
+        s = self.client.get("/api/marantz").get_json()
+        self.assertTrue(s["reachable"])
+        self.assertFalse(s["power"])
+        self.assertEqual(s["volume"], 3)
+        self.assertEqual(s["lines"], ["Now Playing", "Bayern 3", "Musik"])
+        self.assertEqual(s["source"], "IRADIO")
+
+    def test_commands_and_volume_limit(self):
+        self.client.post("/api/marantz/cmd", json={"cmd": "power_on"})
+        self.client.post("/api/marantz/cmd", json={"cmd": "volume", "value": 99})
+        self.assertEqual(self.fake.calls, ["PWON", "MV60"])
+        self.assertEqual(self.client.post("/api/marantz/cmd", json={"cmd": "rm -rf"}).status_code, 502)
+
+    def test_play_powers_on_and_uses_relay_for_https(self):
+        r = self.client.post("/api/marantz/play", json={"name": "B3 <&>", "url": "https://stream.example/b3.mp3"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.fake.calls[0], "PWON")
+        actions = [a for _, a, _ in self.fake.soap]
+        self.assertEqual(actions, ['"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI"',
+                                   '"urn:schemas-upnp-org:service:AVTransport:1#Play"'])
+        body = self.fake.soap[0][2]
+        self.assertIn("http://192.168.178.210/relay?url=https%3A%2F%2Fstream.example%2Fb3.mp3&amp;sig=", body)
+        self.assertIn("B3 &amp;lt;&amp;amp;&amp;gt;", body)  # Titel doppelt maskiert (DIDL in SOAP)
+        self.assertEqual(self.fake.soap[0][0], "http://192.168.178.56:8080/AVTransport/ctrl")
+
+    def test_ip_must_be_private(self):
+        self.assertEqual(self.client.put("/api/marantz/settings", json={"ip": "8.8.8.8"}).status_code, 400)
+        self.assertEqual(self.client.put("/api/marantz/settings", json={"ip": "localhost"}).status_code, 400)
+
+    def test_ip_autodetect_from_log(self):
+        self.common.save_setting("marantz_ip", "")
+        self.common.log_request("192.168.178.77", "denon.vtuner.com", "/ycast/", "Marantz")
+        self.assertEqual(self.client.get("/api/marantz").get_json()["how"], "erkannt")
+        self.assertEqual(self.web.marantz_ip()[0], "192.168.178.77")
+
+    def test_manifest_and_icons(self):
+        mf = self.client.get("/manifest.webmanifest").get_json()
+        self.assertEqual(mf["display"], "standalone")
+        for icon in ("icon-180.png", "icon-192.png", "icon-512.png", "icon.svg"):
+            self.assertEqual(self.client.get(f"/static/{icon}").status_code, 200, icon)
+
+
 class TestVtuner(Base):
     def setUp(self):
         super().setUp()
@@ -164,8 +292,24 @@ class TestVtuner(Base):
     def test_https_goes_through_relay(self):
         import ycast.vtuner as vtuner
         url = vtuner.strip_https("https://stream.example/live.mp3")
-        self.assertEqual(url, "http://192.168.178.210/relay?url=https%3A%2F%2Fstream.example%2Flive.mp3")
+        self.assertTrue(url.startswith("http://192.168.178.210/relay?url=https%3A%2F%2Fstream.example%2Flive.mp3&sig="))
+        sig = url.rsplit("sig=", 1)[1]
+        self.assertTrue(self.common.verify_url("https://stream.example/live.mp3", sig))
+        self.assertFalse(self.common.verify_url("https://other.example/x", sig))
         self.assertEqual(vtuner.strip_https("http://a/b"), "http://a/b")
+
+    def test_relay_requires_signature_and_public_target(self):
+        self.assertEqual(self.client.get("/relay?url=http://evil/x").status_code, 403)
+        internal = "http://dev-unode-ycast_web_1:8000/api/settings"
+        sig = self.common.sign_url(internal)
+        with mock.patch.object(self.vs.socket, "getaddrinfo", return_value=[(2, 1, 6, "", ("10.21.0.5", 8000))]):
+            self.assertEqual(self.client.get(f"/relay?url={internal}&sig={sig}").status_code, 403)
+        self.assertFalse(self.vs._public_target("http://127.0.0.1/x"))
+
+    def test_log_failure_does_not_break_receiver(self):
+        with mock.patch.object(self.common, "REQUEST_LOG", Path(self.tmp.name, "nope", "requests.log")):
+            r = self.client.get("/ycast/", headers={"Host": "denon.vtuner.com"})
+        self.assertEqual(r.status_code, 200)
 
     def test_receiver_requests_are_logged(self):
         r = self.client.get("/setupapp/marantz/asp/browsexml/loginXML.asp?token=0", headers={"Host": "denon.vtuner.com"})
@@ -180,7 +324,8 @@ class TestVtuner(Base):
         self.assertIn(b"Favoriten", r.data)
 
     def test_relay_rejects_bad_scheme(self):
-        self.assertEqual(self.client.get("/relay?url=file:///etc/passwd").status_code, 400)
+        bad = "file:///etc/passwd"
+        self.assertEqual(self.client.get(f"/relay?url={bad}&sig={self.common.sign_url(bad)}").status_code, 403)
 
 
 if __name__ == "__main__":
