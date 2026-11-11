@@ -42,6 +42,15 @@ def check_ip(ip):
     return str(addr)
 
 
+def is_receiver(ip, timeout=2):
+    """Antwortet unter dieser Adresse ein Denon/Marantz (Geräteinfo der Webschnittstelle)?"""
+    try:
+        r = requests.get(f"http://{check_ip(ip)}/goform/Deviceinfo.xml", timeout=timeout)
+        return r.ok and "<Device_Info" in r.text
+    except (requests.RequestException, MarantzError):
+        return False
+
+
 def _get(ip, path):
     try:
         r = requests.get(f"http://{ip}{path}", timeout=TIMEOUT)

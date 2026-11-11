@@ -12,7 +12,7 @@ from urllib.parse import quote
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/3.0.1"}
+UA = {"User-Agent": "YCast-Umbrel/3.0.2"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -288,14 +288,33 @@ def put_settings():
 
 # ---------- Marantz-Fernbedienung ----------
 
+_detected = {"ip": "", "at": 0.0}
+DETECT_TTL = 600
+
+
 def marantz_ip():
-    """Gespeicherte IP, sonst das Gerät, das zuletzt YCast abgefragt hat."""
+    """Gespeicherte IP, sonst automatisch erkannt.
+
+    Kandidaten sind nur Geräte, die YCast über *.vtuner.com abgefragt haben (Router, Umbrel und
+    Abrufe direkt per IP fallen weg). Jeder Kandidat muss sich als Denon/Marantz ausweisen,
+    damit z. B. die Hersteller-App auf dem Handy nicht als Receiver gilt."""
     ip = common.load_settings().get("marantz_ip") or ""
     if ip:
         return ip, "gespeichert"
+    if _detected["ip"] and time.time() - _detected["at"] < DETECT_TTL:
+        return _detected["ip"], "erkannt"
+    net = common.active_network()
+    skip = {net.get("gateway"), net.get("host_ip"), net.get("ip"), ""}
+    seen = []
     for r in common.read_requests(300):
-        if not r.get("path", "").startswith("/relay") and r.get("client"):
-            return r["client"], "erkannt"
+        client = r.get("client") or ""
+        if client in skip or client in seen or not str(r.get("host", "")).endswith("vtuner.com"):
+            continue
+        seen.append(client)
+    for client in seen[:5]:
+        if marantz.is_receiver(client):
+            _detected.update(ip=client, at=time.time())
+            return client, "erkannt"
     return "", ""
 
 
