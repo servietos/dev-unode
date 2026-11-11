@@ -65,6 +65,24 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
     </div>
     <p class="deck-note" id="deck-note"></p>
 
+    <div class="deck-extra">
+      <div id="recent-wrap" hidden>
+        <h2 class="mini">Zuletzt gespielt</h2>
+        <ul class="chips" id="recent"></ul>
+      </div>
+      <div class="sleep-row">
+        <h2 class="mini" id="sleep-label">Ausschalten in</h2>
+        <div class="seg" id="sleep" role="group" aria-labelledby="sleep-label">
+          <button type="button" data-min="0" aria-pressed="true">Aus</button>
+          <button type="button" data-min="15" aria-label="15 Minuten">15</button>
+          <button type="button" data-min="30" aria-label="30 Minuten">30</button>
+          <button type="button" data-min="60" aria-label="60 Minuten">60</button>
+          <button type="button" data-min="90" aria-label="90 Minuten">90 min</button>
+        </div>
+        <span class="sleep-left" id="sleep-left" hidden></span>
+      </div>
+    </div>
+
     <dl class="deck-status">
       <div><dt>YCast</dt><dd><span class="dot" id="pill-ycast"></span><span id="pill-ycast-text">…</span></dd></div>
       <div><dt>Receiver</dt><dd><span class="dot" id="pill-avr"></span><span id="pill-avr-text">…</span></dd></div>
@@ -117,7 +135,8 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
       <section id="tab-search" class="panel" hidden>
         <div class="block">
           <h2>Im Radio Browser suchen</h2>
-          <form id="search-form" class="search-form">
+          <div class="search-bar" id="search-bar">
+          <form id="search-form" class="search-form" role="search">
             <input name="name" placeholder="Name, z. B. Bayern 3, Antenne, Jazz …" aria-label="Sendername">
             <select name="countrycode" id="search-country" aria-label="Land">
               <option value="DE">Deutschland</option>
@@ -134,6 +153,9 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
             </select>
             <button class="btn">Suchen</button>
           </form>
+          <p class="muted small search-hint" id="search-hint">Ergebnisse erscheinen beim Tippen. HLS- und Ogg-Sender wandelt YCast für den Marantz um.</p>
+          </div>
+          <p class="visually-hidden" id="search-status" aria-live="polite"></p>
           <div id="search-results" class="results"></div>
         </div>
 

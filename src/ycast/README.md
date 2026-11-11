@@ -15,6 +15,11 @@ Basis ist [YCast 1.1.0 von milaq](https://github.com/milaq/YCast) (PyPI), ergän
   bleibt), Abspielen per UPnP AVTransport. Die Geräte-IP wird aus den Abrufen erkannt oder fest
   eingetragen; im Gerät muss Netzwerk-Standby aktiv sein.
 - **iPhone/Android**: Web-App-Manifest und Symbole, „Zum Home-Bildschirm“ startet im Vollbild.
+- **HLS und Ogg/Opus**: `/hls?url=…&sig=…` im vTuner-Dienst wandelt mit ffmpeg um (AAC → ADTS und
+  MP3 werden nur umverpackt, sonst MP3 192 kbit/s). Vorher lädt YCast die Playlist selbst und prüft,
+  dass alle Adressen darin öffentlich sind (kein Zugriff aufs Heimnetz über fremde Playlisten).
+  Gleiche Plätze-Begrenzung wie das Relay, ffmpeg bricht nach 15 s ohne Daten ab.
+- **Komfort**: „Zuletzt gespielt“ (`data/recent.json`) und Ausschalt-Timer (Standby nach Ablauf).
 - **HTTPS-Relay**: Receiver können kein HTTPS. YCast schreibt `https://` normalerweise auf
   `http://` um, was bei vielen Sendern scheitert. Hier laufen HTTPS-Streams stattdessen über
   `http://<YCast-IP>/relay?url=…` (abschaltbar mit `RELAY_HTTPS=off`).

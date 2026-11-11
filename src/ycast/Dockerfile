@@ -3,7 +3,13 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     YCAST_DATA_DIR=/data \
-    YCASTUI_MODE=web
+    YCASTUI_MODE=web \
+    LANG=C.UTF-8
+
+# ffmpeg/ffprobe: HLS-Sender (.m3u8) für den Receiver in einen durchgehenden Stream umwandeln
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ffmpeg \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY requirements.txt ./

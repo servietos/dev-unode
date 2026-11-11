@@ -314,7 +314,11 @@ async function loadLists() {
     sel.value = keep;
   } catch { /* Genre-Vorschläge sind optional */ }
 }
-document.querySelector('.tab[data-tab="search"]').addEventListener("click", loadLists);
+document.querySelector('.tab[data-tab="search"]').addEventListener("click", () => {
+  loadLists();
+  // Beim ersten Öffnen gleich die beliebtesten Sender des Landes zeigen
+  if (!results.length && !$("#search-results").children.length) $("#search-form").requestSubmit();
+});
 
 // Manuell hinzufügen
 const manual = $("#manual-form");
@@ -398,15 +402,22 @@ $("#search-form").addEventListener("submit", async (e) => {
   if (seq !== searchSeq) return;
   box.removeAttribute("aria-busy");
   results = found;
+  $("#search-status").textContent = results.length ? `${results.length} Treffer` : "Nichts gefunden";
   if (!results.length) { box.innerHTML = `<p class="muted">Nichts gefunden.</p>`; return; }
   box.innerHTML = results.map((r, i) => `<div class="result">
       ${r.favicon ? `<img src="${esc(r.favicon)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph'}))">` : '<div class="ph"></div>'}
-      <div><strong>${esc(r.name)}</strong>${r.hls ? '<span class="badge bad" title="HLS-Streams spielt der Marantz nicht ab">HLS · nicht am Marantz</span>' : ""}
+      <div><strong title="${esc(r.name)}">${esc(r.name)}</strong>${convertBadge(r)}
         <div class="meta">${esc([r.country, r.codec, r.bitrate ? r.bitrate + " kbit/s" : "", r.tags].filter(Boolean).join(" · "))}</div>
-        <div class="row"><button class="btn small" data-i="${i}" data-act="marantz" ${r.hls ? "disabled" : ""}>Auf dem Marantz abspielen</button>
+        <div class="row"><button class="btn small" data-i="${i}" data-act="marantz">Auf dem Marantz abspielen</button>
           <button class="btn ghost small" data-i="${i}" data-act="play">Vorhören</button>
           <button class="btn ghost small" data-i="${i}" data-act="add">Zu meinen Sendern</button></div></div></div>`).join("");
 });
+// Formate, die der Marantz nicht direkt kann, wandelt YCast per ffmpeg um
+function convertBadge(r) {
+  const codec = (r.codec || "").toUpperCase();
+  const what = r.hls ? "HLS" : /OGG|OPUS|VORBIS/.test(codec) ? codec.split(",")[0] : "";
+  return what ? `<span class="badge info" title="Diesen Stream wandelt YCast für den Marantz um; der Start dauert ein paar Sekunden länger">${esc(what)} · wird umgewandelt</span>` : "";
+}
 $("#search-results").addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const r = results[+b.dataset.i];
@@ -620,6 +631,7 @@ async function refreshMarantz() {
   if (mzBusy) return;
   try { mz = await api("api/marantz"); } catch (e) { mz = { configured: true, reachable: false, ip: "" }; }
   renderMarantz();
+  renderSleep(mz.sleep_left || 0, mz.sleep_minutes || 0);
   renderMzSettings();
 }
 
@@ -637,11 +649,14 @@ async function playOnMarantz(name, url) {
   $("#porthole").dataset.state = "on";
   $("#ph-source").textContent = "Starte";
   $("#ph-title").textContent = name;
-  $("#ph-sub").textContent = wasOff ? "Marantz wird eingeschaltet …" : "";
+  const isHls = /\.m3u8?(\?|#|$)/i.test(url);
+  $("#ph-sub").textContent = [wasOff ? "Marantz wird eingeschaltet …" : "", isHls ? "HLS wird umgewandelt …" : ""].filter(Boolean).join(" ");
   try {
     const r = await api("api/marantz/play", { method: "POST", body: { name, url } });
     playingUrl = url; renderStations();
-    toast(`„${name}“ läuft auf dem Marantz${r.via_relay ? " (über das HTTPS-Relay)" : ""}`);
+    const via = { relay: " (über das HTTPS-Relay)", hls: " (HLS, von YCast umgewandelt)", convert: " (von YCast in MP3 umgewandelt)" }[r.via] || "";
+    toast(`„${name}“ läuft auf dem Marantz${via}`);
+    loadRecent();
   } catch (e) { toast(e.message, true); }
   finally {
     mzBusy = false;
@@ -683,9 +698,60 @@ async function saveMz(ip) {
 $("#mz-form").addEventListener("submit", (e) => { e.preventDefault(); saveMz($("#mz-ip").value.trim()); });
 $("#mz-auto").addEventListener("click", () => { $("#mz-ip").value = ""; saveMz(""); });
 
+// ---------- Zuletzt gespielt ----------
+let recentItems = [];
+async function loadRecent() {
+  try { recentItems = (await api("api/recent")).items; } catch { recentItems = []; }
+  $("#recent-wrap").hidden = !recentItems.length;
+  $("#recent").innerHTML = recentItems.map((r, i) =>
+    `<li><button type="button" class="chip" data-i="${i}" title="${esc(r.name)} auf dem Marantz abspielen">${esc(r.name)}</button></li>`).join("");
+}
+$("#recent").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  const r = recentItems[+b.dataset.i];
+  if (r) playOnMarantz(r.name, r.url);
+});
+
+// ---------- Einschlaf-Timer ----------
+function renderSleep(left, chosen) {
+  const mins = Math.ceil((left || 0) / 60);
+  document.querySelectorAll("#sleep button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(+b.dataset.min === (left ? chosen : 0))));
+  const el = $("#sleep-left");
+  el.hidden = !left;
+  el.textContent = left ? `noch ${mins} min` : "";
+}
+$("#sleep").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-min]"); if (!b) return;
+  const minutes = +b.dataset.min;
+  try {
+    const r = await api("api/marantz/sleep", { method: "PUT", body: { minutes } });
+    renderSleep(r.sleep_left, r.sleep_minutes);
+    toast(minutes ? `Der Marantz geht in ${minutes} Minuten in Standby` : "Ausschalt-Timer aus");
+  } catch (err) { toast(err.message, true); }
+});
+
+// Suchleiste: Schatten, sobald sie beim Scrollen oben stehen bleibt
+const searchBar = $("#search-bar");
+const sentinel = document.createElement("div");
+searchBar.before(sentinel);
+let stuckObserver;
+function watchSearchBar() {
+  const h = $(".tabs").offsetHeight;           // enthält die Safe-Area oben (Notch)
+  document.documentElement.style.setProperty("--tabs-h", h + "px");
+  stuckObserver?.disconnect();
+  stuckObserver = new IntersectionObserver(([e]) =>
+    searchBar.classList.toggle("stuck", !e.isIntersecting && e.boundingClientRect.top < h + 40),
+    { rootMargin: `-${h + 1}px 0px 0px 0px` });
+  stuckObserver.observe(sentinel);
+}
+watchSearchBar();
+new ResizeObserver(watchSearchBar).observe($(".tabs"));
+
 load().catch((e) => toast(e.message, true));
 refreshStatus();
 refreshMarantz();
+loadRecent();
 // Abfragen nur bei sichtbarer Seite: Marantz alle 5 s, Dienststatus alle 15 s (im Reiter Einrichtung) bzw. 60 s
 let tick = 0;
 setInterval(() => {

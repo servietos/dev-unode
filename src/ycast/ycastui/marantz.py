@@ -70,11 +70,14 @@ def status(ip):
     zone = ET.fromstring(_get(ip, "/goform/formMainZone_MainZoneXmlStatusLite.xml"))
     power = (_values(zone, "Power") or [""])[0].upper()
     db_text = (_values(zone, "MasterVolume") or [""])[0]
-    try:
-        db = float(db_text)
-        volume = max(0, round(db + 80))
-    except ValueError:
-        db, volume = None, None
+    if db_text.strip() == "--":
+        db, volume = -80.0, 0          # „--“: das Gerät zeigt so die niedrigste Stufe 0
+    else:
+        try:
+            db = float(db_text)
+            volume = max(0, round(db + 80))
+        except ValueError:
+            db, volume = None, None
     out = {
         "ip": ip,
         "power": power == "ON",
