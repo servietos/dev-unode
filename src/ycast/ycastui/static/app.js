@@ -411,7 +411,20 @@ $("#search-form").addEventListener("submit", async (e) => {
         <div class="row"><button class="btn small" data-i="${i}" data-act="marantz">Auf dem Marantz abspielen</button>
           <button class="btn ghost small" data-i="${i}" data-act="play">Vorhören</button>
           <button class="btn ghost small" data-i="${i}" data-act="add">Zu meinen Sendern</button></div></div></div>`).join("");
+  scrollToFirstResult();
 });
+
+// Neue Suche (Filter, Sortierung oder Suchbegriff): zum ersten Treffer direkt unter der Suchleiste springen
+function scrollToFirstResult() {
+  const box = $("#search-results");
+  if (box.hidden || !box.firstElementChild) return;
+  const offset = $(".tabs").offsetHeight + $("#search-bar").offsetHeight + 4;
+  const target = box.getBoundingClientRect().top + window.scrollY - offset;
+  if (window.scrollY > target + 1) {
+    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: Math.max(0, target), behavior: smooth ? "smooth" : "auto" });
+  }
+}
 // Formate, die der Marantz nicht direkt kann, wandelt YCast per ffmpeg um
 function convertBadge(r) {
   const codec = (r.codec || "").toUpperCase();

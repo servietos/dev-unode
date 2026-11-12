@@ -14,7 +14,7 @@ from urllib.parse import quote
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/3.1.2"}
+UA = {"User-Agent": "YCast-Umbrel/3.1.3"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -429,14 +429,17 @@ def marantz_cmd():
 
 
 def stream_for_marantz(url, is_hls=False):
-    """Der Marantz kann weder HTTPS noch HLS: über den vTuner-Dienst (signiert) leiten."""
+    """Adresse, die der Marantz abholt.
+
+    Über den vTuner-Dienst (signiert) laufen: HLS/Ogg (Umwandler), HTTPS (Relay) und Adressen
+    mit „&“ (Relay), weil der Marantz „&“ in UPnP-Adressen falsch auflöst."""
     if not common.YCAST_IP:
         return url
-    signed = f"url={quote(url, safe='')}&sig={common.sign_url(url)}"
+    base = f"http://{common.YCAST_IP}"
     if is_hls:
-        return f"http://{common.YCAST_IP}/hls?{signed}"
-    if url.startswith("https://"):
-        return f"http://{common.YCAST_IP}/relay?{signed}"
+        return common.signed_stream_url(base, "hls", url)
+    if url.startswith("https://") or "&" in url:
+        return common.signed_stream_url(base, "relay", url)
     return url
 
 
@@ -486,8 +489,8 @@ def marantz_play():
         return jsonify({"ok": True, "via": "convert", "codec": codec, "mime": used})
     used = marantz.play_url(ip, stream_for_marantz(url), name, mimes)
     remember(name, url)
-    return jsonify({"ok": True, "via": "relay" if url.startswith("https://") else "direct",
-                    "via_relay": url.startswith("https://"), "mime": used})
+    via = "relay" if (url.startswith("https://") or "&" in url) else "direct"
+    return jsonify({"ok": True, "via": via, "via_relay": via == "relay", "mime": used})
 
 
 @app.put("/api/marantz/settings")
