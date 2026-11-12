@@ -454,6 +454,9 @@ class TestHls(Base):
         self.assertEqual(probe_with('{"index":0,"codec_type":"audio","codec_name":"aac","profile":"LC","sample_rate":"48000"}'), "aac")
         cmd, ct = self.hls.command("http://x/p.m3u8", 0, "aac-he")
         self.assertEqual(ct, "audio/mpeg"); self.assertIn("libmp3lame", cmd)
+        # Live-Stream ohne ID3/Xing (damit hatte der M-CR510 „Serverfehler“ gemeldet)
+        self.assertEqual(cmd[cmd.index("-id3v2_version") + 1], "0")
+        self.assertEqual(cmd[cmd.index("-write_xing") + 1], "0")
         self.assertEqual(self.hls.mime_candidates("aac-he"), ["audio/mpeg"])
 
     def test_command_copies_aac_and_mp3_transcodes_others(self):
@@ -515,6 +518,18 @@ class TestVtuner(Base):
         self.assertIn("adts", popen.call_args.args[0])
         proc.kill.assert_called_once()
         self.assertEqual(self.vs._relay_active, 0)  # Platz wieder freigegeben
+
+    def test_hls_head_answers_without_ffmpeg(self):
+        src = "https://x.example/p.m3u8"
+        with mock.patch.object(self.vs.hls, "available", return_value=True), \
+             mock.patch.object(self.vs.hls, "is_public", return_value=True), \
+             mock.patch.object(self.vs.hls, "probe", return_value=(0, "aac-he")), \
+             mock.patch.object(self.vs.subprocess, "Popen") as popen:
+            r = self.client.head(f"/hls?url={src}&sig={self.common.sign_url(src)}")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.headers["Content-Type"], "audio/mpeg")
+        popen.assert_not_called()
+        self.assertEqual(self.vs._relay_active, 0)
 
     def test_hls_requires_signature(self):
         self.assertEqual(self.client.get("/hls?url=http://x/a.m3u8&sig=falsch").status_code, 403)

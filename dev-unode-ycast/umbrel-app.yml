@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.1.1"
+version: "3.1.2"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -58,10 +58,9 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  HE-AAC-Sender (AAC+, oft bei 32–64 kbit/s, z. B. viele HLS-Streams) werden für den Marantz jetzt
-  nach MP3 gewandelt, statt mit „Format nicht unterstützt“ abzubrechen. Normales AAC (FIP, WDR …)
-  wird weiter ohne Qualitätsverlust durchgereicht. Seit 3.1.0: HLS/Ogg-Umwandlung, Zuletzt
-  gespielt, Ausschalt-Timer, neue Oberfläche.
+  Umgewandelte MP3-Streams beginnen jetzt ohne ID3-Tag und Xing-Rahmen (beides ist nur für Dateien
+  gedacht; der Marantz meldete sonst „Serverfehler“). Kopfanfragen beantwortet der Umwandler sofort.
+  Seit 3.1.1: HE-AAC wird für den Marantz nach MP3 gewandelt.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

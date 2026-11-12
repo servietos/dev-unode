@@ -18,7 +18,7 @@ Contained apps (alle mit Weboberfläche über das Umbrel-Dashboard, x86 und ARM)
 | owncast | Livestream-Server (Zuschauerseite ohne Umbrel-Login, RTMP auf Port 1935) | 0.2.1-1 |
 | pi-hole | DNS-Server und Werbeblocker (Weboberfläche auf Port 8082) | 2025.05.1 |
 | smart-tv-telegram | Telegram-Videos per Bot auf Smart-TV/Chromecast, mit Einrichtungsseite | 1.4.0-1.3 |
-| ycast | Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …), Fernbedienung, HLS/Ogg-Umwandlung, HTTPS-Relay, einstellbare IP (Anleitung in `src/ycast/README.md`) | 3.1.1 |
+| ycast | Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …), Fernbedienung, HLS/Ogg-Umwandlung, HTTPS-Relay, einstellbare IP (Anleitung in `src/ycast/README.md`) | 3.1.2 |
 
 Hinweis: Apps mit Spiele- oder Streaming-Ports (crafty, owncast) brauchen für Zugriffe von außen
 eine Portfreigabe im Router; pi-hole kollidiert mit dem offiziellen Pi-hole aus dem Umbrel-Store.
