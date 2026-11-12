@@ -301,6 +301,15 @@ def sign_url(url):
     return hmac.new(relay_secret().encode(), url.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
 
 
+def signed_stream_url(base, kind, url):
+    """Adresse für den Receiver: Signatur im Pfad, nur EIN Parameter, also kein „&“.
+
+    Der Marantz liest die Adresse aus den UPnP-Metadaten, ohne XML-Zeichen zurückzuwandeln
+    („&“ kommt bei ihm als „&amp;amp;“ an). Ein „&“ in der Adresse zerstört daher die Signatur."""
+    from urllib.parse import quote
+    return f"{base}/{kind}/{sign_url(url)}?url={quote(url, safe='')}"
+
+
 def verify_url(url, sig):
     return bool(url) and bool(sig) and hmac.compare_digest(sign_url(url), sig)
 

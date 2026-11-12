@@ -39,11 +39,16 @@ def _base():
 
 
 def relay_url(url):
-    return f"{_base()}/relay?url={quote(url, safe='')}&sig={common.sign_url(url)}"
+    return common.signed_stream_url(_base(), "relay", url)
 
 
 def hls_url(url):
-    return f"{_base()}/hls?url={quote(url, safe='')}&sig={common.sign_url(url)}"
+    return common.signed_stream_url(_base(), "hls", url)
+
+
+def _sig():
+    """Signatur aus dem Pfad (/relay/<sig>) oder, für ältere Adressen, aus dem Parameter sig."""
+    return (request.view_args or {}).get("sig") or request.args.get("sig", "")
 
 
 def relay_or_strip(url):
@@ -133,10 +138,11 @@ def _take_slot():
 
 
 @app.route("/hls")
-def hls_stream():
+@app.route("/hls/<sig>")
+def hls_stream(sig=None):
     """HLS (.m3u8) per ffmpeg als durchgehenden Stream ausgeben."""
     url = request.args.get("url", "")
-    if not common.verify_url(url, request.args.get("sig", "")) or not hls.is_public(url):
+    if not common.verify_url(url, _sig()) or not hls.is_public(url):
         abort(403)
     if not hls.available():
         abort(501)
@@ -193,9 +199,10 @@ def hls_stream():
 
 
 @app.route("/relay")
-def relay():
+@app.route("/relay/<sig>")
+def relay(sig=None):
     url = request.args.get("url", "")
-    if not common.verify_url(url, request.args.get("sig", "")):
+    if not common.verify_url(url, _sig()):
         abort(403)
     release = _take_slot()
     headers = {k: v for k, v in request.headers.items() if k.lower() in _FORWARD_REQ}

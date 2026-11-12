@@ -1,4 +1,5 @@
 import importlib
+import re
 import os
 import tempfile
 import unittest
@@ -194,6 +195,20 @@ class TestNetwork(Base):
         self.down.start()
 
 
+class TestMarantzUrls(Base):
+    """Der M-CR510 löst „&“ in UPnP-Adressen nicht auf (kommt als „&amp;amp;“ an): kein „&“ zulassen."""
+
+    def test_stream_urls_for_marantz_have_no_ampersand(self):
+        import ycastui.web as web
+        web = importlib.reload(web)
+        for url, kind in [("https://a.example/s.mp3", "relay"), ("http://a.example/s.mp3?x=1&token=2", "relay"),
+                          ("https://a.example/p.m3u8", "hls")]:
+            out = web.stream_for_marantz(url, is_hls=(kind == "hls"))
+            self.assertNotIn("&", out)
+            self.assertIn(f"/{kind}/", out)
+        self.assertEqual(web.stream_for_marantz("http://a.example/s.mp3"), "http://a.example/s.mp3")
+
+
 class FakeMarantz:
     """Simuliert die Webschnittstelle und UPnP des M-CR510."""
 
@@ -277,7 +292,7 @@ class TestMarantz(Base):
         self.assertEqual(r.status_code, 200, r.get_json())
         self.assertEqual(r.get_json()["via"], "hls")
         body = self.fake.soap[0][2]
-        self.assertIn("http://192.168.178.210/hls?url=https%3A%2F%2Fbr.example%2Fb3.m3u8&amp;sig=", body)
+        self.assertRegex(body, r"http://192\.168\.178\.210/hls/[0-9a-f]{32}\?url=https%3A%2F%2Fbr\.example%2Fb3\.m3u8<")
         self.assertIn(":audio/x-mp4:", body)
         recent = self.client.get("/api/recent").get_json()["items"]
         self.assertEqual(recent[0]["name"], "Bayern 3 HLS")
@@ -319,7 +334,7 @@ class TestMarantz(Base):
             r = self.client.post("/api/marantz/play", json={"name": "DLF Opus", "url": "https://dlf.example/dlf.opus"})
         self.assertEqual(r.status_code, 200, r.get_json())
         self.assertEqual(r.get_json()["via"], "convert")
-        self.assertIn("/hls?url=", self.fake.soap[0][2])
+        self.assertRegex(self.fake.soap[0][2], r"/hls/[0-9a-f]{32}\?url=")
         self.assertIn(":audio/mpeg:", self.fake.soap[0][2])
 
     def test_status(self):
@@ -357,7 +372,8 @@ class TestMarantz(Base):
         self.assertEqual(actions, ['"urn:schemas-upnp-org:service:AVTransport:1#SetAVTransportURI"',
                                    '"urn:schemas-upnp-org:service:AVTransport:1#Play"'])
         body = self.fake.soap[0][2]
-        self.assertIn("http://192.168.178.210/relay?url=https%3A%2F%2Fstream.example%2Fb3.mp3&amp;sig=", body)
+        self.assertRegex(body, r"http://192\.168\.178\.210/relay/[0-9a-f]{32}\?url=https%3A%2F%2Fstream\.example%2Fb3\.mp3<")
+        self.assertNotIn("&amp;sig", body)
         self.assertIn("B3 &amp;lt;&amp;amp;&amp;gt;", body)  # Titel doppelt maskiert (DIDL in SOAP)
         self.assertEqual(self.fake.soap[0][0], "http://192.168.178.56:8080/AVTransport/ctrl")
 
@@ -481,8 +497,9 @@ class TestVtuner(Base):
     def test_https_goes_through_relay(self):
         import ycast.vtuner as vtuner
         url = vtuner.strip_https("https://stream.example/live.mp3")
-        self.assertTrue(url.startswith("http://192.168.178.210/relay?url=https%3A%2F%2Fstream.example%2Flive.mp3&sig="))
-        sig = url.rsplit("sig=", 1)[1]
+        m = re.match(r"http://192\.168\.178\.210/relay/([0-9a-f]{32})\?url=https%3A%2F%2Fstream\.example%2Flive\.mp3$", url)
+        self.assertIsNotNone(m, url)
+        sig = m.group(1)
         self.assertTrue(self.common.verify_url("https://stream.example/live.mp3", sig))
         self.assertFalse(self.common.verify_url("https://other.example/x", sig))
         self.assertEqual(vtuner.strip_https("http://a/b"), "http://a/b")
@@ -499,7 +516,7 @@ class TestVtuner(Base):
         import ycast.vtuner as vtuner
         with mock.patch.object(self.vs.hls, "available", return_value=True):
             url = vtuner.strip_https("http://br.example/live/b3.m3u8")
-        self.assertTrue(url.startswith("http://192.168.178.210/hls?url=http%3A%2F%2Fbr.example%2Flive%2Fb3.m3u8&sig="))
+        self.assertRegex(url, r"^http://192\.168\.178\.210/hls/[0-9a-f]{32}\?url=http%3A%2F%2Fbr\.example%2Flive%2Fb3\.m3u8$")
 
     def test_hls_endpoint_streams_ffmpeg_output_and_kills_it(self):
         src = "https://br.example/live/b3.m3u8"
@@ -510,7 +527,7 @@ class TestVtuner(Base):
              mock.patch.object(self.vs.hls, "probe", return_value=(0, "aac")), \
              mock.patch.object(self.vs.hls, "is_public", return_value=True), \
              mock.patch.object(self.vs.subprocess, "Popen", return_value=proc) as popen:
-            r = self.client.get(f"/hls?url={src}&sig={self.common.sign_url(src)}")
+            r = self.client.get(f"/hls/{self.common.sign_url(src)}?url={src}")
             body = r.get_data()
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.headers["Content-Type"], "audio/aac")
