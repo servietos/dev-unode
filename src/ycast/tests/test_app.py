@@ -252,7 +252,7 @@ class TestMarantz(Base):
 
     def test_aac_falls_back_when_mime_rejected(self):
         """Wie am echten M-CR510: audio/aac gibt es nicht; lehnt er audio/x-mp4 ab, folgt audio/mp4."""
-        self.stream_type = "audio/aacp"
+        self.stream_type = "audio/aac"     # so meldet sich FIP tatsächlich
         rejected = {"audio/x-mp4"}
 
         def post(url, data=None, headers=None, timeout=None):
@@ -439,6 +439,22 @@ class TestHls(Base):
                 with self.assertRaises(self.hls.HlsError):
                     self.hls.check_playlist(bad)
         self.assertFalse(self.hls.is_hls("http://x/list.m3u"))
+
+    def test_he_aac_is_transcoded(self):
+        """Wie Surf Shack Radio (HLS, 64k, HE-AAC): wird nach MP3 gewandelt; AAC-LC 48 kHz (WDR5, FIP) bleibt Kopie."""
+        def probe_with(stream):
+            out = '{"streams":[' + stream + ']}'
+            with mock.patch.object(self.hls, "available", return_value=True), \
+                 mock.patch.object(self.hls, "check_playlist", return_value="x"), \
+                 mock.patch.object(self.hls.subprocess, "run", return_value=mock.Mock(stdout=out.encode(), stderr=b"")):
+                self.hls._cache.clear()
+                return self.hls.probe("http://x/p.m3u8")[1]
+        self.assertEqual(probe_with('{"index":0,"codec_type":"audio","codec_name":"aac","profile":"HE-AAC","sample_rate":"48000"}'), "aac-he")
+        self.assertEqual(probe_with('{"index":0,"codec_type":"audio","codec_name":"aac","profile":"LC","sample_rate":"24000"}'), "aac-he")
+        self.assertEqual(probe_with('{"index":0,"codec_type":"audio","codec_name":"aac","profile":"LC","sample_rate":"48000"}'), "aac")
+        cmd, ct = self.hls.command("http://x/p.m3u8", 0, "aac-he")
+        self.assertEqual(ct, "audio/mpeg"); self.assertIn("libmp3lame", cmd)
+        self.assertEqual(self.hls.mime_candidates("aac-he"), ["audio/mpeg"])
 
     def test_command_copies_aac_and_mp3_transcodes_others(self):
         cmd, ct = self.hls.command("http://x/a.m3u8", 2, "aac")

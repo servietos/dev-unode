@@ -14,7 +14,7 @@ from urllib.parse import quote
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/3.1.0"}
+UA = {"User-Agent": "YCast-Umbrel/3.1.1"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -472,6 +472,8 @@ def marantz_play():
         return jsonify({"ok": True, "via": "hls", "codec": codec, "mime": used})
     try:
         mimes = marantz.mime_candidates(info.get("type", ""), url)
+        if "aacp" in info.get("type", "").lower():      # HE-AAC (AAC+) kann der Marantz nicht direkt
+            raise marantz.MarantzError("HE-AAC")
     except marantz.MarantzError:
         # Ogg/Opus & Co.: kann der Marantz nicht, ffmpeg wandelt nach MP3 (gleicher Weg wie HLS)
         if not hls.available():

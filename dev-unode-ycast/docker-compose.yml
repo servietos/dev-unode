@@ -16,7 +16,7 @@ services:
       APP_PORT: 8000
 
   web:
-    image: ghcr.io/servietos/ycast:3.1.0
+    image: ghcr.io/servietos/ycast:3.1.1
     user: "1000:1000"
     restart: unless-stopped
     stop_grace_period: 10s
@@ -38,7 +38,7 @@ services:
       - ${APP_DATA_DIR}/data:/data
 
   ycast:
-    image: ghcr.io/servietos/ycast:3.1.0
+    image: ghcr.io/servietos/ycast:3.1.1
     user: "1000:1000"
     restart: unless-stopped
     stop_grace_period: 10s
