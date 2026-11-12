@@ -38,12 +38,12 @@ def _base():
     return f"http://{common.YCAST_IP}" if common.YCAST_IP else request.host_url.rstrip("/")
 
 
-def relay_url(url):
-    return common.signed_stream_url(_base(), "relay", url)
+def relay_url(url, ext=None):
+    return common.signed_stream_url(_base(), "relay", url, ext)
 
 
-def hls_url(url):
-    return common.signed_stream_url(_base(), "hls", url)
+def hls_url(url, ext="mp3"):
+    return common.signed_stream_url(_base(), "hls", url, ext)
 
 
 def _sig():
@@ -54,9 +54,9 @@ def _sig():
 def relay_or_strip(url):
     """Receiver können weder HTTPS noch HLS: HLS über ffmpeg, HTTPS über das Relay leiten."""
     if url and hls.is_hls(url) and hls.available():
-        return hls_url(url)
+        return hls_url(url, "mp3")          # ohne Vorabprüfung: MP3 spielt der Receiver immer
     if RELAY_HTTPS and url and url.startswith("https://"):
-        return relay_url(url)
+        return relay_url(url, common.stream_ext("", url))
     return _original_strip_https(url)
 
 
@@ -137,9 +137,19 @@ def _take_slot():
     return release
 
 
+def _requested_ext(name):
+    return name.rsplit(".", 1)[-1].lower() if name and "." in name else None
+
+
+def _output_codec(codec, name):
+    """/hls/<sig>/stream.mp3 erzwingt MP3, auch wenn sich AAC kopieren ließe."""
+    return "aac-he" if codec == "aac" and _requested_ext(name) == "mp3" else codec
+
+
 @app.route("/hls")
 @app.route("/hls/<sig>")
-def hls_stream(sig=None):
+@app.route("/hls/<sig>/<name>")
+def hls_stream(sig=None, name=None):
     """HLS (.m3u8) per ffmpeg als durchgehenden Stream ausgeben."""
     url = request.args.get("url", "")
     if not common.verify_url(url, _sig()) or not hls.is_public(url):
@@ -152,10 +162,12 @@ def hls_stream(sig=None):
             _, codec = hls.probe(url)
         except hls.HlsError:
             abort(502)
+        codec = _output_codec(codec, name)
         return Response(status=200, headers={"Content-Type": hls.output_for(codec)[1]})
     release = _take_slot()
     try:
         index, codec = hls.probe(url)
+        codec = _output_codec(codec, name)
         cmd, content_type = hls.command(url, index, codec)
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
     except hls.HlsError as e:
@@ -200,7 +212,8 @@ def hls_stream(sig=None):
 
 @app.route("/relay")
 @app.route("/relay/<sig>")
-def relay(sig=None):
+@app.route("/relay/<sig>/<name>")
+def relay(sig=None, name=None):
     url = request.args.get("url", "")
     if not common.verify_url(url, _sig()):
         abort(403)

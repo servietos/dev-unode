@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.1.3-1"
+version: "3.1.4"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -58,12 +58,11 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Feste MAC-Adresse für den Receiver-Dienst (aus seiner IP abgeleitet), damit die Fritzbox nicht bei
-  jedem Neustart oder Update ein „neues Gerät“ meldet.
-  Behebt „Serverfehler“ beim Abspielen über HTTPS-Relay, HLS- und Ogg/FLAC-Umwandlung: Der Marantz
-  löst „&“ in UPnP-Adressen nicht auf, dadurch ging die Signatur verloren. Adressen enthalten jetzt
-  kein „&“ mehr; Sender mit „&“ in der eigenen Adresse laufen automatisch über das Relay.
-  Sendersuche springt bei neuem Filter, Sortierung oder Suchbegriff zum ersten Treffer.
+  Behebt „File Format Error“ bzw. „Dateiformat-Fehler“ am Marantz bei AAC-Sendern, die über YCast
+  laufen – vor allem TV-Sender und HLS-Radio (z. B. HR, SACHSENeins, EWTN, WDR). Der Marantz erkennt
+  AAC nur an der Endung „.aac“ in der Adresse; YCast hängt sie jetzt an (live am M-CR510 geprüft).
+  AAC-Sender ohne „.aac“ in der eigenen Adresse laufen automatisch über das Relay.
+  HE-AAC-Sender (AAC+) werden immer nach MP3 umgewandelt.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode
