@@ -115,7 +115,7 @@ def probe(url):
     elif not is_public(url):
         raise HlsError("Die Stream-Adresse zeigt nicht ins Internet")
     cmd = ["ffprobe", "-v", "error", "-protocol_whitelist", PROTOCOLS, "-rw_timeout", IO_TIMEOUT_US,
-           "-show_entries", "stream=index,codec_type,codec_name,bit_rate:stream_tags=variant_bitrate",
+           "-show_entries", "stream=index,codec_type,codec_name,profile,sample_rate,bit_rate:stream_tags=variant_bitrate",
            "-of", "json", url]
     try:
         out = subprocess.run(cmd, capture_output=True, timeout=PROBE_TIMEOUT, check=False)
@@ -139,10 +139,25 @@ def probe(url):
         return 0
 
     best = max(audio, key=rate)
-    result = (int(best.get("index", 0)), (best.get("codec_name") or "").lower())
+    codec = (best.get("codec_name") or "").lower()
+    if codec == "aac" and not plain_aac(best.get("profile"), best.get("sample_rate")):
+        codec = "aac-he"     # HE-AAC/AAC+: viele Receiver (z. B. M-CR510) spielen das nicht → nach MP3 wandeln
+    result = (int(best.get("index", 0)), codec)
     with _cache_lock:
         _cache[url] = (time.monotonic(), result)
     return result
+
+
+def plain_aac(profile, sample_rate):
+    """Nur normales AAC-LC ab 32 kHz wird unverändert durchgereicht."""
+    prof = (profile or "").upper()
+    try:
+        rate = int(sample_rate or 0)
+    except (TypeError, ValueError):
+        rate = 0
+    if prof and prof not in ("LC", "AAC-LC", "LOW"):
+        return False
+    return rate == 0 or rate >= 32000
 
 
 def output_for(codec):
@@ -151,7 +166,7 @@ def output_for(codec):
         return ["-c:a", "copy", "-f", "adts"], "audio/aac"
     if codec == "mp3":
         return ["-c:a", "copy", "-f", "mp3"], "audio/mpeg"
-    return ["-c:a", "libmp3lame", "-b:a", "192k", "-f", "mp3"], "audio/mpeg"
+    return ["-c:a", "libmp3lame", "-b:a", "192k", "-ar", "44100", "-f", "mp3"], "audio/mpeg"
 
 
 def command(url, index, codec):
