@@ -301,13 +301,32 @@ def sign_url(url):
     return hmac.new(relay_secret().encode(), url.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
 
 
-def signed_stream_url(base, kind, url):
+def signed_stream_url(base, kind, url, ext=None):
     """Adresse für den Receiver: Signatur im Pfad, nur EIN Parameter, also kein „&“.
 
     Der Marantz liest die Adresse aus den UPnP-Metadaten, ohne XML-Zeichen zurückzuwandeln
-    („&“ kommt bei ihm als „&amp;amp;“ an). Ein „&“ in der Adresse zerstört daher die Signatur."""
+    („&“ kommt bei ihm als „&amp;amp;“ an). Ein „&“ in der Adresse zerstört daher die Signatur.
+
+    ext hängt einen Dateinamen an (stream.aac / stream.mp3): Der Marantz erkennt rohes AAC nur
+    an der Endung „.aac“ in der Adresse, sonst meldet er „File Format Error“ (live geprüft)."""
     from urllib.parse import quote
-    return f"{base}/{kind}/{sign_url(url)}?url={quote(url, safe='')}"
+    name = f"/stream.{ext}" if ext else ""
+    return f"{base}/{kind}/{sign_url(url)}{name}?url={quote(url, safe='')}"
+
+
+def stream_ext(content_type, url=""):
+    """Dateiendung für die Ausgabe des Relays: aac, mp3 oder None (unbekannt)."""
+    ct = (content_type or "").lower()
+    if "aac" in ct or "mp4" in ct:
+        return "aac"
+    if "mpeg" in ct or "mp3" in ct:
+        return "mp3"
+    path = url.split("?")[0].lower()
+    if path.endswith(".aac") or "aac" in path.rsplit("/", 1)[-1]:
+        return "aac"
+    if path.endswith(".mp3"):
+        return "mp3"
+    return None
 
 
 def verify_url(url, sig):

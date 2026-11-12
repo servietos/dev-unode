@@ -14,7 +14,7 @@ from urllib.parse import quote
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
 RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
-UA = {"User-Agent": "YCast-Umbrel/3.1.3"}
+UA = {"User-Agent": "YCast-Umbrel/3.1.4"}
 
 app = Flask(__name__, static_folder=None)
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -428,19 +428,32 @@ def marantz_cmd():
     return jsonify({"ok": True})
 
 
-def stream_for_marantz(url, is_hls=False):
+def stream_for_marantz(url, kind=None, ext=None):
     """Adresse, die der Marantz abholt.
 
-    Über den vTuner-Dienst (signiert) laufen: HLS/Ogg (Umwandler), HTTPS (Relay) und Adressen
-    mit „&“ (Relay), weil der Marantz „&“ in UPnP-Adressen falsch auflöst."""
+    kind="hls": Umwandler (HLS, Ogg, HE-AAC …), kind="relay": Relay, None: selbst entscheiden.
+    Über den vTuner-Dienst (signiert) laufen außerdem HTTPS und Adressen mit „&“ (Relay), weil
+    der Marantz „&“ in UPnP-Adressen falsch auflöst. ext („aac“/„mp3“) wird als Dateiname
+    angehängt – ohne „.aac“ in der Adresse meldet der Marantz bei AAC „File Format Error“."""
     if not common.YCAST_IP:
         return url
     base = f"http://{common.YCAST_IP}"
-    if is_hls:
-        return common.signed_stream_url(base, "hls", url)
-    if url.startswith("https://") or "&" in url:
-        return common.signed_stream_url(base, "relay", url)
+    if kind is None and (url.startswith("https://") or "&" in url):
+        kind = "relay"
+    if kind:
+        return common.signed_stream_url(base, kind, url, ext)
     return url
+
+
+def needs_relay(url, content_type):
+    """HTTPS, „&“ oder AAC ohne „.aac“ in der Adresse kann der Marantz nicht direkt."""
+    if url.startswith("https://") or "&" in url:
+        return True
+    return common.stream_ext(content_type) == "aac" and not url.split("?")[0].lower().endswith(".aac")
+
+
+def hls_ext(codec):
+    return "aac" if hls.output_for(codec)[1] == "audio/aac" else "mp3"
 
 
 def probe_for_conversion(url):
@@ -470,7 +483,7 @@ def marantz_play():
         codec = probe_for_conversion(url)
         if codec is None:
             return err("Dieser HLS-Stream lässt sich nicht umwandeln (nicht erreichbar oder ohne Audio)", 502)
-        used = marantz.play_url(ip, stream_for_marantz(url, is_hls=True), name, hls.mime_candidates(codec))
+        used = marantz.play_url(ip, stream_for_marantz(url, "hls", hls_ext(codec)), name, hls.mime_candidates(codec))
         remember(name, url)
         return jsonify({"ok": True, "via": "hls", "codec": codec, "mime": used})
     try:
@@ -484,12 +497,17 @@ def marantz_play():
         codec = probe_for_conversion(url)
         if codec is None:
             return err("Dieser Stream lässt sich nicht umwandeln (nicht erreichbar oder ohne Audio)", 502)
-        used = marantz.play_url(ip, stream_for_marantz(url, is_hls=True), name, hls.mime_candidates(codec))
+        if "aacp" in info.get("type", "").lower() and codec == "aac":
+            codec = "aac-he"        # ffprobe meldet implizites HE-AAC oft als LC: sicherheitshalber MP3
+        used = marantz.play_url(ip, stream_for_marantz(url, "hls", hls_ext(codec)), name, hls.mime_candidates(codec))
         remember(name, url)
         return jsonify({"ok": True, "via": "convert", "codec": codec, "mime": used})
-    used = marantz.play_url(ip, stream_for_marantz(url), name, mimes)
+    ctype = info.get("type", "")
+    relay = needs_relay(url, ctype)
+    target = stream_for_marantz(url, "relay", common.stream_ext(ctype, url)) if relay else url
+    used = marantz.play_url(ip, target, name, mimes)
     remember(name, url)
-    via = "relay" if (url.startswith("https://") or "&" in url) else "direct"
+    via = "relay" if relay else "direct"
     return jsonify({"ok": True, "via": via, "via_relay": via == "relay", "mime": used})
 
 
