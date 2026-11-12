@@ -164,9 +164,11 @@ def output_for(codec):
     """(ffmpeg-Ausgabeoptionen, Content-Type) passend zum Quellcodec."""
     if codec == "aac":
         return ["-c:a", "copy", "-f", "adts"], "audio/aac"
+    # Live-Stream: kein ID3-Tag und kein Xing-Rahmen am Anfang (ältere Receiver brechen sonst ab)
+    mp3 = ["-id3v2_version", "0", "-write_xing", "0", "-f", "mp3"]
     if codec == "mp3":
-        return ["-c:a", "copy", "-f", "mp3"], "audio/mpeg"
-    return ["-c:a", "libmp3lame", "-b:a", "192k", "-ar", "44100", "-f", "mp3"], "audio/mpeg"
+        return ["-c:a", "copy", *mp3], "audio/mpeg"
+    return ["-c:a", "libmp3lame", "-b:a", "192k", "-ar", "44100", *mp3], "audio/mpeg"
 
 
 def command(url, index, codec):

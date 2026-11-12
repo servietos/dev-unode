@@ -140,6 +140,13 @@ def hls_stream():
         abort(403)
     if not hls.available():
         abort(501)
+    if request.method == "HEAD":
+        # Nur Kopfdaten: ohne ffmpeg sofort antworten
+        try:
+            _, codec = hls.probe(url)
+        except hls.HlsError:
+            abort(502)
+        return Response(status=200, headers={"Content-Type": hls.output_for(codec)[1]})
     release = _take_slot()
     try:
         index, codec = hls.probe(url)
