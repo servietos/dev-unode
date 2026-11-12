@@ -79,6 +79,12 @@ __ycast_setup() {
   export APP_YCAST_GATEWAY="$gateway"
   export APP_YCAST_HOST_IP="$host_ip"
   export APP_YCAST_NOTE="$note"
+  # Feste MAC aus der IP (02:42 = lokal vergeben), damit der Router nicht bei jedem
+  # Neustart ein „neues Gerät“ meldet; Docker würde sonst eine zufällige MAC vergeben.
+  local IFS=.
+  local o1 o2 o3 o4
+  read -r o1 o2 o3 o4 <<< "$ip"
+  export APP_YCAST_MAC="$(printf '02:42:%02x:%02x:%02x:%02x' "$o1" "$o2" "$o3" "$o4")"
 }
 
 __ycast_setup || true

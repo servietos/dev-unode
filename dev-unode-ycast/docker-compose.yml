@@ -59,6 +59,8 @@ services:
       default: {}
       lan:
         ipv4_address: ${APP_YCAST_IP:-192.168.178.210}
+        # feste MAC (aus der IP abgeleitet), sonst meldet die Fritzbox bei jedem Neustart ein neues Gerät
+        mac_address: ${APP_YCAST_MAC:-02:42:c0:a8:b2:d2}
 
 networks:
   lan:
