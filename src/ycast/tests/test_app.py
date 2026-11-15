@@ -14,8 +14,14 @@ class Base(unittest.TestCase):
         os.environ["YCAST_IP"] = "192.168.178.210"
         import ycastui.common as common
         self.common = importlib.reload(common)
+        import ycastui.rbapi as rbapi
+        self.rb = importlib.reload(rbapi)
+        self.rb_srv = mock.patch.object(self.rb, "_lookup_srv", return_value=["de1.api.radio-browser.info",
+                                                                             "fi1.api.radio-browser.info"])
+        self.rb_srv.start()
 
     def tearDown(self):
+        self.rb_srv.stop()
         self.tmp.cleanup()
 
 
@@ -714,3 +720,94 @@ class TestVtuner(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRadioBrowser(Base):
+    def setUp(self):
+        super().setUp()
+        import ycastui.web as web
+        self.web = importlib.reload(web)
+        self.client = self.web.app.test_client()
+        os.environ.pop("RADIOBROWSER_API", None)
+
+    @staticmethod
+    def responder(down=()):
+        calls = []
+
+        def get(url, params=None, headers=None, timeout=None):
+            host = url.split("/")[2]
+            calls.append(host)
+            if host in down:
+                import requests
+                raise requests.ConnectionError("down")
+            r = mock.Mock()
+            r.raise_for_status = lambda: None
+            r.json.return_value = [{"name": f"von {host}", "url": "http://a"}]
+            return r
+        return get, calls
+
+    def test_auto_falls_back_and_remembers_working_server(self):
+        get, calls = self.responder(down={"de1.api.radio-browser.info"})
+        with mock.patch.object(self.rb.requests, "get", side_effect=get):
+            res = self.client.get("/api/search?name=x").get_json()["results"]
+            self.client.get("/api/search?name=y")
+        self.assertEqual(res[0]["name"], "von fi1.api.radio-browser.info")
+        self.assertEqual(calls, ["de1.api.radio-browser.info", "fi1.api.radio-browser.info",
+                                 "fi1.api.radio-browser.info"])     # danach zuerst der funktionierende
+        self.assertEqual(self.rb.servers(), ["de1.api.radio-browser.info", "fi1.api.radio-browser.info",
+                                             "de2.api.radio-browser.info"])   # feste Liste ergänzt
+        st = self.client.get("/api/radiobrowser").get_json()
+        self.assertEqual((st["mode"], st["current"]), ("auto", "fi1.api.radio-browser.info"))
+
+    def test_fixed_server_has_no_fallback(self):
+        self.assertEqual(self.client.put("/api/radiobrowser", json={"server": "de1.api.radio-browser.info"}).status_code, 200)
+        get, calls = self.responder(down={"de1.api.radio-browser.info"})
+        with mock.patch.object(self.rb.requests, "get", side_effect=get):
+            r = self.client.get("/api/search?name=x")
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("de1.api.radio-browser.info", r.get_json()["error"])
+        self.assertEqual(calls, ["de1.api.radio-browser.info"])
+
+    def test_setting_is_validated_and_can_be_reset(self):
+        for bad in ("evil.example.com", "https://de1.api.radio-browser.info/", "de1.api.radio-browser.info.evil.com"):
+            self.assertEqual(self.client.put("/api/radiobrowser", json={"server": bad}).status_code, 400, bad)
+        self.client.put("/api/radiobrowser", json={"server": "nl1.api.radio-browser.info"})
+        self.assertEqual(self.client.get("/api/radiobrowser").get_json()["server"], "nl1.api.radio-browser.info")
+        st = self.client.put("/api/radiobrowser", json={"server": ""}).get_json()
+        self.assertEqual(st["mode"], "auto")
+
+    def test_env_variable_applies_when_nothing_is_set(self):
+        os.environ["RADIOBROWSER_API"] = "https://at1.api.radio-browser.info"
+        try:
+            st = self.client.get("/api/radiobrowser").get_json()
+        finally:
+            os.environ.pop("RADIOBROWSER_API")
+        self.assertEqual((st["mode"], st["server"], st["from_env"]), ("fixed", "at1.api.radio-browser.info", True))
+
+    def test_dns_failure_uses_builtin_list(self):
+        with mock.patch.object(self.rb, "_lookup_srv", side_effect=OSError("kein DNS")):
+            self.assertEqual(self.rb.servers(), self.rb.FALLBACK_SERVERS)
+
+    def test_vtuner_service_uses_server_choice(self):
+        import ycastui.vtuner_server as vt
+        self.assertIs(vt.radiobrowser.request, vt._rb_request)
+        get, calls = self.responder(down={"de1.api.radio-browser.info", "fi1.api.radio-browser.info",
+                                          "de2.api.radio-browser.info"})
+        with mock.patch.object(self.rb.requests, "get", side_effect=get):
+            self.assertEqual(vt.radiobrowser.request("stations?limit=1"), {})
+            self.assertEqual(vt.radiobrowser.get_stations_by_votes(), [])
+        self.assertTrue(calls)
+
+
+class TestTranslations(unittest.TestCase):
+    STATIC = Path(__file__).resolve().parent.parent / "ycastui" / "static"
+
+    def test_every_ui_text_has_an_english_translation(self):
+        app = (self.STATIC / "app.js").read_text(encoding="utf-8")
+        i18n = (self.STATIC / "i18n.js").read_text(encoding="utf-8")
+        used = set(re.findall(r'\bt\("((?:[^"\\]|\\.)*)"', app)) | set(re.findall(r"\bt\('((?:[^'\\]|\\.)*)'", app))
+        known = set(re.findall(r'^\s*"((?:[^"\\]|\\.)*)":', i18n, re.M)) | set(re.findall(r',\s*"((?:[^"\\]|\\.)*)":', i18n))
+        known = {k.replace('\\"', '"') for k in known}
+        missing = sorted(u.replace('\\"', '"') for u in used if u.replace('\\"', '"') not in known)
+        self.assertGreater(len(used), 100)
+        self.assertEqual(missing, [])

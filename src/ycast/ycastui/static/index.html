@@ -14,8 +14,10 @@
 <meta name="theme-color" content="#1d1e21">
 <link rel="stylesheet" href="static/style.css">
 <script>/* Theme vor dem ersten Zeichnen setzen, damit nichts aufblitzt */
-let t = "dark"; try { t = localStorage.getItem("ycast-theme") || "dark"; } catch (e) {}
-document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "dark";
+(() => {
+  let th = "dark"; try { th = localStorage.getItem("ycast-theme") || "dark"; } catch (e) {}
+  document.documentElement.dataset.theme = ["light", "auto"].includes(th) ? th : "dark";
+})();
 </script>
 </head>
 <body>
@@ -28,10 +30,16 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
         <img src="static/icon.svg" alt="" width="30" height="30">
         <h1>YCast</h1>
       </div>
-      <div class="theme" role="group" aria-label="Darstellung">
-        <button type="button" data-theme-set="auto" title="Wie das System">Auto</button>
-        <button type="button" data-theme-set="light" title="Hell" aria-label="Hell">☀</button>
-        <button type="button" data-theme-set="dark" title="Dunkel" aria-label="Dunkel">☾</button>
+      <div class="prefs">
+        <div class="theme lang" role="group" aria-label="Sprache">
+          <button type="button" data-lang-set="de" lang="de" title="Deutsch">DE</button>
+          <button type="button" data-lang-set="en" lang="en" title="English">EN</button>
+        </div>
+        <div class="theme" role="group" aria-label="Darstellung">
+          <button type="button" data-theme-set="auto" title="Wie das System">Auto</button>
+          <button type="button" data-theme-set="light" title="Hell" aria-label="Hell">☀</button>
+          <button type="button" data-theme-set="dark" title="Dunkel" aria-label="Dunkel">☾</button>
+        </div>
       </div>
     </header>
 
@@ -201,6 +209,19 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
         </div>
 
         <div class="block">
+          <h2>Senderdatenbank</h2>
+          <p class="muted small">Die Suche hier und die Menüs am Marantz (Land, Genre, Sprache, beliebte Sender) nutzen den freien
+            <a href="https://www.radio-browser.info" target="_blank" rel="noopener">Community Radio Browser</a>. Er läuft auf mehreren
+            Servern; „Automatisch“ nimmt den nächsten, wenn einer nicht antwortet. Ein fester Server weicht nicht aus.</p>
+          <dl class="kv" id="rb-info"></dl>
+          <form id="rb-form" class="inline-form">
+            <label>Server <select name="server" id="rb-server"><option value="">Automatisch</option></select></label>
+            <button class="btn">Speichern</button>
+            <button class="btn ghost" type="button" id="rb-test">Testen</button>
+          </form>
+        </div>
+
+        <div class="block">
           <h2>Auf dem iPhone als App</h2>
           <p class="small">In Safari diese Seite öffnen, unten auf <em>Teilen</em> tippen und <em>Zum Home-Bildschirm</em> wählen. YCast startet dann im Vollbild mit eigenem Symbol. Beim ersten Start einmal mit dem Umbrel-Passwort anmelden.</p>
         </div>
@@ -287,6 +308,7 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
 </dialog>
 
 <div class="toast" id="toast" role="status" hidden></div>
+<script src="static/i18n.js"></script>
 <script src="static/app.js"></script>
 </body>
 </html>

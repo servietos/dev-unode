@@ -18,7 +18,7 @@ import ycast.radiobrowser as radiobrowser
 import ycast.server as server
 import ycast.vtuner as vtuner
 
-from . import common, hls
+from . import common, hls, rbapi
 
 RELAY_HTTPS = os.environ.get("RELAY_HTTPS", "on").lower() not in ("0", "off", "false", "no")
 RELAY_MAX = int(os.environ.get("RELAY_MAX", "8"))        # gleichzeitige Relay-Streams
@@ -63,6 +63,19 @@ def relay_or_strip(url):
 vtuner.strip_https = relay_or_strip
 # ycast 1.1.0 (PyPI) gibt beim Abruf der Top-Sender jeden Datensatz per print() aus
 radiobrowser.print = lambda *args, **kwargs: None
+
+
+def _rb_request(url):
+    """Ersetzt radiobrowser.request: Server-Auswahl mit Ausweichen und Zeitlimit (das Original
+    fragt einen festen Server ohne Zeitlimit). Fehler ergeben wie im Original eine leere Antwort."""
+    try:
+        return rbapi.get(url)
+    except rbapi.RadioBrowserError as e:
+        logging.error("%s", e)
+        return {}
+
+
+radiobrowser.request = _rb_request
 
 
 def _public_target(url):
@@ -249,7 +262,6 @@ def run():
     logging.basicConfig(format="%(asctime)s %(levelname)s: %(message)s", level=logging.INFO)
     common.ensure_data()
     common.relay_secret()  # beim Start anlegen, damit beide Dienste denselben Schlüssel sehen
-    radiobrowser.API_ENDPOINT = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
     server.check_my_stations_feature(str(common.STATIONS_FILE))
     port = int(os.environ.get("PORT", "80"))
     logging.info("YCast vTuner-Dienst auf Port %s, IP %s, HTTPS-Relay %s (max. %d gleichzeitig)",

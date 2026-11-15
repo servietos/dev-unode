@@ -1,31 +1,35 @@
 manifestVersion: 1
 id: dev-unode-ycast
 name: YCast
-tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
+tagline: Internetradio und Fernbedienung für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.1.8"
+version: "3.1.9"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
   YCast ersetzt den eingestellten vTuner-Dienst, den viele AV-Receiver und Netzwerk-Player
   (ca. 2011–2017, z. B. Marantz, Denon, Yamaha, Onkyo, Pioneer, Grundig) für Internetradio nutzen.
   Der Receiver zeigt deine eigenen Sender unter „My Stations“ und kann den Community Radio
-  Browser durchsuchen. Getestet mit einem Marantz M-CR510.
+  Browser nach Land, Genre und Sprache durchsuchen. Getestet mit einem Marantz M-CR510.
 
 
-  Fernbedienung für Denon/Marantz-Netzwerkgeräte: einschalten, Lautstärke, Stumm und jeden
-  Sender per Klick direkt auf dem Gerät abspielen (UPnP/DLNA), mit rundem Display für den
-  laufenden Titel. Auf dem iPhone über „Zum Home-Bildschirm“ als App nutzbar.
+  Fernbedienung für Denon/Marantz-Netzwerkgeräte: Ein/Standby, Abspielen/Pause, vorheriger und
+  nächster Sender, Lautstärke und Stumm, „Zuletzt gespielt“ und ein Ausschalt-Timer. Jeder Sender
+  lässt sich per Klick direkt auf dem Gerät starten (UPnP/DLNA). Das Display zeigt Sendername,
+  den laufenden Titel aus dem Stream sowie Format und Bitrate. Auf dem Handy bleiben Display und
+  Bedienung beim Scrollen oben stehen; auf dem iPhone über „Zum Home-Bildschirm“ als App nutzbar.
 
 
-  HLS-Sender (.m3u8) und Ogg/Opus-Streams, die Receiver nicht selbst abspielen können, wandelt
-  YCast mit ffmpeg um: AAC/MP3 nur umverpackt (ohne Qualitätsverlust), andere Formate nach MP3.
+  Weboberfläche auf Deutsch und Englisch, hell oder dunkel: Kategorien und Sender verwalten
+  (Drag & Drop), im Browser vorhören, Streams testen, Sender im Radio Browser suchen und
+  übernehmen, stations.yml importieren/exportieren, Abruf-Log des Receivers, DNS-Prüfung und
+  Netzwerk-Einstellung. Für den Radio Browser wählt YCast automatisch einen erreichbaren Server
+  (oder einen festen).
 
 
-  Weboberfläche: Kategorien und Sender verwalten (Drag & Drop), im Browser vorhören, Streams
-  testen, Sender im Radio Browser suchen und übernehmen, stations.yml importieren/exportieren,
-  Abruf-Log des Receivers, DNS-Prüfung und Netzwerk-Einstellung. HTTPS-Streams, die Receiver
-  nicht abspielen können, leitet YCast über ein internes Relay als HTTP weiter.
+  Formate, die Receiver nicht selbst abspielen können, wandelt YCast um: HLS (.m3u8), Ogg/Opus
+  und HE-AAC per ffmpeg (AAC/MP3 nur umverpackt, sonst MP3 192 kbit/s); HTTPS-Streams laufen über
+  ein internes Relay als HTTP.
 
 
   Voraussetzungen und Einrichtung:
@@ -34,8 +38,8 @@ description: >-
   1. Eine freie IP im Heimnetz außerhalb des DHCP-Bereichs deines Routers. Der Receiver-Dienst
   läuft darauf auf Port 80 (eigene LAN-IP per macvlan, weil Port 80 des Umbrel belegt ist).
   Standard ist <dein Netz>.210, z. B. 192.168.178.210. Adapter, Netz und Gateway erkennt die App
-  selbst; die IP kannst du unter „Status & Einrichtung → Netzwerk“ ändern (gilt nach Neustart der
-  App). Ist die gespeicherte IP ungültig, startet die App mit dem Standard und zeigt einen Hinweis.
+  selbst; die IP kannst du unter „Einrichtung → Netzwerk“ ändern (gilt nach Neustart der App).
+  Ist die gespeicherte IP ungültig, startet die App mit dem Standard und zeigt einen Hinweis.
 
 
   2. Ein DNS-Server, den du selbst pflegen kannst (z. B. Pi-hole, AdGuard Home oder ein Router
@@ -46,12 +50,21 @@ description: >-
 
 
   3. Der Receiver muss diesen DNS-Server nutzen. Danach einmal stromlos machen und Internetradio
-  öffnen; unter „Status & Einrichtung“ erscheint er dann als „Receiver gesehen“.
+  öffnen; unter „Einrichtung“ erscheint er dann als „Receiver gesehen“. Für die Fernbedienung
+  im Receiver „Netzwerk-Standby“ einschalten.
 
 
   Hinweis: Der Umbrel selbst erreicht die YCast-IP nicht (Eigenschaft von macvlan), alle
   anderen Geräte im Netz schon. Kein WLAN-only-Umbrel: macvlan braucht in der Regel einen
   kabelgebundenen Netzwerkadapter.
+
+
+  English: YCast replaces the discontinued vTuner internet radio service used by many AV receivers
+  (Marantz, Denon, Yamaha, Onkyo …). Manage your own stations, search the Community Radio Browser
+  and remote-control Denon/Marantz devices (play/pause, next/previous station, volume, sleep
+  timer, now-playing display with bitrate). The web interface is available in German and English.
+  Setup needs a free LAN IP for the receiver service (port 80) and a DNS entry (e.g. in Pi-hole)
+  pointing the receiver's vTuner hostname to that IP.
 developer: servietos
 website: https://github.com/servietos/dev-unode/tree/master/src/ycast
 repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
@@ -60,10 +73,10 @@ gallery:
   - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-1.jpg
   - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-2.jpg
 releaseNotes: >-
-  Das Display zeigt bei Sendern, die YCast startet, jetzt den Sendernamen, darunter den laufenden
-  Titel aus dem Stream und oben Format und Bitrate (z. B. „MP3 · 128 kbit/s“, bei Umwandlung
-  „Opus → MP3 192 kbit/s“). „Neue Kategorie“ steht neben „Umbenennen“ und „Löschen“, dadurch hat
-  die Kategorienleiste auf dem Handy die volle Breite.
+  Die Weboberfläche gibt es jetzt auf Deutsch und Englisch (Umschalter „DE | EN“ oben, ohne Wahl
+  nach Browsersprache). Neue Einstellung „Senderdatenbank“: „Automatisch“ weicht auf einen anderen
+  Radio-Browser-Server aus, wenn einer nicht antwortet (für die Suche und die Menüs am Marantz),
+  alternativ ein fester Server; Abfragen haben jetzt ein Zeitlimit. Neue Beschreibung und Bilder.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

@@ -12,23 +12,23 @@ async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Fehler ${res.status}`);
+  if (!res.ok) throw new Error(data.error ? t(data.error) : t("Fehler {n}", { n: res.status }));
   return data;
 }
 let toastTimer;
 function toast(msg, bad = false) {
-  const t = $("#toast");
-  t.textContent = msg; t.className = "toast" + (bad ? " bad" : ""); t.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), bad ? 5000 : 2200);
+  const el = $("#toast");
+  el.textContent = msg; el.className = "toast" + (bad ? " bad" : ""); el.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (el.hidden = true), bad ? 5000 : 2200);
 }
 function ago(ts) {
   const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
-  if (s < 60) return "gerade eben";
-  if (s < 3600) return `vor ${Math.round(s / 60)} min`;
-  if (s < 86400) return `vor ${Math.round(s / 3600)} h`;
-  return new Date(ts * 1000).toLocaleString("de-DE");
+  if (s < 60) return t("gerade eben");
+  if (s < 3600) return t("vor {n} min", { n: Math.round(s / 60) });
+  if (s < 86400) return t("vor {n} h", { n: Math.round(s / 3600) });
+  return new Date(ts * 1000).toLocaleString(LOCALE);
 }
-function dialog(title, bodyHtml, okLabel = "OK") {
+function dialog(title, bodyHtml, okLabel = t("OK")) {
   const dlg = $("#dlg");
   $("#dlg-title").textContent = title;
   $("#dlg-body").innerHTML = bodyHtml;
@@ -45,14 +45,14 @@ function dialog(title, bodyHtml, okLabel = "OK") {
 
 let revision = null; // Stand der Senderliste auf dem Server (Konfliktprüfung bei zwei offenen Tabs)
 
-async function save(msg = "Gespeichert") {
+async function save(msg = t("Gespeichert")) {
   try {
     const data = await api("api/stations", { method: "PUT", body: { categories: cats, revision } });
     cats = data.categories; revision = data.revision;
     toast(msg);
   } catch (e) {
     toast(e.message, true);
-    try { await load(); } catch (e2) { toast("Senderliste konnte nicht neu geladen werden: " + e2.message, true); }
+    try { await load(); } catch (e2) { toast(t("Senderliste konnte nicht neu geladen werden: {msg}", { msg: e2.message }), true); }
   } finally {
     render();
   }
@@ -68,7 +68,7 @@ async function load() {
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
   document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + b.dataset.tab));
-  if (b.dataset.tab === "setup") refreshStatus();
+  if (b.dataset.tab === "setup") { refreshStatus(); loadRb(); }
 }));
 
 // ---------- Kategorien ----------
@@ -95,39 +95,39 @@ function renderCats() {
       const from = +e.dataTransfer.getData("text/cat");
       if (Number.isNaN(from) || from === i) return;
       const [c] = cats.splice(from, 1); cats.splice(i, 0, c);
-      current = i; save("Reihenfolge gespeichert");
+      current = i; save(t("Reihenfolge gespeichert"));
     });
   });
 }
 
 function moveStation(idx, toCat) {
   const st = cats[current].stations[idx];
-  if (cats[toCat].stations.some((s) => s.name === st.name)) return toast(`„${st.name}“ gibt es dort schon`, true);
+  if (cats[toCat].stations.some((s) => s.name === st.name)) return toast(t("„{name}“ gibt es dort schon", { name: st.name }), true);
   cats[current].stations.splice(idx, 1);
   cats[toCat].stations.push(st);
-  save(`Nach „${cats[toCat].name}“ verschoben`);
+  save(t("Nach „{cat}“ verschoben", { cat: cats[toCat].name }));
 }
 
 $("#cat-add").addEventListener("click", async () => {
-  const fd = await dialog("Neue Kategorie", `<label>Name<input name="name" required></label>`, "Anlegen");
+  const fd = await dialog(t("Neue Kategorie"), `<label>${t("Name")}<input name="name" required></label>`, t("Anlegen"));
   const name = fd?.get("name")?.trim();
   if (!name) return;
-  if (cats.some((c) => c.name === name)) return toast("Kategorie gibt es schon", true);
-  cats.push({ name, stations: [] }); current = cats.length - 1; save("Kategorie angelegt");
+  if (cats.some((c) => c.name === name)) return toast(t("Kategorie gibt es schon"), true);
+  cats.push({ name, stations: [] }); current = cats.length - 1; save(t("Kategorie angelegt"));
 });
 $("#cat-rename").addEventListener("click", async () => {
   const c = cats[current]; if (!c) return;
-  const fd = await dialog("Kategorie umbenennen", `<label>Name<input name="name" value="${esc(c.name)}" required></label>`, "Speichern");
+  const fd = await dialog(t("Kategorie umbenennen"), `<label>${t("Name")}<input name="name" value="${esc(c.name)}" required></label>`, t("Speichern"));
   const name = fd?.get("name")?.trim();
   if (!name || name === c.name) return;
-  if (cats.some((x) => x.name === name)) return toast("Kategorie gibt es schon", true);
+  if (cats.some((x) => x.name === name)) return toast(t("Kategorie gibt es schon"), true);
   c.name = name; save();
 });
 $("#cat-delete").addEventListener("click", async () => {
   const c = cats[current]; if (!c) return;
-  const fd = await dialog("Kategorie löschen?", `<p>„${esc(c.name)}“ mit ${c.stations.length} Sendern wird gelöscht. Die vorige Fassung bleibt als <code>stations.yml.bak</code> erhalten.</p>`, "Löschen");
+  const fd = await dialog(t("Kategorie löschen?"), t("<p>„{name}“ mit {n} Sendern wird gelöscht. Die vorige Fassung bleibt als <code>stations.yml.bak</code> erhalten.</p>", { name: esc(c.name), n: c.stations.length }), t("Löschen"));
   if (!fd) return;
-  cats.splice(current, 1); current = 0; save("Kategorie gelöscht");
+  cats.splice(current, 1); current = 0; save(t("Kategorie gelöscht"));
 });
 
 // ---------- Sender ----------
@@ -139,28 +139,28 @@ function badge(url) {
 
 function renderStations() {
   const c = cats[current];
-  $("#cat-title").textContent = c ? c.name : "Keine Kategorie";
-  $("#cat-meta").textContent = c ? `${c.stations.length} Sender · erscheint am Marantz unter „My Stations“` : "Lege oben eine neue Kategorie an.";
+  $("#cat-title").textContent = c ? c.name : t("Keine Kategorie");
+  $("#cat-meta").textContent = c ? t("{n} Sender · erscheint am Marantz unter „My Stations“", { n: c.stations.length }) : t("Lege oben eine neue Kategorie an.");
   $("#station-add").hidden = !c;
   $("#cat-rename").hidden = $("#cat-delete").hidden = !c;
   const ul = $("#station-list");
   const list = c ? c.stations : [];
   $("#station-empty").hidden = !c || list.length > 0;
   ul.innerHTML = list.map((s, i) => `<li class="station${playingUrl === s.url ? " playing" : ""}" draggable="true" data-i="${i}">
-      <span class="grip" title="Ziehen zum Sortieren oder auf eine Kategorie">⋮⋮</span>
+      <span class="grip" title="${t("Ziehen zum Sortieren oder auf eine Kategorie")}">⋮⋮</span>
       <div class="st-main"><div class="st-name">${esc(s.name)}${badge(s.url)}</div>
-        <div class="st-url" title="${esc(s.url)}">${s.url.startsWith("https://") ? "HTTPS über Relay · " : ""}${esc(s.url)}</div></div>
+        <div class="st-url" title="${esc(s.url)}">${s.url.startsWith("https://") ? t("HTTPS über Relay · ") : ""}${esc(s.url)}</div></div>
       <div class="st-actions">
-        <button class="btn small st-play" data-act="marantz" title="Auf dem Marantz abspielen"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z"/></svg><span class="st-play-label">Abspielen</span></button>
+        <button class="btn small st-play" data-act="marantz" title="${t("Auf dem Marantz abspielen")}"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z"/></svg><span class="st-play-label">${t("Abspielen")}</span></button>
         <span class="more">
-          <button class="icon-btn" data-act="menu" title="Weitere Aktionen" aria-haspopup="true" aria-expanded="false">⋯</button>
+          <button class="icon-btn" data-act="menu" title="${t("Weitere Aktionen")}" aria-haspopup="true" aria-expanded="false">⋯</button>
           <span class="more-menu" hidden>
-            <button data-act="play">Im Browser vorhören</button>
-            <button data-act="check">Stream testen</button>
-            <button data-act="up" ${i === 0 ? "disabled" : ""}>Nach oben</button>
-            <button data-act="down" ${i === list.length - 1 ? "disabled" : ""}>Nach unten</button>
-            <button data-act="edit">Bearbeiten</button>
-            <button data-act="del" class="danger">Löschen</button>
+            <button data-act="play">${t("Im Browser vorhören")}</button>
+            <button data-act="check">${t("Stream testen")}</button>
+            <button data-act="up" ${i === 0 ? "disabled" : ""}>${t("Nach oben")}</button>
+            <button data-act="down" ${i === list.length - 1 ? "disabled" : ""}>${t("Nach unten")}</button>
+            <button data-act="edit">${t("Bearbeiten")}</button>
+            <button data-act="del" class="danger">${t("Löschen")}</button>
           </span>
         </span>
       </div></li>`).join("");
@@ -183,25 +183,25 @@ function renderStations() {
       if (from === "" || +from === i) return;
       const arr = cats[current].stations;
       const [s] = arr.splice(+from, 1); arr.splice(i, 0, s);
-      save("Reihenfolge gespeichert");
+      save(t("Reihenfolge gespeichert"));
     });
   });
 }
 
 async function checkUrl(url, name) {
-  checks[url] = { ok: true, label: "teste …" }; renderStations();
+  checks[url] = { ok: true, label: t("teste …") }; renderStations();
   try {
     const r = await api("api/check", { method: "POST", body: { url } });
     const d = r.direct;
     if (d.ok) {
       const bits = [d.bitrate && `${d.bitrate} kbit/s`, d.type.split(";")[0]].filter(Boolean).join(" · ");
-      checks[url] = { ok: true, label: "läuft" + (bits ? " · " + bits : "") };
-      toast(`${name}: Stream erreichbar`);
+      checks[url] = { ok: true, label: t("läuft") + (bits ? " · " + bits : "") };
+      toast(t("{name}: Stream erreichbar", { name }));
     } else {
-      checks[url] = { ok: false, label: d.status ? `Fehler ${d.status}` : (d.error || "nicht erreichbar") };
-      toast(`${name}: Stream nicht erreichbar`, true);
+      checks[url] = { ok: false, label: d.status ? t("Fehler {n}", { n: d.status }) : (d.error || t("nicht erreichbar")) };
+      toast(t("{name}: Stream nicht erreichbar", { name }), true);
     }
-  } catch (e) { checks[url] = { ok: false, label: "Fehler" }; toast(e.message, true); }
+  } catch (e) { checks[url] = { ok: false, label: t("Fehler") }; toast(e.message, true); }
   renderStations();
 }
 
@@ -228,23 +228,23 @@ async function stationAction(act, i) {
     const j = act === "up" ? i - 1 : i + 1;
     if (j < 0 || j >= arr.length) return;
     [arr[i], arr[j]] = [arr[j], arr[i]];
-    return save("Reihenfolge gespeichert");
+    return save(t("Reihenfolge gespeichert"));
   }
   if (act === "del") {
-    const fd = await dialog("Sender löschen?", `<p>„${esc(s.name)}“ wird aus „${esc(cats[current].name)}“ entfernt.</p>`, "Löschen");
+    const fd = await dialog(t("Sender löschen?"), t("<p>„{name}“ wird aus „{cat}“ entfernt.</p>", { name: esc(s.name), cat: esc(cats[current].name) }), t("Löschen"));
     if (!fd) return;
-    arr.splice(i, 1); return save(`„${s.name}“ gelöscht`);
+    arr.splice(i, 1); return save(t("„{name}“ gelöscht", { name: s.name }));
   }
   if (act === "edit") {
     const opts = cats.map((c, ci) => `<option value="${ci}" ${ci === current ? "selected" : ""}>${esc(c.name)}</option>`).join("");
-    const fd = await dialog("Sender bearbeiten", `
-      <label>Name<input name="name" value="${esc(s.name)}" required></label>
-      <label>Stream-URL<input name="url" value="${esc(s.url)}" required></label>
-      <label>Kategorie<select name="cat">${opts}</select></label>`, "Speichern");
+    const fd = await dialog(t("Sender bearbeiten"), `
+      <label>${t("Name")}<input name="name" value="${esc(s.name)}" required></label>
+      <label>${t("Stream-URL")}<input name="url" value="${esc(s.url)}" required></label>
+      <label>${t("Kategorie")}<select name="cat">${opts}</select></label>`, t("Speichern"));
     if (!fd) return;
     const name = fd.get("name").trim(), url = fd.get("url").trim(), cat = +fd.get("cat");
     if (!name || !url) return;
-    if (arr.some((x, xi) => xi !== i && x.name === name)) return toast("Name gibt es in der Kategorie schon", true);
+    if (arr.some((x, xi) => xi !== i && x.name === name)) return toast(t("Name gibt es in der Kategorie schon"), true);
     s.name = name; s.url = url;
     if (cat !== current) return moveStation(i, cat);
     save();
@@ -255,27 +255,27 @@ $("#station-add").addEventListener("submit", (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   const name = fd.get("name").trim(), url = fd.get("url").trim();
-  if (cats[current].stations.some((s) => s.name === name)) return toast("Name gibt es in der Kategorie schon", true);
+  if (cats[current].stations.some((s) => s.name === name)) return toast(t("Name gibt es in der Kategorie schon"), true);
   cats[current].stations.push({ name, url });
   e.target.reset();
-  save(`„${name}“ hinzugefügt`);
+  save(t("„{name}“ hinzugefügt", { name }));
 });
 
 // ---------- Import / Export ----------
 $("#btn-export").addEventListener("click", async () => {
   const text = await (await fetch("api/stations/export")).text();
-  await dialog("Export (stations.yml)", `<textarea readonly>${esc(text)}</textarea>
-    <p class="muted small">Text markieren und kopieren, oder <a href="api/stations/export" target="_blank" rel="noopener">als Datei öffnen</a>.</p>`, "Schließen");
+  await dialog(t("Export (stations.yml)"), `<textarea readonly>${esc(text)}</textarea>
+    <p class="muted small">${t('Text markieren und kopieren, oder <a href="api/stations/export" target="_blank" rel="noopener">als Datei öffnen</a>.')}</p>`, t("Schließen"));
 });
 $("#btn-import").addEventListener("click", async () => {
-  const fd = await dialog("Import (YCast-Format)", `
-    <textarea name="yaml" placeholder="Kategorie:\n  Sendername: http://stream-url"></textarea>
-    <label>Modus<select name="mode"><option value="merge">Ergänzen (vorhandene bleiben)</option><option value="replace">Ersetzen (alles neu)</option></select></label>`, "Importieren");
+  const fd = await dialog(t("Import (YCast-Format)"), `
+    <textarea name="yaml" placeholder="${esc(t("Kategorie:\n  Sendername: http://stream-url"))}"></textarea>
+    <label>${t("Modus")}<select name="mode"><option value="merge">${t("Ergänzen (vorhandene bleiben)")}</option><option value="replace">${t("Ersetzen (alles neu)")}</option></select></label>`, t("Importieren"));
   if (!fd) return;
   try {
     const data = await api("api/stations/import", { method: "POST", body: { yaml: fd.get("yaml"), mode: fd.get("mode") } });
     cats = data.categories; revision = data.revision;
-    current = 0; render(); toast("Import gespeichert");
+    current = 0; render(); toast(t("Import gespeichert"));
   } catch (e) { toast(e.message, true); }
 });
 
@@ -293,24 +293,24 @@ let listsLoaded = false;
 async function loadLists() {
   if (listsLoaded) return;
   listsLoaded = true;
-  const dn = (() => { try { return new Intl.DisplayNames(["de"], { type: "region" }); } catch { return null; } })();
+  const dn = (() => { try { return new Intl.DisplayNames([LANG], { type: "region" }); } catch { return null; } })();
   const deName = (c) => { try { return (dn && dn.of(c.code)) || c.name; } catch { return c.name; } };
   try {
     const { countries } = await api("api/countries");
-    const list = countries.map((c) => ({ ...c, de: deName(c) })).sort((a, b) => a.de.localeCompare(b.de, "de"));
+    const list = countries.map((c) => ({ ...c, de: deName(c) })).sort((a, b) => a.de.localeCompare(b.de, LANG));
     const opt = (c) => `<option value="${esc(c.code)}">${esc(c.de)} (${c.count})</option>`;
     const top = ["DE", "AT", "CH"].map((code) => list.find((c) => c.code === code)).filter(Boolean);
     const sel = $("#search-country"), keep = sel.value;
-    sel.innerHTML = `<optgroup label="Häufig">${top.map(opt).join("")}</optgroup>
-      <option value="">Alle Länder</option>
-      <optgroup label="Alle Länder A–Z (${list.length})">${list.map(opt).join("")}</optgroup>`;
+    sel.innerHTML = `<optgroup label="${t("Häufig")}">${top.map(opt).join("")}</optgroup>
+      <option value="">${t("Alle Länder")}</option>
+      <optgroup label="${t("Alle Länder A–Z ({n})", { n: list.length })}">${list.map(opt).join("")}</optgroup>`;
     sel.value = keep;
-  } catch (e) { listsLoaded = false; toast("Länderliste: " + e.message, true); }
+  } catch (e) { listsLoaded = false; toast(t("Länderliste: {msg}", { msg: e.message }), true); }
   try {
     const { tags } = await api("api/tags");
     const sel = $("#search-tag"), keep = sel.value;
-    const sorted = [...tags].sort((a, b) => a.localeCompare(b, "de"));
-    sel.innerHTML = `<option value="">Alle Genres</option>` + sorted.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+    const sorted = [...tags].sort((a, b) => a.localeCompare(b, LANG));
+    sel.innerHTML = `<option value="">${t("Alle Genres")}</option>` + sorted.map((tag) => `<option value="${esc(tag)}">${esc(tag)}</option>`).join("");
     sel.value = keep;
   } catch { /* Genre-Vorschläge sind optional */ }
 }
@@ -328,14 +328,14 @@ function manualValues() {
 $("#manual-test").addEventListener("click", async () => {
   const { url } = manualValues();
   const out = $("#manual-result");
-  if (!/^https?:\/\//.test(url)) { out.textContent = "Bitte eine URL mit http:// oder https:// eingeben."; return; }
-  out.textContent = "Teste …";
+  if (!/^https?:\/\//.test(url)) { out.textContent = t("Bitte eine URL mit http:// oder https:// eingeben."); return; }
+  out.textContent = t("Teste …");
   try {
     const d = (await api("api/check", { method: "POST", body: { url } })).direct;
     out.textContent = d.ok
-      ? `Stream erreichbar: ${[d.name, d.bitrate && d.bitrate + " kbit/s", d.type.split(";")[0]].filter(Boolean).join(" · ")}`
-        + (url.startsWith("https://") ? " · läuft am Marantz über das HTTPS-Relay" : "")
-      : `Nicht erreichbar (${d.status ? "HTTP " + d.status : d.error || "keine Daten"}). Hinzufügen geht trotzdem.`;
+      ? t("Stream erreichbar: {info}", { info: [d.name, d.bitrate && d.bitrate + " kbit/s", d.type.split(";")[0]].filter(Boolean).join(" · ") })
+        + (url.startsWith("https://") ? t(" · läuft am Marantz über das HTTPS-Relay") : "")
+      : t("Nicht erreichbar ({why}). Hinzufügen geht trotzdem.", { why: d.status ? "HTTP " + d.status : d.error || t("keine Daten") });
     if (d.ok && d.name && !manual.name.value.trim()) manual.name.value = d.name.slice(0, 60);
   } catch (e) { out.textContent = e.message; }
 });
@@ -346,12 +346,12 @@ $("#manual-play").addEventListener("click", () => {
 manual.addEventListener("submit", (e) => {
   e.preventDefault();
   const { name, url, ci } = manualValues();
-  if (!cats[ci]) return toast("Lege zuerst eine Kategorie an", true);
-  if (!/^https?:\/\//.test(url)) return toast("URL muss mit http:// oder https:// beginnen", true);
-  if (cats[ci].stations.some((s) => s.name === name)) return toast(`„${name}“ ist schon in „${cats[ci].name}“`, true);
+  if (!cats[ci]) return toast(t("Lege zuerst eine Kategorie an"), true);
+  if (!/^https?:\/\//.test(url)) return toast(t("URL muss mit http:// oder https:// beginnen"), true);
+  if (cats[ci].stations.some((s) => s.name === name)) return toast(t("„{name}“ ist schon in „{cat}“", { name, cat: cats[ci].name }), true);
   cats[ci].stations.push({ name, url });
   manual.reset(); $("#manual-result").textContent = "";
-  save(`„${name}“ zu „${cats[ci].name}“ hinzugefügt`);
+  save(t("„{name}“ zu „{cat}“ hinzugefügt", { name, cat: cats[ci].name }));
 });
 let results = [];
 // Land oder Genre gewechselt: sofort neu suchen
@@ -379,9 +379,9 @@ let savedTheme = "dark";
 try { savedTheme = localStorage.getItem("ycast-theme") || "dark"; } catch { /* privat */ }
 applyTheme(savedTheme);
 document.querySelectorAll("[data-theme-set]").forEach((b) => b.addEventListener("click", () => {
-  const t = b.dataset.themeSet;
-  try { localStorage.setItem("ycast-theme", t); } catch { /* privat */ }
-  applyTheme(t);
+  const th = b.dataset.themeSet;
+  try { localStorage.setItem("ycast-theme", th); } catch { /* privat */ }
+  applyTheme(th);
 }));
 
 $("#search-form").addEventListener("submit", async (e) => {
@@ -391,7 +391,7 @@ $("#search-form").addEventListener("submit", async (e) => {
   const box = $("#search-results");
   const seq = ++searchSeq;            // nur die Antwort auf die letzte Suche anzeigen
   box.setAttribute("aria-busy", "true");
-  if (!results.length) box.innerHTML = `<p class="muted">Suche …</p>`;
+  if (!results.length) box.innerHTML = `<p class="muted">${t("Suche …")}</p>`;
   let found;
   try {
     found = (await api("api/search?" + params)).results;
@@ -402,15 +402,15 @@ $("#search-form").addEventListener("submit", async (e) => {
   if (seq !== searchSeq) return;
   box.removeAttribute("aria-busy");
   results = found;
-  $("#search-status").textContent = results.length ? `${results.length} Treffer` : "Nichts gefunden";
-  if (!results.length) { box.innerHTML = `<p class="muted">Nichts gefunden.</p>`; return; }
+  $("#search-status").textContent = results.length ? t("{n} Treffer", { n: results.length }) : t("Nichts gefunden");
+  if (!results.length) { box.innerHTML = `<p class="muted">${t("Nichts gefunden.")}</p>`; return; }
   box.innerHTML = results.map((r, i) => `<div class="result">
       ${r.favicon ? `<img src="${esc(r.favicon)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'ph'}))">` : '<div class="ph"></div>'}
       <div><strong title="${esc(r.name)}">${esc(r.name)}</strong>${convertBadge(r)}
         <div class="meta">${esc([r.country, r.codec, r.bitrate ? r.bitrate + " kbit/s" : "", r.tags].filter(Boolean).join(" · "))}</div>
-        <div class="row"><button class="btn small" data-i="${i}" data-act="marantz">Auf dem Marantz abspielen</button>
-          <button class="btn ghost small" data-i="${i}" data-act="play">Vorhören</button>
-          <button class="btn ghost small" data-i="${i}" data-act="add">Zu meinen Sendern</button></div></div></div>`).join("");
+        <div class="row"><button class="btn small" data-i="${i}" data-act="marantz">${t("Auf dem Marantz abspielen")}</button>
+          <button class="btn ghost small" data-i="${i}" data-act="play">${t("Vorhören")}</button>
+          <button class="btn ghost small" data-i="${i}" data-act="add">${t("Zu meinen Sendern")}</button></div></div></div>`).join("");
   scrollToFirstResult();
 });
 
@@ -430,7 +430,7 @@ function scrollToFirstResult() {
 function convertBadge(r) {
   const codec = (r.codec || "").toUpperCase();
   const what = r.hls ? "HLS" : /OGG|OPUS|VORBIS/.test(codec) ? codec.split(",")[0] : "";
-  return what ? `<span class="badge info" title="Diesen Stream wandelt YCast für den Marantz um; der Start dauert ein paar Sekunden länger">${esc(what)} · wird umgewandelt</span>` : "";
+  return what ? `<span class="badge info" title="${t("Diesen Stream wandelt YCast für den Marantz um; der Start dauert ein paar Sekunden länger")}">${t("{what} · wird umgewandelt", { what: esc(what) })}</span>` : "";
 }
 $("#search-results").addEventListener("click", (e) => {
   const b = e.target.closest("[data-act]"); if (!b) return;
@@ -445,27 +445,27 @@ let lastTarget = null;
 async function addToCategory(rawName, url) {
   const pre = lastTarget ?? current;
   const opts = cats.map((c, i) => `<option value="${i}" ${i === pre ? "selected" : ""}>${esc(c.name)} (${c.stations.length})</option>`).join("");
-  const fd = await dialog("Zu meinen Sendern", `
-    <label>Name<input name="name" value="${esc((rawName || "").trim().slice(0, 60) || "Sender")}" maxlength="120" required></label>
-    <label>Kategorie<select name="cat" id="dlg-cat">${opts}<option value="new" ${cats.length ? "" : "selected"}>Neue Kategorie …</option></select></label>
-    <label id="dlg-new-wrap" ${cats.length ? "hidden" : ""}>Name der neuen Kategorie<input name="newcat" maxlength="120"></label>`, "Hinzufügen");
+  const fd = await dialog(t("Zu meinen Sendern"), `
+    <label>${t("Name")}<input name="name" value="${esc((rawName || "").trim().slice(0, 60) || t("Sender"))}" maxlength="120" required></label>
+    <label>${t("Kategorie")}<select name="cat" id="dlg-cat">${opts}<option value="new" ${cats.length ? "" : "selected"}>${t("Neue Kategorie …")}</option></select></label>
+    <label id="dlg-new-wrap" ${cats.length ? "hidden" : ""}>${t("Name der neuen Kategorie")}<input name="newcat" maxlength="120"></label>`, t("Hinzufügen"));
   if (!fd) return;
   const name = fd.get("name").trim();
   if (!name) return;
   let ci;
   if (fd.get("cat") === "new") {
     const cname = (fd.get("newcat") || "").trim();
-    if (!cname) return toast("Bitte einen Namen für die neue Kategorie eingeben", true);
+    if (!cname) return toast(t("Bitte einen Namen für die neue Kategorie eingeben"), true);
     ci = cats.findIndex((c) => c.name === cname);
     if (ci < 0) { cats.push({ name: cname, stations: [] }); ci = cats.length - 1; }
   } else {
     ci = +fd.get("cat");
   }
   if (!cats[ci]) return;
-  if (cats[ci].stations.some((s) => s.name === name)) return toast(`„${name}“ ist schon in „${cats[ci].name}“`, true);
+  if (cats[ci].stations.some((s) => s.name === name)) return toast(t("„{name}“ ist schon in „{cat}“", { name, cat: cats[ci].name }), true);
   cats[ci].stations.push({ name, url });
   lastTarget = ci;
-  save(`„${name}“ zu „${cats[ci].name}“ hinzugefügt`);
+  save(t("„{name}“ zu „{cat}“ hinzugefügt", { name, cat: cats[ci].name }));
 }
 // Im Dialog: Feld für den Namen der neuen Kategorie nur bei Bedarf zeigen
 document.addEventListener("change", (e) => {
@@ -482,12 +482,12 @@ function play(name, url) {
   localStream = { name, url };
   $("#player").hidden = false;
   $("#player-name").textContent = name;
-  $("#player-state").textContent = "verbinde …";
+  $("#player-state").textContent = t("verbinde …");
   audio.src = url;
-  audio.play().catch(() => ($("#player-state").textContent = "Browser kann diesen Stream nicht abspielen"));
+  audio.play().catch(() => ($("#player-state").textContent = t("Browser kann diesen Stream nicht abspielen")));
 }
-audio.addEventListener("playing", () => ($("#player-state").textContent = "läuft im Browser"));
-audio.addEventListener("error", () => ($("#player-state").textContent = "Stream nicht abspielbar"));
+audio.addEventListener("playing", () => ($("#player-state").textContent = t("läuft im Browser")));
+audio.addEventListener("error", () => ($("#player-state").textContent = t("Stream nicht abspielbar")));
 function stopLocal() { audio.pause(); audio.removeAttribute("src"); audio.load(); $("#player").hidden = true; localStream = null; }
 $("#player-stop").addEventListener("click", stopLocal);
 $("#player-send").addEventListener("click", () => {
@@ -506,29 +506,29 @@ function setPill(el, ok, text) {
 
 async function refreshStatus() {
   let s;
-  try { s = await api("api/status"); } catch { setPill($("#pill-ycast"), false, "getrennt"); return; }
+  try { s = await api("api/status"); } catch { setPill($("#pill-ycast"), false, t("getrennt")); return; }
   ycastIp = s.ip;
-  setPill($("#pill-ycast"), s.ycast.ok, s.ycast.ok ? `läuft auf ${s.ip}` : "nicht erreichbar");
+  setPill($("#pill-ycast"), s.ycast.ok, s.ycast.ok ? t("läuft auf {ip}", { ip: s.ip }) : t("nicht erreichbar"));
   const last = s.last_receiver;
-  setPill($("#pill-avr"), last ? (Date.now() / 1000 - last.t < 86400) : null, last ? `gesehen ${ago(last.t)}` : "noch nie gesehen");
+  setPill($("#pill-avr"), last ? (Date.now() / 1000 - last.t < 86400) : null, last ? t("gesehen {ago}", { ago: ago(last.t) }) : t("noch nie gesehen"));
 
   document.querySelectorAll(".ip").forEach((el) => (el.textContent = s.ip || "–"));
   $("#dns-cli").textContent = `sudo pihole-FTL --config misc.dnsmasq_lines '["address=/vtuner.com/${s.ip || "?"}"]'`;
   $("#dns-env").textContent = `FTLCONF_misc_dnsmasq_lines: 'address=/vtuner.com/${s.ip || "?"}'`;
   $("#svc-info").innerHTML = `
-    <dt>vTuner-Dienst</dt><dd>${s.ycast.ok ? "läuft" : "nicht erreichbar (" + esc(s.ycast.error || "") + ")"}</dd>
-    <dt>LAN-IP</dt><dd>${esc(s.ip || "nicht gesetzt")} · Port 80</dd>
-    <dt>„My Stations“</dt><dd>${s.counts.categories} Kategorien · ${s.counts.stations} Sender</dd>
-    <dt>HTTPS-Relay</dt><dd>${s.ycast.relay ? "an: HTTPS-Streams laufen über YCast" : "aus"}</dd>`;
+    <dt>${t("vTuner-Dienst")}</dt><dd>${s.ycast.ok ? t("läuft") : t("nicht erreichbar ({e})", { e: esc(s.ycast.error || "") })}</dd>
+    <dt>${t("LAN-IP")}</dt><dd>${esc(s.ip || t("nicht gesetzt"))} · Port 80</dd>
+    <dt>${t("„My Stations“")}</dt><dd>${t("{c} Kategorien · {s} Sender", { c: s.counts.categories, s: s.counts.stations })}</dd>
+    <dt>${t("HTTPS-Relay")}</dt><dd>${s.ycast.relay ? t("an: HTTPS-Streams laufen über YCast") : t("aus")}</dd>`;
   $("#avr-info").innerHTML = last ? `
-    <dt>Zuletzt gesehen</dt><dd>${ago(last.t)}</dd>
+    <dt>${t("Zuletzt gesehen")}</dt><dd>${ago(last.t)}</dd>
     <dt>IP</dt><dd>${esc(last.client)}</dd>
-    <dt>Angefragt als</dt><dd>${esc(last.host)}</dd>
-    <dt>Kennung</dt><dd>${esc(last.agent || "–")}</dd>` :
-    `<dt>Status</dt><dd>Noch kein Abruf. Sobald der Marantz „Internet Radio“ öffnet und DNS stimmt, erscheint er hier.</dd>`;
+    <dt>${t("Angefragt als")}</dt><dd>${esc(last.host)}</dd>
+    <dt>${t("Kennung")}</dt><dd>${esc(last.agent || "–")}</dd>` :
+    `<dt>${t("Status")}</dt><dd>${t("Noch kein Abruf. Sobald der Marantz „Internet Radio“ öffnet und DNS stimmt, erscheint er hier.")}</dd>`;
   $("#log-body").innerHTML = s.requests.slice(0, 30).map((r) =>
-    `<tr><td>${new Date(r.t * 1000).toLocaleTimeString("de-DE")}</td><td>${esc(r.client)}</td><td>${esc(r.path)}</td></tr>`).join("")
-    || `<tr><td colspan="3" class="muted">Noch keine Abrufe.</td></tr>`;
+    `<tr><td>${new Date(r.t * 1000).toLocaleTimeString(LOCALE)}</td><td>${esc(r.client)}</td><td>${esc(r.path)}</td></tr>`).join("")
+    || `<tr><td colspan="3" class="muted">${t("Noch keine Abrufe.")}</td></tr>`;
   renderNetwork(s.network);
   const form = $("#pihole-form");
   if (document.activeElement?.form !== form) {
@@ -540,25 +540,23 @@ function renderNetwork(n) {
   if (!n) return;
   const a = n.active;
   $("#net-info").innerHTML = `
-    <dt>Aktive IP</dt><dd><strong>${esc(a.ip || "–")}</strong>${n.saved ? "" : " (Standard)"}</dd>
-    <dt>Netz</dt><dd>${esc(a.subnet || "–")} · Gateway ${esc(a.gateway || "–")}</dd>
-    <dt>Adapter</dt><dd>${esc(a.parent || "–")}${a.host_ip ? " · Umbrel " + esc(a.host_ip) : ""}</dd>`;
+    <dt>${t("Aktive IP")}</dt><dd><strong>${esc(a.ip || "–")}</strong>${n.saved ? "" : t(" (Standard)")}</dd>
+    <dt>${t("Netz")}</dt><dd>${esc(a.subnet || "–")} · Gateway ${esc(a.gateway || "–")}</dd>
+    <dt>${t("Adapter")}</dt><dd>${esc(a.parent || "–")}${a.host_ip ? " · Umbrel " + esc(a.host_ip) : ""}</dd>`;
   $("#net-note").hidden = !a.note;
   $("#net-note").textContent = a.note || "";
   const want = n.saved || n.default;
   $("#net-pending").hidden = !n.pending;
-  $("#net-pending").innerHTML = n.pending ? `Gespeichert: <strong>${esc(want)}</strong>. Gilt nach einem Neustart der App
-    (Umbrel-Dashboard: YCast-Symbol gedrückt halten bzw. Rechtsklick → <em>Neu starten</em>).
-    Danach die Local DNS Records in den Pi-holes auf ${esc(want)} ändern.` : "";
+  $("#net-pending").innerHTML = n.pending ? t("Gespeichert: <strong>{ip}</strong>. Gilt nach einem Neustart der App (Umbrel-Dashboard: YCast-Symbol gedrückt halten bzw. Rechtsklick → <em>Neu starten</em>). Danach die Local DNS Records in den Pi-holes auf {ip} ändern.", { ip: esc(want) }) : "";
   const inp = $("#net-ip");
   if (document.activeElement !== inp) inp.value = n.saved || "";
-  inp.placeholder = n.default ? `Standard: ${n.default}` : "z. B. 192.168.178.210";
+  inp.placeholder = n.default ? t("Standard: {ip}", { ip: n.default }) : t("z. B. 192.168.178.210");
 }
 
 async function saveNetwork(ip) {
   try {
     renderNetwork(await api("api/network", { method: "PUT", body: { ip } }));
-    toast(ip ? "IP gespeichert, Neustart der App nötig" : "Standard-IP gespeichert");
+    toast(ip ? t("IP gespeichert, Neustart der App nötig") : t("Standard-IP gespeichert"));
   } catch (err) { toast(err.message, true); }
 }
 $("#net-form").addEventListener("submit", (e) => { e.preventDefault(); saveNetwork($("#net-ip").value.trim()); });
@@ -567,23 +565,23 @@ $("#net-default").addEventListener("click", () => { $("#net-ip").value = ""; sav
 $("#pihole-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const f = e.target;
-  try { await api("api/settings", { method: "PUT", body: { piholes: [f.p0.value, f.p1.value] } }); toast("Pi-holes gespeichert"); }
+  try { await api("api/settings", { method: "PUT", body: { piholes: [f.p0.value, f.p1.value] } }); toast(t("Pi-holes gespeichert")); }
   catch (err) { toast(err.message, true); }
 });
 $("#dns-check").addEventListener("click", async () => {
   const box = $("#dns-results");
-  box.innerHTML = `<p class="muted">Prüfe …</p>`;
+  box.innerHTML = `<p class="muted">${t("Prüfe …")}</p>`;
   try {
     const r = await api("api/dns");
-    if (!r.results.length) { box.innerHTML = `<p class="muted">Trage oben mindestens einen Pi-hole ein und speichere.</p>`; return; }
-    box.innerHTML = r.results.map((x) => `<div class="dns-row"><span class="badge ${x.ok ? "ok" : "bad"}">${x.ok ? "OK" : "falsch"}</span>
-      <code>${esc(x.host)}</code> über ${esc(x.server)} → ${esc(x.ips.join(", ") || x.error || "keine Antwort")}</div>`).join("");
+    if (!r.results.length) { box.innerHTML = `<p class="muted">${t("Trage oben mindestens einen Pi-hole ein und speichere.")}</p>`; return; }
+    box.innerHTML = r.results.map((x) => `<div class="dns-row"><span class="badge ${x.ok ? "ok" : "bad"}">${x.ok ? "OK" : t("falsch")}</span>
+      <code>${esc(x.host)}</code> ${t("über")} ${esc(x.server)} → ${esc(x.ips.join(", ") || x.error || t("keine Antwort"))}</div>`).join("");
   } catch (err) { box.innerHTML = `<p class="muted">${esc(err.message)}</p>`; }
 });
 
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-copy]"); if (!b) return;
-  navigator.clipboard?.writeText($("#" + b.dataset.copy).textContent).then(() => toast("Kopiert"), () => toast("Bitte manuell kopieren", true));
+  navigator.clipboard?.writeText($("#" + b.dataset.copy).textContent).then(() => toast(t("Kopiert")), () => toast(t("Bitte manuell kopieren"), true));
 });
 
 // ---------- Marantz: Display und Fernbedienung ----------
@@ -596,7 +594,7 @@ let volTimer;
 
 function sourceName(s) {
   const key = (s.source || s.input || "").toUpperCase();
-  return SOURCES[key] || s.source || s.input || "";
+  return SOURCES[key] ? t(SOURCES[key]) : s.source || s.input || "";
 }
 
 function renderMarantz() {
@@ -606,25 +604,25 @@ function renderMarantz() {
   const controls = [power, play, mute, range, $("#btn-vol-up"), $("#btn-vol-down"), $("#btn-prev"), $("#btn-next")];
   setPlayButton(false);
   if (!mz || !mz.configured) {
-    ph.dataset.state = "offline"; src.textContent = "Marantz"; title.textContent = "Nicht verbunden";
-    sub.textContent = "IP unter Einrichtung eintragen"; vol.textContent = "";
+    ph.dataset.state = "offline"; src.textContent = "Marantz"; title.textContent = t("Nicht verbunden");
+    sub.textContent = t("IP unter Einrichtung eintragen"); vol.textContent = "";
     controls.forEach((c) => (c.disabled = true)); note.textContent = ""; setDial(0); return;
   }
   if (!mz.reachable) {
-    ph.dataset.state = "offline"; src.textContent = "Marantz"; title.textContent = "Nicht erreichbar";
+    ph.dataset.state = "offline"; src.textContent = "Marantz"; title.textContent = t("Nicht erreichbar");
     sub.textContent = mz.ip; vol.textContent = "";
-    controls.forEach((c) => (c.disabled = true)); note.textContent = "Ist der Marantz am Strom und im Netz?"; setDial(0); return;
+    controls.forEach((c) => (c.disabled = true)); note.textContent = t("Ist der Marantz am Strom und im Netz?"); setDial(0); return;
   }
   controls.forEach((c) => (c.disabled = false));
   power.setAttribute("aria-pressed", String(mz.power));
-  power.setAttribute("aria-label", mz.power ? "In Standby schalten" : "Einschalten");
+  power.setAttribute("aria-label", mz.power ? t("In Standby schalten") : t("Einschalten"));
   mute.setAttribute("aria-pressed", String(mz.mute));
   setPlayButton(mz.power && mz.playing === true);
   range.max = mz.volume_max || 60;
   if (document.activeElement !== range && mz.volume != null) range.value = mz.volume;
   if (!mz.power) {
-    ph.dataset.state = "standby"; src.textContent = "Marantz"; title.textContent = "Standby";
-    sub.textContent = ""; vol.textContent = ""; note.textContent = "Tippe auf Abspielen bei einem Sender, der Marantz schaltet sich dann ein.";
+    ph.dataset.state = "standby"; src.textContent = "Marantz"; title.textContent = t("Standby");
+    sub.textContent = ""; vol.textContent = ""; note.textContent = t("Tippe auf Abspielen bei einem Sender, der Marantz schaltet sich dann ein.");
     [mute, range, $("#btn-vol-up"), $("#btn-vol-down")].forEach((c) => (c.disabled = true));
     setDial(0); return;
   }
@@ -635,17 +633,17 @@ function renderMarantz() {
     // Von YCast gestartet: Sendername groß, darunter der Titel aus dem Stream, oben Format und Bitrate
     const same = (a) => a.toLowerCase() === n.station.toLowerCase();
     const rate = [n.format, n.kbps ? `${n.kbps} kbit/s` : ""].filter(Boolean).join(" · ");
-    src.textContent = (n.out ? `${rate || "Stream"} → ${n.out}` : rate) || "YCast";
+    src.textContent = (n.out ? `${rate || t("Stream")} → ${n.out}` : rate) || "YCast";
     title.textContent = n.station;
     sub.textContent = lines.filter((l) => !same(l)).slice(0, 2).join(" · ");
     if (n.url && n.url !== playingUrl) { playingUrl = n.url; renderStations(); }
   } else {
     src.textContent = sourceName(mz);
-    title.textContent = lines[0] || sourceName(mz) || "Bereit";
+    title.textContent = lines[0] || sourceName(mz) || t("Bereit");
     sub.textContent = lines.slice(1, 3).join(" · ");
   }
   [src, title, sub].forEach((el) => (el.title = el.textContent));
-  vol.textContent = mz.mute ? "Stumm" : `Lautstärke ${mz.volume ?? "–"}`;
+  vol.textContent = mz.mute ? t("Stumm") : t("Lautstärke {v}", { v: mz.volume ?? "–" });
   note.textContent = "";
   setDial(mz.mute ? 0 : (mz.volume || 0) / (mz.volume_max || 60));
 }
@@ -653,7 +651,7 @@ function renderMarantz() {
 function setPlayButton(playing) {
   const b = $("#btn-play");
   b.setAttribute("aria-pressed", String(playing));
-  b.setAttribute("aria-label", playing ? "Pause" : "Abspielen");
+  b.setAttribute("aria-label", playing ? t("Pause") : t("Abspielen"));
 }
 
 function setDial(fraction) {
@@ -681,15 +679,15 @@ async function playOnMarantz(name, url) {
   mzBusy = true;
   const wasOff = mz && mz.reachable && !mz.power;
   $("#porthole").dataset.state = "on";
-  $("#ph-source").textContent = "Starte";
+  $("#ph-source").textContent = t("Starte");
   $("#ph-title").textContent = name;
   const isHls = /\.m3u8?(\?|#|$)/i.test(url);
-  $("#ph-sub").textContent = [wasOff ? "Marantz wird eingeschaltet …" : "", isHls ? "HLS wird umgewandelt …" : ""].filter(Boolean).join(" ");
+  $("#ph-sub").textContent = [wasOff ? t("Marantz wird eingeschaltet …") : "", isHls ? t("HLS wird umgewandelt …") : ""].filter(Boolean).join(" ");
   try {
     const r = await api("api/marantz/play", { method: "POST", body: { name, url } });
     playingUrl = url; renderStations();
-    const via = { relay: " (über das HTTPS-Relay)", hls: " (HLS, von YCast umgewandelt)", convert: " (von YCast in MP3 umgewandelt)" }[r.via] || "";
-    toast(`„${name}“ läuft auf dem Marantz${via}`);
+    const via = { relay: " (über das HTTPS-Relay)", hls: " (HLS, von YCast umgewandelt)", convert: " (von YCast in MP3 umgewandelt)" }[r.via];
+    toast(t("„{name}“ läuft auf dem Marantz{via}", { name, via: via ? t(via) : "" }));
     loadRecent();
   } catch (e) { toast(e.message, true); }
   finally {
@@ -718,7 +716,7 @@ $("#btn-play").addEventListener("click", () => {
   const s = lastStation();
   if (s) playOnMarantz(s.name, s.url);
   else if (mz.power) mzCommand("play");      // z. B. Spotify oder Bluetooth am Gerät
-  else toast("Wähle zuerst einen Sender aus der Liste", true);
+  else toast(t("Wähle zuerst einen Sender aus der Liste"), true);
 });
 
 // Vor / zurück: nächster bzw. vorheriger Sender in der Kategorie des laufenden Senders
@@ -728,7 +726,7 @@ function stepStation(dir) {
   let ci = cats.findIndex((c) => c.stations.some((s) => s.url === ref));
   if (ci < 0) ci = current;
   const list = (cats[ci] && cats[ci].stations) || [];
-  if (!list.length) { toast("Keine Sender in dieser Kategorie", true); return; }
+  if (!list.length) { toast(t("Keine Sender in dieser Kategorie"), true); return; }
   const i = list.findIndex((s) => s.url === ref);
   const next = i < 0 ? (dir > 0 ? 0 : list.length - 1) : (i + dir + list.length) % list.length;
   playOnMarantz(list[next].name, list[next].url);
@@ -739,7 +737,7 @@ $("#btn-vol-down").addEventListener("click", () => mzCommand("vol_down"));
 $("#vol-range").addEventListener("input", (e) => {
   const v = +e.target.value;
   setDial(v / (+e.target.max || 60));
-  $("#ph-vol").textContent = `Lautstärke ${v}`;
+  $("#ph-vol").textContent = t("Lautstärke {v}", { v });
   clearTimeout(volTimer);
   volTimer = setTimeout(() => mzCommand("volume", v), 250);
 });
@@ -747,24 +745,62 @@ $("#vol-range").addEventListener("input", (e) => {
 // Einrichtung: Marantz-IP
 function renderMzSettings() {
   if (!mz) return;
-  const how = { gespeichert: "fest eingetragen", erkannt: "aus den Abrufen erkannt" }[mz.how] || "";
+  const how = t({ gespeichert: "fest eingetragen", erkannt: "aus den Abrufen erkannt" }[mz.how] || "");
   $("#mz-info").innerHTML = mz.configured ? `
-    <dt>Adresse</dt><dd>${esc(mz.ip)}${how ? " (" + how + ")" : ""}</dd>
-    <dt>Zustand</dt><dd>${mz.reachable ? (mz.power ? "eingeschaltet" : "Standby") : "nicht erreichbar"}</dd>` :
-    `<dt>Adresse</dt><dd>noch unbekannt: öffne einmal Internet Radio am Marantz oder trage die IP ein</dd>`;
+    <dt>${t("Adresse")}</dt><dd>${esc(mz.ip)}${how ? " (" + how + ")" : ""}</dd>
+    <dt>${t("Zustand")}</dt><dd>${mz.reachable ? (mz.power ? t("eingeschaltet") : t("Standby")) : t("nicht erreichbar")}</dd>` :
+    `<dt>${t("Adresse")}</dt><dd>${t("noch unbekannt: öffne einmal Internet Radio am Marantz oder trage die IP ein")}</dd>`;
   const inp = $("#mz-ip");
   if (document.activeElement !== inp) inp.value = mz.how === "gespeichert" ? mz.ip : "";
-  inp.placeholder = mz.how === "erkannt" ? `erkannt: ${mz.ip}` : "z. B. 192.168.178.56";
+  inp.placeholder = mz.how === "erkannt" ? t("erkannt: {ip}", { ip: mz.ip }) : t("z. B. 192.168.178.56");
 }
 async function saveMz(ip) {
   try {
     await api("api/marantz/settings", { method: "PUT", body: { ip } });
-    toast(ip ? "Marantz-Adresse gespeichert" : "Marantz wird automatisch erkannt");
+    toast(ip ? t("Marantz-Adresse gespeichert") : t("Marantz wird automatisch erkannt"));
     refreshMarantz();
   } catch (e) { toast(e.message, true); }
 }
 $("#mz-form").addEventListener("submit", (e) => { e.preventDefault(); saveMz($("#mz-ip").value.trim()); });
 $("#mz-auto").addEventListener("click", () => { $("#mz-ip").value = ""; saveMz(""); });
+
+// Einrichtung: Senderdatenbank (Radio-Browser-Server)
+let rb = null;
+function renderRb() {
+  if (!rb) return;
+  const sel = $("#rb-server");
+  const known = [...new Set([...(rb.servers || []), rb.server].filter(Boolean))];
+  if (document.activeElement !== sel) {
+    sel.innerHTML = `<option value="">${t("Automatisch")}</option>` + known.map((h) => `<option value="${esc(h)}">${esc(h)}</option>`).join("");
+    sel.value = rb.from_env ? "" : rb.server;
+  }
+  const mode = rb.mode === "fixed" ? t("fest: {s}", { s: esc(rb.server) }) + (rb.from_env ? t(" (aus RADIOBROWSER_API)") : "") : t("automatisch");
+  $("#rb-info").innerHTML = `
+    <dt>${t("Auswahl")}</dt><dd>${mode}</dd>
+    <dt>${t("Zuletzt benutzt")}</dt><dd>${rb.current ? `${esc(rb.current)} · ${ago(rb.ok_at)}` : t("noch keine Abfrage seit dem Start")}</dd>
+    ${rb.error ? `<dt>${t("Fehler")}</dt><dd>${esc(t(`Radio Browser nicht erreichbar (${rb.error})`))}</dd>` : ""}
+    <dt>${t("Bekannte Server")}</dt><dd>${known.map(esc).join(", ") || "–"}</dd>`;
+}
+async function loadRb() {
+  try { rb = await api("api/radiobrowser"); renderRb(); } catch (e) { /* Einrichtung bleibt ohne Angaben */ }
+}
+$("#rb-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    rb = await api("api/radiobrowser", { method: "PUT", body: { server: $("#rb-server").value } });
+    renderRb();
+    toast(rb.mode === "fixed" ? t("Radio Browser: fest {s}", { s: rb.server }) : t("Radio Browser: automatisch"));
+  } catch (err) { toast(err.message, true); }
+});
+$("#rb-test").addEventListener("click", async () => {
+  const btn = $("#rb-test"); btn.disabled = true;
+  try {
+    const r = await api("api/radiobrowser/test", { method: "POST" });
+    rb = r; renderRb();
+    toast(t("{s} antwortet · {n} Sender", { s: r.current, n: Number(r.stations || 0).toLocaleString(LOCALE) }));
+  } catch (err) { toast(err.message, true); loadRb(); }
+  finally { btn.disabled = false; }
+});
 
 // ---------- Zuletzt gespielt ----------
 let recentItems = [];
@@ -772,7 +808,7 @@ async function loadRecent() {
   try { recentItems = (await api("api/recent")).items; } catch { recentItems = []; }
   $("#recent-wrap").hidden = !recentItems.length;
   $("#recent").innerHTML = recentItems.map((r, i) =>
-    `<li><button type="button" class="chip" data-i="${i}" title="${esc(r.name)} auf dem Marantz abspielen">${esc(r.name)}</button></li>`).join("");
+    `<li><button type="button" class="chip" data-i="${i}" title="${t("{name} auf dem Marantz abspielen", { name: esc(r.name) })}">${esc(r.name)}</button></li>`).join("");
 }
 $("#recent").addEventListener("click", (e) => {
   const b = e.target.closest(".chip"); if (!b) return;
@@ -787,7 +823,7 @@ function renderSleep(left, chosen) {
     b.setAttribute("aria-pressed", String(+b.dataset.min === (left ? chosen : 0))));
   const el = $("#sleep-left");
   el.hidden = !left;
-  el.textContent = left ? `noch ${mins} min` : "";
+  el.textContent = left ? t("noch {n} min", { n: mins }) : "";
 }
 $("#sleep").addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-min]"); if (!b) return;
@@ -795,7 +831,7 @@ $("#sleep").addEventListener("click", async (e) => {
   try {
     const r = await api("api/marantz/sleep", { method: "PUT", body: { minutes } });
     renderSleep(r.sleep_left, r.sleep_minutes);
-    toast(minutes ? `Der Marantz geht in ${minutes} Minuten in Standby` : "Ausschalt-Timer aus");
+    toast(minutes ? t("Der Marantz geht in {n} Minuten in Standby", { n: minutes }) : t("Ausschalt-Timer aus"));
   } catch (err) { toast(err.message, true); }
 });
 
@@ -832,6 +868,7 @@ load().catch((e) => toast(e.message, true));
 refreshStatus();
 refreshMarantz();
 loadRecent();
+loadRb();
 // Abfragen nur bei sichtbarer Seite: Marantz alle 5 s, Dienststatus alle 15 s (im Reiter Einrichtung) bzw. 60 s
 let tick = 0;
 setInterval(() => {

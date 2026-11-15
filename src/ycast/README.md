@@ -4,13 +4,13 @@ vTuner-Ersatz für AV-Receiver und Netzwerk-Player mit eigener Weboberfläche, a
 [umbrelOS](https://umbrel.com) im Community App Store
 [`servietos/dev-unode`](https://github.com/servietos/dev-unode). Getestet mit einem Marantz M-CR510.
 
-![YCast am Desktop: Display mit Sender, laufendem Titel und Bitrate, Bedienung und Senderliste](../../gallery/ycast-1.jpg)
+![YCast am Desktop: FIP läuft, Display mit Format und Bitrate, Bedienung und Senderliste](../../gallery/ycast-1.jpg)
 
-![YCast auf dem Handy, dunkel und hell](../../gallery/ycast-2.jpg)
+![YCast auf dem Handy: links Deutsch und dunkel, rechts Englisch und hell mit der Suche nach FIP](../../gallery/ycast-2.jpg)
 
 Basis ist [YCast 1.1.0 von milaq](https://github.com/milaq/YCast) (PyPI), ergänzt um:
 
-- **Weboberfläche** (Umbrel-Dashboard): Kategorien und Sender verwalten, Drag & Drop,
+- **Weboberfläche** (Umbrel-Dashboard, Deutsch/Englisch, hell/dunkel): Kategorien und Sender verwalten, Drag & Drop,
   vorhören im Browser, Stream-Test, Suche im Community Radio Browser, Import/Export der
   `stations.yml`, Status, Abruf-Log des Receivers, DNS-Prüfung, Netzwerk-Einstellung.
 - **Fernbedienung** für Denon/Marantz-Netzwerkgeräte (getestet M-CR510): Ein/Standby, Abspielen/Pause,
@@ -24,6 +24,11 @@ Basis ist [YCast 1.1.0 von milaq](https://github.com/milaq/YCast) (PyPI), ergän
   MP3 werden nur umverpackt, sonst MP3 192 kbit/s). Vorher lädt YCast die Playlist selbst und prüft,
   dass alle Adressen darin öffentlich sind (kein Zugriff aufs Heimnetz über fremde Playlisten).
   Gleiche Plätze-Begrenzung wie das Relay, ffmpeg bricht nach 15 s ohne Daten ab.
+- **Senderdatenbank**: Suche und Marantz-Menüs nutzen den [Community Radio Browser](https://www.radio-browser.info).
+  Die Server werden per DNS (`_api._tcp.radio-browser.info`) ermittelt, ergänzt um de1/de2; „Automatisch“
+  weicht bei Ausfall auf den nächsten aus, ein fester Server lässt sich unter „Einrichtung“ wählen
+  (oder per `RADIOBROWSER_API`). Ersetzt die Abfrage des Original-YCast, die keinen Ausweichserver
+  und kein Zeitlimit kennt.
 - **Komfort**: „Zuletzt gespielt“ (`data/recent.json`) und Ausschalt-Timer (Standby nach Ablauf).
 - **HTTPS-Relay**: Receiver können kein HTTPS. YCast schreibt `https://` normalerweise auf
   `http://` um, was bei vielen Sendern scheitert. Hier laufen HTTPS-Streams stattdessen über

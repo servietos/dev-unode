@@ -8,11 +8,10 @@ import time
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 
-from . import common, hls, marantz
+from . import common, hls, marantz, rbapi
 from urllib.parse import quote
 
 YCAST_URL = os.environ.get("YCAST_URL", "http://dev-unode-ycast_ycast_1").rstrip("/")
-RADIOBROWSER_API = os.environ.get("RADIOBROWSER_API", "https://de1.api.radio-browser.info")
 VTUNER_HOSTS = ["denon.vtuner.com", "denon2.vtuner.com"]
 UA = {"User-Agent": "YCast-Umbrel/3.1.4"}
 
@@ -117,10 +116,9 @@ def search():
     if request.args.get("countrycode"):
         params["countrycode"] = request.args["countrycode"]
     try:
-        r = requests.get(f"{RADIOBROWSER_API}/json/stations/search", params=params, headers=UA, timeout=10)
-        r.raise_for_status()
-    except requests.RequestException as e:
-        return err(f"Radio Browser nicht erreichbar: {e}", 502)
+        data = rbapi.get("stations/search", params)
+    except rbapi.RadioBrowserError as e:
+        return err(str(e), 502)
     out = [{
         "name": (s.get("name") or "").strip(),
         "url": s.get("url_resolved") or s.get("url") or "",
@@ -131,7 +129,7 @@ def search():
         "bitrate": s.get("bitrate") or 0,
         "votes": s.get("votes") or 0,
         "hls": bool(s.get("hls")),
-    } for s in r.json() if isinstance(s, dict) and (s.get("url_resolved") or s.get("url"))]
+    } for s in data if isinstance(s, dict) and (s.get("url_resolved") or s.get("url"))]
     return jsonify({"results": out})
 
 
@@ -143,9 +141,7 @@ def cached_rb(key, path, params):
     hit = _cache.get(key)
     if hit and time.time() - hit[0] < CACHE_SECONDS:
         return hit[1]
-    r = requests.get(f"{RADIOBROWSER_API}/json/{path}", params=params, headers=UA, timeout=10)
-    r.raise_for_status()
-    _cache[key] = (time.time(), r.json())
+    _cache[key] = (time.time(), rbapi.get(path, params))
     return _cache[key][1]
 
 
@@ -154,8 +150,8 @@ def countries():
     """Alle Länder mit Sendern (ISO-Code + Anzahl); deutsche Namen setzt der Browser."""
     try:
         data = cached_rb("countries", "countries", {"hidebroken": "true"})
-    except requests.RequestException as e:
-        return err(f"Radio Browser nicht erreichbar: {e}", 502)
+    except rbapi.RadioBrowserError as e:
+        return err(str(e), 502)
     out = {}
     for c in data:
         code = (c.get("iso_3166_1") or "").upper()
@@ -171,9 +167,32 @@ def tags():
     try:
         data = cached_rb("tags", "tags", {"order": "stationcount", "reverse": "true", "limit": 200,
                                           "hidebroken": "true"})
-    except requests.RequestException as e:
-        return err(f"Radio Browser nicht erreichbar: {e}", 502)
+    except rbapi.RadioBrowserError as e:
+        return err(str(e), 502)
     return jsonify({"tags": [t["name"] for t in data if t.get("name")]})
+
+
+@app.get("/api/radiobrowser")
+def radiobrowser_status():
+    return jsonify(rbapi.status())
+
+
+@app.put("/api/radiobrowser")
+def radiobrowser_save():
+    body = request.get_json(silent=True) or {}
+    result = rbapi.save(body.get("server", ""))
+    _cache.clear()
+    return jsonify(result)
+
+
+@app.post("/api/radiobrowser/test")
+def radiobrowser_test():
+    """Kleine Abfrage, damit die Einrichtung den benutzten Server anzeigen kann."""
+    try:
+        data = rbapi.get("stats")
+    except rbapi.RadioBrowserError as e:
+        return err(str(e), 502)
+    return jsonify({**rbapi.status(), "stations": data.get("stations", 0) if isinstance(data, dict) else 0})
 
 
 # ---------- Stream-Test ----------
