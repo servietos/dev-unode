@@ -35,7 +35,8 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
       </div>
     </header>
 
-    <!-- Rechteckiges Display wie an der Front des Receivers -->
+    <!-- Display und Bedienung: bleiben auf dem Handy beim Scrollen oben stehen -->
+    <div class="deck-sticky" id="deck-sticky">
     <div class="display" id="porthole" data-state="unknown">
       <div class="glass">
         <div class="ph-top">
@@ -48,18 +49,27 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
       </div>
     </div>
 
+    <div class="controls-wrap">
     <div class="controls" id="controls">
       <button class="knob power" id="btn-power" type="button" aria-label="Einschalten" title="Ein / Standby" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
       </button>
-      <button class="knob" id="btn-vol-down" type="button" aria-label="Leiser" title="Leiser">−</button>
+      <button class="knob" id="btn-prev" type="button" aria-label="Vorheriger Sender" title="Vorheriger Sender">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M18 6v12l-8.5-6z"/><path d="M6 6v12"/></svg>
+      </button>
+      <button class="knob" id="btn-next" type="button" aria-label="Nächster Sender" title="Nächster Sender">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M6 6v12l8.5-6z"/><path d="M18 6v12"/></svg>
+      </button>
+      <button class="knob vol-step" id="btn-vol-down" type="button" aria-label="Leiser" title="Leiser">−</button>
       <input class="volume" id="vol-range" type="range" min="0" max="60" step="1" value="0" aria-label="Lautstärke">
-      <button class="knob" id="btn-vol-up" type="button" aria-label="Lauter" title="Lauter">+</button>
+      <button class="knob vol-step" id="btn-vol-up" type="button" aria-label="Lauter" title="Lauter">+</button>
       <button class="knob mute" id="btn-mute" type="button" aria-label="Stumm" title="Stumm" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="mute-x" d="M17 9l4 6M21 9l-4 6"/></svg>
       </button>
     </div>
+    </div>
     <p class="deck-note" id="deck-note"></p>
+    </div>
 
     <div class="deck-extra">
       <div id="recent-wrap" hidden>

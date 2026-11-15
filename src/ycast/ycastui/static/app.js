@@ -418,7 +418,8 @@ $("#search-form").addEventListener("submit", async (e) => {
 function scrollToFirstResult() {
   const box = $("#search-results");
   if (box.hidden || !box.firstElementChild) return;
-  const offset = $(".tabs").offsetHeight + $("#search-bar").offsetHeight + 4;
+  const tabs = $(".tabs");
+  const offset = (parseFloat(getComputedStyle(tabs).top) || 0) + tabs.offsetHeight + $("#search-bar").offsetHeight + 4;
   const target = box.getBoundingClientRect().top + window.scrollY - offset;
   if (window.scrollY > target + 1) {
     const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -601,7 +602,7 @@ function sourceName(s) {
 function renderMarantz() {
   const ph = $("#porthole"), title = $("#ph-title"), sub = $("#ph-sub"), src = $("#ph-source"), vol = $("#ph-vol");
   const power = $("#btn-power"), mute = $("#btn-mute"), range = $("#vol-range"), note = $("#deck-note");
-  const controls = [power, mute, range, $("#btn-vol-up"), $("#btn-vol-down")];
+  const controls = [power, mute, range, $("#btn-vol-up"), $("#btn-vol-down"), $("#btn-prev"), $("#btn-next")];
   if (!mz || !mz.configured) {
     ph.dataset.state = "offline"; src.textContent = "Marantz"; title.textContent = "Nicht verbunden";
     sub.textContent = "IP unter Einrichtung eintragen"; vol.textContent = "";
@@ -679,6 +680,21 @@ async function playOnMarantz(name, url) {
 $("#btn-power").addEventListener("click", () => mzCommand(mz && mz.power ? "standby" : "power_on"));
 $("#btn-mute").addEventListener("click", () => mzCommand(mz && mz.mute ? "mute_off" : "mute_on"));
 $("#btn-vol-up").addEventListener("click", () => mzCommand("vol_up"));
+
+// Vor / zurück: nächster bzw. vorheriger Sender in der Kategorie des laufenden Senders
+// (sonst der zuletzt gespielte, sonst die gerade geöffnete Kategorie)
+function stepStation(dir) {
+  const ref = playingUrl || (recentItems[0] && recentItems[0].url) || "";
+  let ci = cats.findIndex((c) => c.stations.some((s) => s.url === ref));
+  if (ci < 0) ci = current;
+  const list = (cats[ci] && cats[ci].stations) || [];
+  if (!list.length) { toast("Keine Sender in dieser Kategorie", true); return; }
+  const i = list.findIndex((s) => s.url === ref);
+  const next = i < 0 ? (dir > 0 ? 0 : list.length - 1) : (i + dir + list.length) % list.length;
+  playOnMarantz(list[next].name, list[next].url);
+}
+$("#btn-prev").addEventListener("click", () => stepStation(-1));
+$("#btn-next").addEventListener("click", () => stepStation(1));
 $("#btn-vol-down").addEventListener("click", () => mzCommand("vol_down"));
 $("#vol-range").addEventListener("input", (e) => {
   const v = +e.target.value;
@@ -749,7 +765,9 @@ const sentinel = document.createElement("div");
 searchBar.before(sentinel);
 let stuckObserver;
 function watchSearchBar() {
-  const h = $(".tabs").offsetHeight;           // enthält die Safe-Area oben (Notch)
+  // Unterkante der stehenden Reiter: deren Abstand nach oben (Notch, auf dem Handy auch das Display) + Höhe
+  const tabs = $(".tabs");
+  const h = Math.round((parseFloat(getComputedStyle(tabs).top) || 0) + tabs.offsetHeight);
   document.documentElement.style.setProperty("--tabs-h", h + "px");
   stuckObserver?.disconnect();
   stuckObserver = new IntersectionObserver(([e]) =>
@@ -759,6 +777,16 @@ function watchSearchBar() {
 }
 watchSearchBar();
 new ResizeObserver(watchSearchBar).observe($(".tabs"));
+// Auf dem Handy steht Display + Bedienung oben; Reiter und Suchleiste rücken darunter
+const stickyMq = matchMedia("(max-width: 919px)");
+function setStickH() {
+  const h = stickyMq.matches ? $("#deck-sticky").offsetHeight : 0;
+  document.documentElement.style.setProperty("--stick-h", `${h}px`);
+  watchSearchBar();
+}
+new ResizeObserver(setStickH).observe($("#deck-sticky"));
+stickyMq.addEventListener("change", setStickH);
+setStickH();
 
 load().catch((e) => toast(e.message, true));
 refreshStatus();
