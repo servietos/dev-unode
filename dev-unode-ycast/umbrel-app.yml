@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.1.6"
+version: "3.1.7"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -58,10 +58,9 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Neue Tasten „Vorheriger“ und „Nächster Sender“: Sie schalten auf dem Marantz durch die Kategorie
-  des laufenden Senders. Auf dem Handy bleiben Display und Bedienung beim Scrollen oben stehen,
-  Reiter und Suchleiste rücken darunter. Die Tasten „−“ und „+“ erscheinen nur noch bei genug
-  Platz, die Lautstärke lässt sich weiter mit dem Regler einstellen.
+  Neue Taste „Abspielen/Pause“ zwischen „Vorheriger“ und „Nächster Sender“. Ist am Marantz nichts
+  geladen, startet sie den zuletzt gespielten Sender. Die Lautstärke hat jetzt eine eigene Zeile
+  mit „Stumm“, „−“, Regler und „+“, die Tasten sind auch auf schmalen Handys immer sichtbar.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

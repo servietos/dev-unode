@@ -331,9 +331,18 @@ def marantz_status():
     if not ip:
         return jsonify({"configured": False, "ip": "", "how": "", **sleep})
     try:
-        return jsonify({"configured": True, "how": how, "reachable": True, **sleep, **marantz.status(ip)})
+        st = marantz.status(ip)
     except marantz.MarantzError as e:
         return jsonify({"configured": True, "how": how, "ip": ip, "reachable": False, "error": str(e), **sleep})
+    # Wiedergabezustand (UPnP): nur bei eingeschaltetem Gerät; None = unbekannt
+    st["transport"], st["playing"] = "", None
+    if st["power"]:
+        try:
+            st["transport"] = marantz.transport_state(ip)
+            st["playing"] = st["transport"] in marantz.PLAYING_STATES
+        except marantz.MarantzError:
+            pass
+    return jsonify({"configured": True, "how": how, "reachable": True, **sleep, **st})
 
 
 # Einschlaf-Timer: schaltet den Marantz nach Ablauf in Standby (läuft im Web-Dienst)
@@ -424,7 +433,10 @@ def marantz_cmd():
     if not ip:
         return err("Kein Marantz bekannt. IP unter „Einrichtung“ eintragen.")
     body = request.get_json(silent=True) or {}
-    marantz.command(ip, str(body.get("cmd", "")), body.get("value"))
+    cmd = str(body.get("cmd", ""))
+    if cmd in ("play", "pause"):
+        return jsonify({"ok": True, "via": marantz.play_pause(ip, cmd)})
+    marantz.command(ip, cmd, body.get("value"))
     return jsonify({"ok": True})
 
 

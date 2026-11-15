@@ -409,6 +409,62 @@ class TestMarantz(Base):
         self.assertIn("B3 &amp;lt;&amp;amp;&amp;gt;", body)  # Titel doppelt maskiert (DIDL in SOAP)
         self.assertEqual(self.fake.soap[0][0], "http://192.168.178.56:8080/AVTransport/ctrl")
 
+    def test_status_reports_playback_only_when_on(self):
+        s = self.client.get("/api/marantz").get_json()
+        self.assertIsNone(s["playing"])
+        self.assertEqual(self.fake.soap, [])              # Standby: keine UPnP-Abfrage
+        self.fake.power = "ON"
+        with mock.patch.object(self.m.requests, "post", return_value=mock.Mock(
+                ok=True, status_code=200, text="<CurrentTransportState>PLAYING</CurrentTransportState>")):
+            s = self.client.get("/api/marantz").get_json()
+        self.assertTrue(s["playing"])
+        self.assertEqual(s["transport"], "PLAYING")
+
+    def test_pause_falls_back_to_stop_and_play_resumes(self):
+        self.fake.power = "ON"
+        sent = []
+
+        def post(url, data=None, headers=None, timeout=None):
+            action = headers["SOAPACTION"].split("#")[1].strip('"')
+            sent.append(action)
+            if action == "GetTransportInfo":
+                return mock.Mock(ok=True, status_code=200, text="<CurrentTransportState>PLAYING</CurrentTransportState>")
+            if action == "Pause":                         # Live-Stream: Pause nicht möglich
+                return mock.Mock(ok=False, status_code=500, text="<errorCode>701</errorCode>")
+            return mock.Mock(ok=True, status_code=200, text="<ok/>")
+
+        with mock.patch.object(self.m.requests, "post", side_effect=post):
+            r = self.client.post("/api/marantz/cmd", json={"cmd": "pause"})
+            self.assertEqual(r.get_json()["via"], "upnp")
+            self.client.post("/api/marantz/cmd", json={"cmd": "play"})
+        self.assertEqual(sent, ["GetTransportInfo", "Pause", "Stop", "GetTransportInfo", "Play"])
+        self.assertEqual(self.fake.calls, [])
+
+    def test_play_pause_without_upnp_uses_web_buttons(self):
+        self.fake.power = "ON"
+        with mock.patch.object(self.m.requests, "post", side_effect=self.m.requests.ConnectionError):
+            r = self.client.post("/api/marantz/cmd", json={"cmd": "pause"})
+            self.client.post("/api/marantz/cmd", json={"cmd": "play"})
+        self.assertEqual(r.get_json()["via"], "goform")
+        self.assertEqual(self.fake.calls, ["NS9B", "NS9A"])
+
+    def test_missing_upnp_is_not_searched_on_every_poll(self):
+        self.fake.power = "ON"
+        orig = self.fake.get
+        lookups = []
+
+        def get(url, timeout=None, **kw):
+            if "description.xml" in url:
+                lookups.append(url)
+                raise self.m.requests.ConnectionError()
+            return orig(url, timeout=timeout)
+
+        with mock.patch.object(self.m.requests, "get", side_effect=get):
+            for _ in range(3):
+                s = self.client.get("/api/marantz").get_json()
+        self.assertIsNone(s["playing"])
+        self.assertEqual(len(lookups), 3)                 # einmal je Port, danach Pause
+
     def test_ip_must_be_private(self):
         self.assertEqual(self.client.put("/api/marantz/settings", json={"ip": "8.8.8.8"}).status_code, 400)
         self.assertEqual(self.client.put("/api/marantz/settings", json={"ip": "localhost"}).status_code, 400)

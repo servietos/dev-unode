@@ -18,6 +18,8 @@ TIMEOUT = 4
 VOLUME_MAX = 60          # Gerätewert 0–98; 60 entspricht −20 dB, mehr ist für Wohnräume nicht sinnvoll
 _UPNP = "urn:schemas-upnp-org:service:AVTransport:1"
 _control_cache = {}      # ip -> controlURL
+_no_upnp = {}            # ip -> Zeitpunkt der letzten erfolglosen Suche (nicht bei jeder Abfrage neu suchen)
+NO_UPNP_RETRY = 300
 
 COMMANDS = {
     "power_on": "PWON", "standby": "PWSTANDBY",
@@ -128,6 +130,8 @@ def wait_power_on(ip, timeout=12):
 def _control_url(ip):
     if ip in _control_cache:
         return _control_cache[ip]
+    if time.monotonic() - _no_upnp.get(ip, -NO_UPNP_RETRY) < NO_UPNP_RETRY:
+        raise MarantzError("Der Marantz bietet keine UPnP-Wiedergabe (AVTransport) an")
     for port in (8080, 60006, 80):
         base = f"http://{ip}:{port}/"
         try:
@@ -138,7 +142,9 @@ def _control_url(ip):
             m = re.search(rf"<serviceType>{re.escape(_UPNP)}</serviceType>.*?<controlURL>(.*?)</controlURL>", r.text, re.S)
             if m:
                 _control_cache[ip] = urljoin(base, m.group(1).strip())
+                _no_upnp.pop(ip, None)
                 return _control_cache[ip]
+    _no_upnp[ip] = time.monotonic()
     raise MarantzError("Der Marantz bietet keine UPnP-Wiedergabe (AVTransport) an")
 
 
@@ -223,3 +229,32 @@ def transport_state(ip):
     text = _soap(check_ip(ip), "GetTransportInfo")
     m = re.search(r"<CurrentTransportState>(.*?)</CurrentTransportState>", text)
     return m.group(1) if m else ""
+
+
+PLAYING_STATES = ("PLAYING", "TRANSITIONING")
+
+
+def play_pause(ip, action):
+    """Wiedergabe anhalten („pause“) oder fortsetzen („play“).
+
+    Zuerst über UPnP, weil YCast die Sender so startet. Live-Streams kennen oft kein Pause
+    (UPnP 701): dann Stop – Play holt den Sender anschließend neu ab. Ohne UPnP-Wiedergabe
+    (z. B. Spotify, Bluetooth) die Tasten der Webschnittstelle."""
+    ip = check_ip(ip)
+    if action not in ("play", "pause"):
+        raise MarantzError(f"Unbekannter Befehl: {action}")
+    try:
+        state = transport_state(ip)
+    except MarantzError:
+        state = ""
+    if state and state != "NO_MEDIA_PRESENT":
+        if action == "play":
+            _soap(ip, "Play", "<Speed>1</Speed>")
+            return "upnp"
+        try:
+            _soap(ip, "Pause")
+        except MarantzError:
+            _soap(ip, "Stop")
+        return "upnp"
+    command(ip, action)
+    return "goform"

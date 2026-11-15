@@ -602,7 +602,9 @@ function sourceName(s) {
 function renderMarantz() {
   const ph = $("#porthole"), title = $("#ph-title"), sub = $("#ph-sub"), src = $("#ph-source"), vol = $("#ph-vol");
   const power = $("#btn-power"), mute = $("#btn-mute"), range = $("#vol-range"), note = $("#deck-note");
-  const controls = [power, mute, range, $("#btn-vol-up"), $("#btn-vol-down"), $("#btn-prev"), $("#btn-next")];
+  const play = $("#btn-play");
+  const controls = [power, play, mute, range, $("#btn-vol-up"), $("#btn-vol-down"), $("#btn-prev"), $("#btn-next")];
+  setPlayButton(false);
   if (!mz || !mz.configured) {
     ph.dataset.state = "offline"; src.textContent = "Marantz"; title.textContent = "Nicht verbunden";
     sub.textContent = "IP unter Einrichtung eintragen"; vol.textContent = "";
@@ -617,6 +619,7 @@ function renderMarantz() {
   power.setAttribute("aria-pressed", String(mz.power));
   power.setAttribute("aria-label", mz.power ? "In Standby schalten" : "Einschalten");
   mute.setAttribute("aria-pressed", String(mz.mute));
+  setPlayButton(mz.power && mz.playing === true);
   range.max = mz.volume_max || 60;
   if (document.activeElement !== range && mz.volume != null) range.value = mz.volume;
   if (!mz.power) {
@@ -633,6 +636,12 @@ function renderMarantz() {
   vol.textContent = mz.mute ? "Stumm" : `Lautstärke ${mz.volume ?? "–"}`;
   note.textContent = "";
   setDial(mz.mute ? 0 : (mz.volume || 0) / (mz.volume_max || 60));
+}
+
+function setPlayButton(playing) {
+  const b = $("#btn-play");
+  b.setAttribute("aria-pressed", String(playing));
+  b.setAttribute("aria-label", playing ? "Pause" : "Abspielen");
 }
 
 function setDial(fraction) {
@@ -680,6 +689,25 @@ async function playOnMarantz(name, url) {
 $("#btn-power").addEventListener("click", () => mzCommand(mz && mz.power ? "standby" : "power_on"));
 $("#btn-mute").addEventListener("click", () => mzCommand(mz && mz.mute ? "mute_off" : "mute_on"));
 $("#btn-vol-up").addEventListener("click", () => mzCommand("vol_up"));
+
+// Abspielen / Pause. Ist nichts geladen (Standby, anderes Gerät aus), startet der zuletzt gespielte Sender.
+function lastStation() {
+  for (const c of cats) { const s = c.stations.find((x) => x.url === playingUrl); if (s) return s; }
+  return recentItems[0] || null;
+}
+$("#btn-play").addEventListener("click", () => {
+  if (!mz || !mz.reachable || mzBusy) return;
+  if (mz.power && mz.playing) {
+    setPlayButton(false); mzCommand("pause"); return;
+  }
+  if (mz.power && mz.transport && mz.transport !== "NO_MEDIA_PRESENT") {
+    setPlayButton(true); mzCommand("play"); return;
+  }
+  const s = lastStation();
+  if (s) playOnMarantz(s.name, s.url);
+  else if (mz.power) mzCommand("play");      // z. B. Spotify oder Bluetooth am Gerät
+  else toast("Wähle zuerst einen Sender aus der Liste", true);
+});
 
 // Vor / zurück: nächster bzw. vorheriger Sender in der Kategorie des laufenden Senders
 // (sonst der zuletzt gespielte, sonst die gerade geöffnete Kategorie)
