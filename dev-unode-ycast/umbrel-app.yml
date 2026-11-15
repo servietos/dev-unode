@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio und Fernbedienung für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.1.11"
+version: "3.1.12"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -50,7 +50,7 @@ description: >-
 
 
   3. Der Receiver muss diesen DNS-Server nutzen. Danach einmal stromlos machen und Internetradio
-  öffnen; unter „Einrichtung“ erscheint er dann als „Receiver gesehen“. Für die Fernbedienung
+  öffnen; unter „Info“ erscheint er dann als „Receiver gesehen“. Für die Fernbedienung
   im Receiver „Netzwerk-Standby“ einschalten.
 
 
@@ -73,10 +73,10 @@ gallery:
   - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-1.jpg
   - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-2.jpg
 releaseNotes: >-
-  Neue Oberfläche zum Ausprobieren unter /neu (Link unter „Einrichtung“): fürs Handy gedacht, mit
-  großer Senderliste oben und der Wiedergabe unten in Daumenreichweite, dazu eine Senderskala mit
-  roter Nadel zum Antippen. Bearbeiten und Einrichtung bleiben in der bisherigen Oberfläche, die
-  unverändert bleibt. Außerdem: ein fehlender englischer Hinweistext in der Senderdatenbank.
+  Aufgeräumt: Der Status („YCast läuft auf …“, „Receiver gesehen …“) steht jetzt mit Dienst,
+  Receiver, Abruf-Log und dem iPhone-Hinweis in einem eigenen Reiter „Info“; „Einrichtung“ enthält
+  nur noch Einstellungen. Die Hinweise „Tippe auf Abspielen …“ und „… Sender · erscheint am Marantz
+  unter My Stations“ sind entfallen, auch in der neuen Oberfläche unter /neu.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

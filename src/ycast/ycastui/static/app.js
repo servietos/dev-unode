@@ -69,6 +69,7 @@ document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () 
   document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === b));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + b.dataset.tab));
   if (b.dataset.tab === "setup") { refreshStatus(); loadRb(); }
+  if (b.dataset.tab === "info") refreshStatus();
 }));
 
 // ---------- Kategorien ----------
@@ -140,7 +141,6 @@ function badge(url) {
 function renderStations() {
   const c = cats[current];
   $("#cat-title").textContent = c ? c.name : t("Keine Kategorie");
-  $("#cat-meta").textContent = c ? t("{n} Sender · erscheint am Marantz unter „My Stations“", { n: c.stations.length }) : t("Lege oben eine neue Kategorie an.");
   $("#station-add").hidden = !c;
   $("#cat-rename").hidden = $("#cat-delete").hidden = !c;
   const ul = $("#station-list");
@@ -622,7 +622,7 @@ function renderMarantz() {
   if (document.activeElement !== range && mz.volume != null) range.value = mz.volume;
   if (!mz.power) {
     ph.dataset.state = "standby"; src.textContent = "Marantz"; title.textContent = t("Standby");
-    sub.textContent = ""; vol.textContent = ""; note.textContent = t("Tippe auf Abspielen bei einem Sender, der Marantz schaltet sich dann ein.");
+    sub.textContent = ""; vol.textContent = ""; note.textContent = "";
     [mute, range, $("#btn-vol-up"), $("#btn-vol-down")].forEach((c) => (c.disabled = true));
     setDial(0); return;
   }
@@ -899,7 +899,7 @@ setInterval(() => {
   if (document.visibilityState !== "visible") return;
   tick += 1;
   refreshMarantz();
-  if ((!$("#tab-setup").hidden && tick % 3 === 0) || tick % 12 === 0) refreshStatus();
+  if (((!$("#tab-setup").hidden || !$("#tab-info").hidden) && tick % 3 === 0) || tick % 12 === 0) refreshStatus();
 }, 5000);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") { refreshMarantz(); refreshStatus(); }

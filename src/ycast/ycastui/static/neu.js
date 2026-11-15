@@ -147,7 +147,6 @@ function renderPlayer() {
   if (!mz.power) {
     p.dataset.state = "standby";
     name.textContent = t("Standby");
-    title.textContent = t("Tippe auf einen Sender, der Marantz schaltet sich dann ein.");
     ["#k-mute", "#k-down", "#k-up", "#vol"].forEach((s) => ($(s).disabled = true));
     return;
   }

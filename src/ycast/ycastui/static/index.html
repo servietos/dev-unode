@@ -96,10 +96,6 @@
       </div>
     </div>
 
-    <dl class="deck-status">
-      <div><dt>YCast</dt><dd><span class="dot" id="pill-ycast"></span><span id="pill-ycast-text">…</span></dd></div>
-      <div><dt>Receiver</dt><dd><span class="dot" id="pill-avr"></span><span id="pill-avr-text">…</span></dd></div>
-    </dl>
   </aside>
 
   <!-- Inhalt -->
@@ -108,6 +104,7 @@
       <button role="tab" class="tab active" data-tab="stations">Meine Sender</button>
       <button role="tab" class="tab" data-tab="search">Sender suchen</button>
       <button role="tab" class="tab" data-tab="setup">Einrichtung</button>
+      <button role="tab" class="tab" data-tab="info">Info</button>
     </nav>
 
     <main>
@@ -120,7 +117,6 @@
         <div class="list-head">
           <div>
             <h2 id="cat-title">–</h2>
-            <p class="muted small" id="cat-meta"></p>
           </div>
           <div class="row">
             <button class="btn ghost small" id="cat-add">Neue Kategorie</button>
@@ -235,22 +231,6 @@
         </div>
 
         <div class="block">
-          <h2>Auf dem iPhone als App</h2>
-          <p class="small">In Safari diese Seite öffnen, unten auf <em>Teilen</em> tippen und <em>Zum Home-Bildschirm</em> wählen. YCast startet dann im Vollbild mit eigenem Symbol. Beim ersten Start einmal mit dem Umbrel-Passwort anmelden.</p>
-        </div>
-
-        <div class="grid-2">
-          <div class="block">
-            <h2>Dienst</h2>
-            <dl class="kv" id="svc-info"></dl>
-          </div>
-          <div class="block">
-            <h2>Receiver</h2>
-            <dl class="kv" id="avr-info"></dl>
-          </div>
-        </div>
-
-        <div class="block">
           <h2>Netzwerk</h2>
           <p class="muted small">Der Receiver-Dienst braucht eine eigene, freie IP in deinem Heimnetz (Port 80). Wähle eine Adresse
             außerhalb des DHCP-Bereichs deines Routers. Adapter, Netz und Gateway erkennt die App beim Start selbst.</p>
@@ -291,6 +271,34 @@
             <button class="btn ghost">Speichern</button>
           </form>
           <div id="dns-results"></div>
+        </div>
+
+      </section>
+
+      <!-- Info: Zustand von Dienst und Receiver, Abrufe -->
+      <section id="tab-info" class="panel" hidden>
+        <div class="block">
+          <h2>Status</h2>
+          <dl class="status-list">
+            <div><dt>YCast</dt><dd><span class="dot" id="pill-ycast"></span><span id="pill-ycast-text">…</span></dd></div>
+            <div><dt>Receiver</dt><dd><span class="dot" id="pill-avr"></span><span id="pill-avr-text">…</span></dd></div>
+          </dl>
+        </div>
+
+        <div class="grid-2">
+          <div class="block">
+            <h2>Dienst</h2>
+            <dl class="kv" id="svc-info"></dl>
+          </div>
+          <div class="block">
+            <h2>Receiver</h2>
+            <dl class="kv" id="avr-info"></dl>
+          </div>
+        </div>
+
+        <div class="block">
+          <h2>Auf dem iPhone als App</h2>
+          <p class="small">In Safari diese Seite öffnen, unten auf <em>Teilen</em> tippen und <em>Zum Home-Bildschirm</em> wählen. YCast startet dann im Vollbild mit eigenem Symbol. Beim ersten Start einmal mit dem Umbrel-Passwort anmelden.</p>
         </div>
 
         <div class="block">

@@ -31,8 +31,6 @@ const EN = {
   "Nicht verbunden": "Not connected", "IP unter Einrichtung eintragen": "Enter the IP under Setup",
   "Nicht erreichbar": "Not reachable", "Ist der Marantz am Strom und im Netz?": "Is the Marantz powered and on the network?",
   "Standby": "Standby", "Bereit": "Ready", "Stream": "Stream", "Starte": "Starting",
-  "Tippe auf Abspielen bei einem Sender, der Marantz schaltet sich dann ein.":
-    "Tap Play on a station and the Marantz will switch on.",
   "Marantz wird eingeschaltet …": "Switching on the Marantz …", "HLS wird umgewandelt …": "Converting HLS …",
   " (über das HTTPS-Relay)": " (via the HTTPS relay)", " (HLS, von YCast umgewandelt)": " (HLS, converted by YCast)",
   " (von YCast in MP3 umgewandelt)": " (converted to MP3 by YCast)",
@@ -43,14 +41,13 @@ const EN = {
   "{name} auf dem Marantz abspielen": "Play {name} on the Marantz",
 
   // ---------- Reiter, Meine Sender ----------
-  "Meine Sender": "My stations", "Sender suchen": "Find stations", "Einrichtung": "Setup",
+  "Meine Sender": "My stations", "Info": "Info", "Sender suchen": "Find stations", "Einrichtung": "Setup",
   "Kategorien": "Categories", "Neue Kategorie": "New category", "Umbenennen": "Rename", "Löschen": "Delete",
   "Noch keine Sender in dieser Kategorie. Füge unten einen hinzu oder nutze „Sender suchen“.":
     "No stations in this category yet. Add one below or use \"Find stations\".",
   "Sendername": "Station name", "Stream-URL (http:// oder https://)": "Stream URL (http:// or https://)",
   "Stream-URL": "Stream URL", "Hinzufügen": "Add", "Export": "Export", "Import": "Import",
   "Keine Kategorie": "No category", "Lege oben eine neue Kategorie an.": "Create a new category above.",
-  "{n} Sender · erscheint am Marantz unter „My Stations“": "{n} stations · shown on the Marantz under \"My Stations\"",
   "Ziehen zum Sortieren oder auf eine Kategorie": "Drag to reorder or onto a category",
   "HTTPS über Relay · ": "HTTPS via relay · ", "Auf dem Marantz abspielen": "Play on the Marantz",
   "Weitere Aktionen": "More actions", "Im Browser vorhören": "Preview in browser", "Stream testen": "Test stream",
@@ -200,7 +197,6 @@ const EN = {
   "Noch nichts gespielt.": "Nothing played yet.", "Diese Kategorie ist leer.": "This category is empty.",
   "Noch keine Sender. Suche oben nach einem Sender oder lege Kategorien in der klassischen Ansicht an.":
     "No stations yet. Search for a station above, or create categories in the classic view.",
-  "Tippe auf einen Sender, der Marantz schaltet sich dann ein.": "Tap a station and the Marantz will switch on.",
   "Favoriten": "Favorites",
 
   // ---------- Zeit ----------

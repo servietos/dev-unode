@@ -191,9 +191,9 @@ code { overflow-wrap: anywhere; font: .86em/1.4 ui-monospace, "SF Mono", Consola
 .seg button[aria-pressed="true"] { background: linear-gradient(180deg, var(--gold-hi), var(--gold)); color: var(--on-gold); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 1px 2px var(--lo); }
 .sleep-left { font-size: .8rem; color: var(--gold); }
 
-.deck-status { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; max-width: 300px; margin: 16px auto 0; font-size: .82rem; }
-.deck-status div { display: contents; } .deck-status dt { color: var(--muted); }
-.deck-status dd { margin: 0; display: flex; align-items: center; gap: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-list { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 10px 0 0; }
+.status-list div { display: contents; } .status-list dt { color: var(--muted); }
+.status-list dd { margin: 0; display: flex; align-items: center; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
 .dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); } .dot.bad { background: var(--bad); }
 
@@ -381,7 +381,6 @@ dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
   .deck-sticky .display { margin: 0 0 10px; }
   .deck-sticky .deck-note { margin-top: 8px; }
   .deck-extra { margin-top: 16px; }
-  .deck-status { margin: 14px 0 0; }
   .tabs { top: calc(env(safe-area-inset-top, 0px) + var(--stick-h, 0px)); padding-top: 0; z-index: 5; }
   /* Streifen unter der Statusleiste (Notch), damit beim Scrollen nichts durchscheint */
   body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--case); z-index: 7; }
