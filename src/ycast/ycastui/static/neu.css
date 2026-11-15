@@ -1,0 +1,180 @@
+/* YCast, zweite Oberfläche „Daumenzone“.
+   Material: eloxiertes Aluminium einer Hi-Fi-Front; einziger Akzent ist die rote Nadel der Senderskala. */
+:root {
+  --alu: #d9dcdf;        /* Player-Grund */
+  --face: #eef0f2;       /* Seite, Liste */
+  --ink: #23272b;        /* Text */
+  --mute: #5c636a;       /* gedämpfter Text */
+  --line: #c4c8cc;       /* Haarlinien, Skalenstriche */
+  --needle: #c8102e;     /* Nadelrot */
+  --key: #f7f8f9;        /* Tastenfläche */
+  --key-edge: #b9bec3;
+  --shadow: 0 1px 0 rgba(255,255,255,.8) inset, 0 1px 2px rgba(35,39,43,.18);
+  --round: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --alu: #1f2326; --face: #2a2f33; --ink: #e6e8ea; --mute: #9aa1a7; --line: #464c52;
+    --needle: #ff5a66; --key: #353b40; --key-edge: #4c5359;
+    --shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 1px 2px rgba(0,0,0,.5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --alu: #1f2326; --face: #2a2f33; --ink: #e6e8ea; --mute: #9aa1a7; --line: #464c52;
+  --needle: #ff5a66; --key: #353b40; --key-edge: #4c5359;
+  --shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 1px 2px rgba(0,0,0,.5);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--face); color: var(--ink); font: 400 17px/1.4 var(--text);
+  -webkit-tap-highlight-color: transparent; padding-bottom: var(--player-h, 0px); }
+button, input, a { font: inherit; color: inherit; touch-action: manipulation; }
+:focus-visible { outline: 3px solid var(--needle); outline-offset: 2px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+svg .fill { fill: currentColor; stroke-width: 1.2; }
+
+/* ---------- Kopf ---------- */
+.top { display: flex; align-items: center; gap: 4px; padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 0 20px; }
+.brand { margin: 0 auto 0 0; font: 600 1.375rem/1 var(--round); letter-spacing: -.01em; }
+.icon { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: none;
+  color: var(--ink); cursor: pointer; text-decoration: none; }
+.icon:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+/* ---------- Kategorien als Bänder einer Senderskala ---------- */
+.bands { display: flex; gap: 22px; overflow-x: auto; padding: 4px 20px 0; scrollbar-width: none;
+  border-bottom: 1px solid var(--line); scroll-padding: 0 20px; }
+.bands::-webkit-scrollbar { display: none; }
+.band { flex: none; min-height: 44px; padding: 0; border: 0; background: none; color: var(--mute); cursor: pointer;
+  border-bottom: 3px solid transparent; margin-bottom: -1px; font-size: .9375rem; white-space: nowrap; }
+.band[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--needle); font-weight: 600; }
+
+/* ---------- Senderliste ---------- */
+.list-wrap { padding: 0 0 12px; }
+.stations { list-style: none; margin: 0; padding: 0; }
+.station { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 58px; padding: 8px 20px;
+  border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; cursor: pointer; }
+.station:active { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.station .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.station .hint { flex: none; color: var(--mute); font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.station[aria-current="true"] { box-shadow: inset 4px 0 0 var(--needle); }
+.station[aria-current="true"] .name { font-weight: 600; }
+.station[aria-busy="true"] .hint::after { content: "…"; }
+.empty { margin: 32px 20px; color: var(--mute); max-width: 32em; }
+.empty a { color: var(--ink); }
+
+/* ---------- Wiedergabe (Daumenzone) ---------- */
+.player { position: fixed; inset: auto 0 0 0; z-index: 5; background: var(--alu);
+  border-top: 1px solid var(--line); padding: 0 16px calc(env(safe-area-inset-bottom, 0px) + 10px);
+  box-shadow: 0 -8px 24px -18px rgba(0,0,0,.6); }
+
+/* Senderskala: jeder Sender der Kategorie ein Strich, die Nadel zeigt den laufenden */
+.scale { position: relative; height: 58px; margin: 0 -16px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  overscroll-behavior-x: contain; }
+.scale::-webkit-scrollbar { display: none; }
+/* Teilstriche wie auf einer Radioskala; Hauptstriche mit Namen sind die Sender */
+.scale-track { position: relative; height: 100%; margin: 0 44px;
+  background: repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 9px) 0 10px / 100% 8px no-repeat; }
+.tick { position: absolute; top: 0; bottom: 0; width: 72px; margin-left: -36px; padding: 0; border: 0; background: none; cursor: pointer; }
+.tick::before { content: ""; position: absolute; left: 50%; top: 6px; height: 18px; width: 1px; background: var(--mute); }
+.tick span { position: absolute; left: 0; right: 0; top: 28px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--mute); font: 500 .6875rem/1.3 var(--round); text-align: center; }
+.tick[aria-current="true"] span { color: var(--needle); font-weight: 700; }
+.tick:hover::before { background: var(--ink); }
+.needle { position: absolute; top: 2px; height: 24px; width: 3px; margin-left: -1.5px; border-radius: 2px;
+  background: var(--needle); pointer-events: none; transition: left .45s cubic-bezier(.3,.7,.2,1); }
+.scale::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--line); }
+.scale[data-empty] .needle { display: none; }
+
+.now { padding: 2px 4px 8px; }
+.now p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-name { font: 600 1.375rem/1.2 var(--round); letter-spacing: -.01em; }
+.now-meta { display: flex; gap: 14px; color: var(--mute); font-size: .8125rem; font-variant-numeric: tabular-nums; min-height: 1.4em; }
+.now-meta span:empty { display: none; }
+.now-vol { margin-left: auto; }
+.now-title { color: var(--ink); font-size: .9375rem; }
+.now-title:empty { display: none; }
+.player[data-state="off"] .now-name, .player[data-state="standby"] .now-name { color: var(--mute); }
+
+.transport, .volume { display: flex; align-items: center; }
+.transport { justify-content: center; gap: 18px; padding: 2px 0 8px; }
+.key { flex: none; }
+@media (max-width: 380px) { .transport { gap: 10px; } .key { width: 48px; height: 48px; } .key-main { width: 62px; height: 62px; } .key-small { width: 44px; height: 44px; } .transport .key-small { margin-left: 0; } }
+.volume { gap: 8px; }
+.key { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; border: 1px solid var(--key-edge);
+  background: var(--key); box-shadow: var(--shadow); cursor: pointer; font-size: 1.375rem; line-height: 1; }
+.key:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.key:disabled { opacity: .4; cursor: default; }
+.key-main { width: 68px; height: 68px; }
+.key-main svg { width: 28px; height: 28px; }
+.key-small { width: 44px; height: 44px; font-size: 1.25rem; }
+.key-main .i-pause, .key-main[aria-pressed="true"] .i-play { display: none; }
+.key-main[aria-pressed="true"] .i-pause { display: inline; }
+#k-power[aria-pressed="true"] { color: var(--needle); border-color: var(--needle); }
+#k-mute .mute-x { display: none; }
+#k-mute[aria-pressed="true"] { color: var(--needle); }
+#k-mute[aria-pressed="true"] .mute-x { display: inline; }
+#k-sleep { position: relative; }
+#k-sleep span { position: absolute; bottom: -2px; right: -4px; min-width: 20px; padding: 1px 4px; border-radius: 10px;
+  background: var(--needle); color: #fff; font: 600 .6875rem/1.3 var(--round); }
+#k-sleep span:empty { display: none; }
+.transport .key-small { margin-left: 4px; }
+
+/* Lautstärke: großer Regler, Daumen gut greifbar */
+#vol { flex: 1; min-width: 0; height: 44px; margin: 0 4px; background: none; accent-color: var(--needle); -webkit-appearance: none; appearance: none; cursor: pointer; }
+#vol::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(var(--needle), var(--needle)) 0/var(--fill, 0%) 100% no-repeat, var(--line); }
+#vol::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; margin-top: -11px; border-radius: 50%;
+  background: var(--key); border: 1px solid var(--key-edge); box-shadow: var(--shadow); }
+#vol::-moz-range-track { height: 6px; border-radius: 3px; background: var(--line); }
+#vol::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--needle); }
+#vol::-moz-range-thumb { width: 28px; height: 28px; border-radius: 50%; background: var(--key); border: 1px solid var(--key-edge); }
+#vol:disabled { opacity: .4; }
+
+/* ---------- Suchen und Kategorie wählen ---------- */
+.sheet { width: 100%; max-width: 640px; height: 100%; max-height: 100%; margin: 0 auto; padding: 0; border: 0;
+  background: var(--face); color: var(--ink); overscroll-behavior: contain; }
+.sheet::backdrop { background: rgba(0,0,0,.4); }
+.sheet-head { position: sticky; top: 0; display: flex; gap: 8px; align-items: center; background: var(--face);
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px 16px; border-bottom: 1px solid var(--line); }
+.sheet-head input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 22px;
+  background: var(--key); font-size: 17px; }
+.text-btn { min-height: 44px; padding: 0 10px; border: 0; background: none; color: var(--needle); font-weight: 600; cursor: pointer; }
+.sheet-hint { margin: 16px 20px; color: var(--mute); font-size: .9375rem; }
+.results { list-style: none; margin: 0; padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 16px); }
+.result { display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 20px; border-bottom: 1px solid var(--line); }
+.result-main { flex: 1; min-width: 0; }
+.result-main p { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result-meta { color: var(--mute); font-size: .8125rem; display: flex; gap: 10px; }
+.result .key-small { flex: none; font-size: 1.5rem; }
+.sheet.small { height: auto; max-height: 80%; margin-bottom: 0; border-radius: 16px 16px 0 0; padding: 18px 0 calc(env(safe-area-inset-bottom, 0px) + 8px); }
+.sheet.small h2 { margin: 0 20px 8px; font: 600 1.0625rem/1.3 var(--round); }
+.pick-list { list-style: none; margin: 0; padding: 0; }
+.pick-list button { width: 100%; min-height: 52px; padding: 0 20px; border: 0; border-top: 1px solid var(--line);
+  background: none; text-align: left; cursor: pointer; }
+.sheet.small .text-btn { display: block; margin: 6px auto 0; }
+
+.toast { position: fixed; left: 50%; bottom: calc(var(--player-h, 0px) + 12px); transform: translateX(-50%); z-index: 20;
+  max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px; background: var(--ink); color: var(--face);
+  font-size: .9375rem; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.toast.bad { background: var(--needle); color: #fff; }
+
+/* ---------- Desktop: Liste links, Wiedergabe als Spalte rechts ---------- */
+@media (min-width: 900px) {
+  body { padding-bottom: 0; }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: auto auto 1fr;
+    max-width: 1180px; margin: 0 auto; min-height: 100vh; column-gap: 32px; padding: 0 24px; }
+  .top, .bands, .list-wrap { grid-column: 1; }
+  .top { padding-left: 20px; }
+  .player { grid-column: 2; grid-row: 1 / span 3; position: sticky; top: 24px; align-self: start; margin-top: 24px;
+    border: 1px solid var(--line); border-radius: 20px; padding: 6px 20px 20px; box-shadow: none; }
+  .scale { margin: 0 -20px; }
+  .toast { bottom: 24px; }
+  .sheet { height: 80vh; margin-top: 10vh; border-radius: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .needle { transition: none; } }

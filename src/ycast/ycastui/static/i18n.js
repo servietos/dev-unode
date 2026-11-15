@@ -140,10 +140,10 @@ const EN = {
   "Sprache dieser Oberfläche. Ohne Auswahl richtet sie sich nach dem Browser.":
     "Language of this interface. Without a choice it follows the browser.",
   "Eigener Server": "Custom server", "eigener": "custom", "Entfernen": "Remove",
-  "Zum Beispiel ein selbst betriebener Radio-Browser-Spiegel, auch im Heimnetz mit Port":
-    "For example a self-hosted Radio Browser mirror, also in your home network with a port",
-  ". YCast prüft die Adresse beim Hinzufügen. Eigene Server lassen sich oben fest auswählen; bei „Automatisch“ werden sie zuerst gefragt.":
-    ". YCast checks the address when adding it. Custom servers can be selected as fixed server above; with \"Automatic\" they are asked first.",
+  "Zum Beispiel ein selbst betriebener Radio-Browser-Spiegel, auch im Heimnetz mit Port (":
+    "For example a self-hosted Radio Browser mirror, also in your home network with a port (",
+  "). YCast prüft die Adresse beim Hinzufügen. Eigene Server lassen sich oben fest auswählen; bei „Automatisch“ werden sie zuerst gefragt.":
+    "). YCast checks the address when adding it. Custom servers can be selected as fixed server above; with \"Automatic\" they are asked first.",
   "https://… oder http://IP:Port": "https://… or http://IP:port",
   "{s} hinzugefügt · {n} Sender": "{s} added · {n} stations", "{s} entfernt": "{s} removed",
   "Auf dem iPhone als App": "As an app on the iPhone",
@@ -185,6 +185,23 @@ const EN = {
   "Pi-holes gespeichert": "Pi-holes saved", "Prüfe …": "Checking …",
   "Trage oben mindestens einen Pi-hole ein und speichere.": "Enter at least one Pi-hole above and save.",
   "falsch": "wrong", "über": "via", "keine Antwort": "no answer", "Kopiert": "Copied", "Bitte manuell kopieren": "Please copy manually",
+
+  // ---------- Zweite Oberfläche (/neu) ----------
+  "Neue Oberfläche ausprobieren": "Try the new interface",
+  "– für das Handy gedacht: Senderliste oben, Wiedergabe unten in Daumenreichweite. Bearbeiten und Einrichtung bleiben hier.":
+    "– made for phones: station list at the top, playback at the bottom within thumb reach. Editing and setup stay here.",
+  "Zuletzt": "Recent", "spielt": "playing", "Bearbeiten und Einrichtung": "Edit and setup", "Senderskala": "Station dial",
+  "Wiedergabe": "Playback", "Ausschalt-Timer": "Sleep timer", "Ausschalt-Timer: {n} min": "Sleep timer: {n} min",
+  "Ausschalt-Timer: antippen schaltet weiter": "Sleep timer: tap to cycle", "Starte …": "Starting …",
+  "{n} kbit/s": "{n} kbit/s", "Fertig": "Done", "Zu welcher Kategorie?": "Add to which category?",
+  "Sendername, z. B. FIP …": "Station name, e.g. FIP …",
+  "Tippe einen Namen. Gesucht wird im freien Radio Browser.": "Type a name. The search uses the free Radio Browser.",
+  "Suche läuft …": "Searching …", "Nichts gefunden für „{q}“.": "Nothing found for \"{q}\".",
+  "Noch nichts gespielt.": "Nothing played yet.", "Diese Kategorie ist leer.": "This category is empty.",
+  "Noch keine Sender. Suche oben nach einem Sender oder lege Kategorien in der klassischen Ansicht an.":
+    "No stations yet. Search for a station above, or create categories in the classic view.",
+  "Tippe auf einen Sender, der Marantz schaltet sich dann ein.": "Tap a station and the Marantz will switch on.",
+  "Favoriten": "Favorites",
 
   // ---------- Zeit ----------
   "gerade eben": "just now", "vor {n} min": "{n} min ago", "vor {n} h": "{n} h ago",

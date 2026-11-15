@@ -38,6 +38,12 @@ def index():
     return send_from_directory(STATIC, "index.html")
 
 
+@app.get("/neu")
+def index_neu():
+    """Zweite Oberfläche (Daumenzone): Hören zuerst, Bearbeiten und Einrichtung in der klassischen."""
+    return send_from_directory(STATIC, "neu.html")
+
+
 @app.get("/manifest.webmanifest")
 def webmanifest():
     """Für „Zum Home-Bildschirm“ (iPhone, Android): startet im Vollbild wie eine App."""

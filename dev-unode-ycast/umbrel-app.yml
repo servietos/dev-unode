@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio und Fernbedienung für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.1.10"
+version: "3.1.11"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -73,10 +73,10 @@ gallery:
   - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-1.jpg
   - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-2.jpg
 releaseNotes: >-
-  Die Sprachauswahl (Deutsch/Englisch) ist von der Kopfzeile in die Einrichtung umgezogen.
-  In der Senderdatenbank lassen sich jetzt eigene Radio-Browser-Server hinzufügen, z. B. ein
-  selbst betriebener Spiegel im Heimnetz. YCast prüft die Adresse beim Hinzufügen; eigene Server
-  lassen sich fest auswählen und werden bei „Automatisch“ zuerst gefragt.
+  Neue Oberfläche zum Ausprobieren unter /neu (Link unter „Einrichtung“): fürs Handy gedacht, mit
+  großer Senderliste oben und der Wiedergabe unten in Daumenreichweite, dazu eine Senderskala mit
+  roter Nadel zum Antippen. Bearbeiten und Einrichtung bleiben in der bisherigen Oberfläche, die
+  unverändert bleibt. Außerdem: ein fehlender englischer Hinweistext in der Senderdatenbank.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

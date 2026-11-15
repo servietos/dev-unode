@@ -30,6 +30,12 @@ Basis ist [YCast 1.1.0 von milaq](https://github.com/milaq/YCast) (PyPI), ergän
   (oder per `RADIOBROWSER_API`). Eigene Server (z. B. ein Spiegel im Heimnetz, auch `http://IP:Port`)
   lassen sich dort hinzufügen; YCast prüft sie per `/json/stats` und fragt sie bei „Automatisch“ zuerst. Ersetzt die Abfrage des Original-YCast, die keinen Ausweichserver
   und kein Zeitlimit kennt.
+- **Zweite Oberfläche** unter `/neu` (Vorschau): fürs Handy, Senderliste oben, Wiedergabe unten in
+  Daumenreichweite, Senderskala zum Antippen; nutzt dieselbe API. Bearbeiten und Einrichtung bleiben
+  in der klassischen Oberfläche unter `/`.
+- **UI-Prüfung**: `.claude/skills/ycast-ui-check` startet die App mit Beispieldaten und prüft beide
+  Oberflächen in Safari-WebKit (iPhone SE, iPhone 15) und Chromium auf Überlauf, JS-Fehler, fehlende
+  Übersetzungen und zu kleine Tipp-Ziele (Herkunft der Skills: `.claude/skills/SOURCES.md`).
 - **Komfort**: „Zuletzt gespielt“ (`data/recent.json`) und Ausschalt-Timer (Standby nach Ablauf).
 - **HTTPS-Relay**: Receiver können kein HTTPS. YCast schreibt `https://` normalerweise auf
   `http://` um, was bei vielen Sendern scheitert. Hier laufen HTTPS-Streams stattdessen über

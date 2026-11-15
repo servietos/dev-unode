@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>YCast</title>
+<link rel="icon" href="static/icon.svg">
+<link rel="apple-touch-icon" href="static/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="YCast">
+<meta name="theme-color" content="#d9dcdf" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1f2326" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="static/neu.css">
+<script>/* Theme vor dem ersten Zeichnen: wie in der klassischen Ansicht gewählt, sonst wie das System */
+(() => {
+  let th = "auto"; try { th = localStorage.getItem("ycast-theme") || "auto"; } catch (e) {}
+  document.documentElement.dataset.theme = ["light", "dark"].includes(th) ? th : "auto";
+})();
+</script>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <h1 class="brand">YCast</h1>
+    <button class="icon" id="open-search" type="button" aria-label="Sender suchen" title="Sender suchen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+    </button>
+    <a class="icon" href="./" aria-label="Bearbeiten und Einrichtung" title="Bearbeiten und Einrichtung">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </a>
+  </header>
+
+  <nav class="bands" id="bands" aria-label="Kategorien"></nav>
+
+  <main class="list-wrap">
+    <ul class="stations" id="stations" aria-live="polite"></ul>
+    <p class="empty" id="empty" hidden></p>
+  </main>
+
+  <!-- Wiedergabe: unten in Daumenreichweite, auf dem Desktop rechts -->
+  <section class="player" id="player" aria-label="Wiedergabe" data-state="unknown">
+    <div class="scale" id="scale" role="group" aria-label="Senderskala"></div>
+    <div class="now">
+      <p class="now-name" id="now-name">Verbinde …</p>
+      <p class="now-meta"><span id="now-format"></span><span id="now-rate"></span><span id="now-vol" class="now-vol"></span></p>
+      <p class="now-title" id="now-title"></p>
+    </div>
+    <div class="transport">
+      <button class="key" id="k-prev" type="button" aria-label="Vorheriger Sender" title="Vorheriger Sender">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M18 6v12l-8.5-6z"/><path d="M6 6v12"/></svg>
+      </button>
+      <button class="key key-main" id="k-play" type="button" aria-label="Abspielen" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill i-play" d="M8 5.5v13l10.5-6.5z"/><path class="fill i-pause" d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>
+      </button>
+      <button class="key" id="k-next" type="button" aria-label="Nächster Sender" title="Nächster Sender">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M6 6v12l8.5-6z"/><path d="M18 6v12"/></svg>
+      </button>
+      <button class="key key-small" id="k-sleep" type="button" aria-label="Ausschalt-Timer" title="Ausschalt-Timer: antippen schaltet weiter">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+        <span id="sleep-min"></span>
+      </button>
+      <button class="key key-small" id="k-power" type="button" aria-label="Einschalten" aria-pressed="false" title="Ein / Standby">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
+      </button>
+    </div>
+    <div class="volume">
+      <button class="key key-small" id="k-mute" type="button" aria-label="Stumm" aria-pressed="false" title="Stumm">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="mute-x" d="M17 9l4 6M21 9l-4 6"/></svg>
+      </button>
+      <button class="key key-small" id="k-down" type="button" aria-label="Leiser">−</button>
+      <input id="vol" type="range" min="0" max="60" step="1" value="0" aria-label="Lautstärke">
+      <button class="key key-small" id="k-up" type="button" aria-label="Lauter">+</button>
+    </div>
+  </section>
+</div>
+
+<!-- Suchen: Ebene über der Liste -->
+<dialog class="sheet" id="search" aria-labelledby="search-title">
+  <form class="sheet-head" id="search-form" role="search" method="dialog">
+    <h2 class="visually-hidden" id="search-title">Sender suchen</h2>
+    <input type="search" name="q" id="q" placeholder="Sendername, z. B. FIP …" aria-label="Sendername"
+           autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    <button class="text-btn" type="button" id="close-search">Fertig</button>
+  </form>
+  <p class="sheet-hint" id="search-hint">Tippe einen Namen. Gesucht wird im freien Radio Browser.</p>
+  <ul class="results" id="results"></ul>
+</dialog>
+
+<!-- Kategorie wählen beim Hinzufügen -->
+<dialog class="sheet small" id="pick" aria-labelledby="pick-title">
+  <h2 id="pick-title">Zu welcher Kategorie?</h2>
+  <ul class="pick-list" id="pick-list"></ul>
+  <button class="text-btn" type="button" id="pick-cancel">Abbrechen</button>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="static/i18n.js"></script>
+<script src="static/neu.js"></script>
+</body>
+</html>

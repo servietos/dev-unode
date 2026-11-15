@@ -846,11 +846,11 @@ class TestTranslations(unittest.TestCase):
     STATIC = Path(__file__).resolve().parent.parent / "ycastui" / "static"
 
     def test_every_ui_text_has_an_english_translation(self):
-        app = (self.STATIC / "app.js").read_text(encoding="utf-8")
+        app = "\n".join((self.STATIC / f).read_text(encoding="utf-8") for f in ("app.js", "neu.js"))
         i18n = (self.STATIC / "i18n.js").read_text(encoding="utf-8")
         used = set(re.findall(r'\bt\("((?:[^"\\]|\\.)*)"', app)) | set(re.findall(r"\bt\('((?:[^'\\]|\\.)*)'", app))
         known = set(re.findall(r'^\s*"((?:[^"\\]|\\.)*)":', i18n, re.M)) | set(re.findall(r',\s*"((?:[^"\\]|\\.)*)":', i18n))
         known = {k.replace('\\"', '"') for k in known}
         missing = sorted(u.replace('\\"', '"') for u in used if u.replace('\\"', '"') not in known)
-        self.assertGreater(len(used), 100)
+        self.assertGreater(len(used), 120)
         self.assertEqual(missing, [])
