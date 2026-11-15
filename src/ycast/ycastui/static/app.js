@@ -588,7 +588,6 @@ document.addEventListener("click", (e) => {
 // ---------- Marantz: Display und Fernbedienung ----------
 const SOURCES = { IRADIO: "Internet Radio", DLNA: "Medienserver", SERVER: "Medienserver", USB: "USB", NET: "Netzwerk",
   BT: "Bluetooth", CD: "CD", TUNER: "Radio", FM: "UKW", DAB: "DAB", AUX: "AUX", "AUX1": "AUX", OPTICAL: "Optisch", AIRPLAY: "AirPlay", SPOTIFY: "Spotify" };
-const DIAL_LEN = 433.5;         // Länge des Lautstärke-Bogens (270°) im SVG
 let mz = null;                  // letzter Status
 let playingUrl = "";
 let mzBusy = false;
@@ -637,7 +636,7 @@ function renderMarantz() {
 
 function setDial(fraction) {
   const f = Math.max(0, Math.min(1, fraction));
-  $("#dial-level").style.strokeDasharray = `${(DIAL_LEN * f).toFixed(1)} 578`;
+  $("#dial-level").style.width = `${(f * 100).toFixed(1)}%`;
 }
 
 async function refreshMarantz() {

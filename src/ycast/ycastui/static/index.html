@@ -21,7 +21,7 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
 <body>
 <div class="shell">
 
-  <!-- Gerät: rundes Display und Bedienung -->
+  <!-- Gerät: Display und Bedienung -->
   <aside class="deck" aria-label="Marantz">
     <header class="deck-top">
       <div class="brand">
@@ -35,20 +35,16 @@ document.documentElement.dataset.theme = ["light", "auto"].includes(t) ? t : "da
       </div>
     </header>
 
-    <div class="porthole-wrap">
-      <div class="porthole" id="porthole" data-state="unknown">
-        <svg class="dial" viewBox="0 0 200 200" aria-hidden="true">
-          <g transform="rotate(135 100 100)">
-            <circle class="dial-track" cx="100" cy="100" r="92"/>
-            <circle class="dial-level" id="dial-level" cx="100" cy="100" r="92"/>
-          </g>
-        </svg>
-        <div class="glass">
+    <!-- Rechteckiges Display wie an der Front des Receivers -->
+    <div class="display" id="porthole" data-state="unknown">
+      <div class="glass">
+        <div class="ph-top">
           <p class="ph-source" id="ph-source">Marantz</p>
-          <p class="ph-title" id="ph-title">Verbinde …</p>
-          <p class="ph-sub" id="ph-sub"></p>
           <p class="ph-vol" id="ph-vol"></p>
         </div>
+        <p class="ph-title" id="ph-title">Verbinde …</p>
+        <p class="ph-sub" id="ph-sub"></p>
+        <div class="vu" aria-hidden="true"><span class="vu-level" id="dial-level"></span></div>
       </div>
     </div>
 
