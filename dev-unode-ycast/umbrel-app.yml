@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio und Fernbedienung für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.1.9"
+version: "3.1.10"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -23,8 +23,8 @@ description: >-
   Weboberfläche auf Deutsch und Englisch, hell oder dunkel: Kategorien und Sender verwalten
   (Drag & Drop), im Browser vorhören, Streams testen, Sender im Radio Browser suchen und
   übernehmen, stations.yml importieren/exportieren, Abruf-Log des Receivers, DNS-Prüfung und
-  Netzwerk-Einstellung. Für den Radio Browser wählt YCast automatisch einen erreichbaren Server
-  (oder einen festen).
+  Netzwerk-Einstellung. Für den Radio Browser wählt YCast automatisch einen erreichbaren Server;
+  alternativ ein fester oder ein eigener Server (z. B. ein Spiegel im Heimnetz).
 
 
   Formate, die Receiver nicht selbst abspielen können, wandelt YCast um: HLS (.m3u8), Ogg/Opus
@@ -73,10 +73,10 @@ gallery:
   - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-1.jpg
   - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-2.jpg
 releaseNotes: >-
-  Die Weboberfläche gibt es jetzt auf Deutsch und Englisch (Umschalter „DE | EN“ oben, ohne Wahl
-  nach Browsersprache). Neue Einstellung „Senderdatenbank“: „Automatisch“ weicht auf einen anderen
-  Radio-Browser-Server aus, wenn einer nicht antwortet (für die Suche und die Menüs am Marantz),
-  alternativ ein fester Server; Abfragen haben jetzt ein Zeitlimit. Neue Beschreibung und Bilder.
+  Die Sprachauswahl (Deutsch/Englisch) ist von der Kopfzeile in die Einrichtung umgezogen.
+  In der Senderdatenbank lassen sich jetzt eigene Radio-Browser-Server hinzufügen, z. B. ein
+  selbst betriebener Spiegel im Heimnetz. YCast prüft die Adresse beim Hinzufügen; eigene Server
+  lassen sich fest auswählen und werden bei „Automatisch“ zuerst gefragt.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

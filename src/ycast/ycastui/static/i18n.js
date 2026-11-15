@@ -137,6 +137,15 @@ const EN = {
   "Auswahl": "Choice", "Zuletzt benutzt": "Last used", "noch keine Abfrage seit dem Start": "no request since start",
   "Bekannte Server": "Known servers", "Radio Browser: fest {s}": "Radio Browser: fixed {s}",
   "Radio Browser: automatisch": "Radio Browser: automatic", "{s} antwortet · {n} Sender": "{s} responds · {n} stations",
+  "Sprache dieser Oberfläche. Ohne Auswahl richtet sie sich nach dem Browser.":
+    "Language of this interface. Without a choice it follows the browser.",
+  "Eigener Server": "Custom server", "eigener": "custom", "Entfernen": "Remove",
+  "Zum Beispiel ein selbst betriebener Radio-Browser-Spiegel, auch im Heimnetz mit Port":
+    "For example a self-hosted Radio Browser mirror, also in your home network with a port",
+  ". YCast prüft die Adresse beim Hinzufügen. Eigene Server lassen sich oben fest auswählen; bei „Automatisch“ werden sie zuerst gefragt.":
+    ". YCast checks the address when adding it. Custom servers can be selected as fixed server above; with \"Automatic\" they are asked first.",
+  "https://… oder http://IP:Port": "https://… or http://IP:port",
+  "{s} hinzugefügt · {n} Sender": "{s} added · {n} stations", "{s} entfernt": "{s} removed",
   "Auf dem iPhone als App": "As an app on the iPhone",
   "In Safari diese Seite öffnen, unten auf": "Open this page in Safari, tap", "Teilen": "Share",
   "tippen und": "at the bottom and choose", "Zum Home-Bildschirm": "Add to Home Screen",
@@ -190,7 +199,8 @@ const EN = {
   "HLS-Sender brauchen ffmpeg, das in diesem Image fehlt": "HLS stations need ffmpeg, which is missing in this image",
   "Dieser HLS-Stream lässt sich nicht umwandeln (nicht erreichbar oder ohne Audio)": "This HLS stream can't be converted (not reachable or no audio)",
   "Dieser Stream lässt sich nicht umwandeln (nicht erreichbar oder ohne Audio)": "This stream can't be converted (not reachable or no audio)",
-  "Bitte einen Server der Form „xyz.api.radio-browser.info“ wählen": "Please choose a server like \"xyz.api.radio-browser.info\"",
+  "Diesen Server zuerst unter „Eigener Server“ hinzufügen": "Add this server under \"Custom server\" first",
+  "Bitte eine Adresse eingeben": "Please enter an address",
   "Lautstärke muss eine Zahl sein": "Volume must be a number",
 };
 
@@ -200,6 +210,11 @@ const EN_PATTERNS = [
   [/^Radio Browser nicht erreichbar \((.+)\)$/, "Radio Browser not reachable ($1)"],
   [/^Marantz lehnt (\w+) ab \((.+)\)$/, "Marantz rejected $1 ($2)"],
   [/^UPnP (\w+) fehlgeschlagen \((.+)\)$/, "UPnP $1 failed ($2)"],
+  [/^(.+) antwortet nicht wie ein Radio Browser( \(.+\))?$/, "$1 doesn't respond like a Radio Browser$2"],
+  [/^(.+) ist schon in der Liste$/, "$1 is already in the list"],
+  [/^Höchstens (\d+) eigene Server$/, "At most $1 custom servers"],
+  [/^„(.*)“ ist keine gültige Adresse \(http:\/\/ oder https:\/\/, ohne \? und #\)$/, "\"$1\" is not a valid address (http:// or https://, without ? and #)"],
+  [/^„(.*)“ ist keine gültige Adresse$/, "\"$1\" is not a valid address"],
 ];
 
 function t(s, vars) {

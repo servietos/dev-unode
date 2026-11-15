@@ -185,6 +185,23 @@ def radiobrowser_save():
     return jsonify(result)
 
 
+@app.post("/api/radiobrowser/custom")
+def radiobrowser_add():
+    """Eigenen Server hinzufügen; vorher wird geprüft, ob er wie ein Radio Browser antwortet."""
+    body = request.get_json(silent=True) or {}
+    try:
+        return jsonify(rbapi.add_custom(body.get("url", "")))
+    except rbapi.RadioBrowserError as e:
+        return err(str(e), 502)
+
+
+@app.delete("/api/radiobrowser/custom")
+def radiobrowser_remove():
+    result = rbapi.remove_custom(request.args.get("url", ""))
+    _cache.clear()
+    return jsonify(result)
+
+
 @app.post("/api/radiobrowser/test")
 def radiobrowser_test():
     """Kleine Abfrage, damit die Einrichtung den benutzten Server anzeigen kann."""

@@ -30,16 +30,10 @@
         <img src="static/icon.svg" alt="" width="30" height="30">
         <h1>YCast</h1>
       </div>
-      <div class="prefs">
-        <div class="theme lang" role="group" aria-label="Sprache">
-          <button type="button" data-lang-set="de" lang="de" title="Deutsch">DE</button>
-          <button type="button" data-lang-set="en" lang="en" title="English">EN</button>
-        </div>
-        <div class="theme" role="group" aria-label="Darstellung">
-          <button type="button" data-theme-set="auto" title="Wie das System">Auto</button>
-          <button type="button" data-theme-set="light" title="Hell" aria-label="Hell">☀</button>
-          <button type="button" data-theme-set="dark" title="Dunkel" aria-label="Dunkel">☾</button>
-        </div>
+      <div class="theme" role="group" aria-label="Darstellung">
+        <button type="button" data-theme-set="auto" title="Wie das System">Auto</button>
+        <button type="button" data-theme-set="light" title="Hell" aria-label="Hell">☀</button>
+        <button type="button" data-theme-set="dark" title="Dunkel" aria-label="Dunkel">☾</button>
       </div>
     </header>
 
@@ -198,6 +192,15 @@
       <!-- Einrichtung -->
       <section id="tab-setup" class="panel" hidden>
         <div class="block">
+          <h2 id="lang-label">Sprache</h2>
+          <p class="muted small">Sprache dieser Oberfläche. Ohne Auswahl richtet sie sich nach dem Browser.</p>
+          <div class="theme lang" role="group" aria-labelledby="lang-label">
+            <button type="button" data-lang-set="de" lang="de">Deutsch</button>
+            <button type="button" data-lang-set="en" lang="en">English</button>
+          </div>
+        </div>
+
+        <div class="block">
           <h2>Marantz</h2>
           <p class="muted small">Für Fernbedienung und „Auf dem Marantz abspielen“. Die Adresse wird aus den Abrufen erkannt; trage sie nur ein, wenn sie nicht stimmt. Im Marantz muss „Netzwerk-Standby“ eingeschaltet sein, damit er sich aus dem Standby wecken lässt.</p>
           <dl class="kv" id="mz-info"></dl>
@@ -218,6 +221,15 @@
             <label>Server <select name="server" id="rb-server"><option value="">Automatisch</option></select></label>
             <button class="btn">Speichern</button>
             <button class="btn ghost" type="button" id="rb-test">Testen</button>
+          </form>
+          <h3 class="mini">Eigener Server</h3>
+          <p class="muted small">Zum Beispiel ein selbst betriebener Radio-Browser-Spiegel, auch im Heimnetz mit Port
+            (<code>http://192.168.178.20:8080</code>). YCast prüft die Adresse beim Hinzufügen. Eigene Server lassen sich oben
+            fest auswählen; bei „Automatisch“ werden sie zuerst gefragt.</p>
+          <ul class="rb-custom" id="rb-custom"></ul>
+          <form id="rb-add" class="inline-form">
+            <label>Adresse <input name="url" id="rb-url" placeholder="https://… oder http://IP:Port" autocomplete="off" inputmode="url"></label>
+            <button class="btn ghost">Hinzufügen</button>
           </form>
         </div>
 

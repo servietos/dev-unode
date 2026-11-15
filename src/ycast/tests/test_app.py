@@ -16,8 +16,8 @@ class Base(unittest.TestCase):
         self.common = importlib.reload(common)
         import ycastui.rbapi as rbapi
         self.rb = importlib.reload(rbapi)
-        self.rb_srv = mock.patch.object(self.rb, "_lookup_srv", return_value=["de1.api.radio-browser.info",
-                                                                             "fi1.api.radio-browser.info"])
+        self.rb_srv = mock.patch.object(self.rb, "_lookup_srv", return_value=["https://de1.api.radio-browser.info",
+                                                                             "https://fi1.api.radio-browser.info"])
         self.rb_srv.start()
 
     def tearDown(self):
@@ -742,7 +742,8 @@ class TestRadioBrowser(Base):
                 raise requests.ConnectionError("down")
             r = mock.Mock()
             r.raise_for_status = lambda: None
-            r.json.return_value = [{"name": f"von {host}", "url": "http://a"}]
+            r.json.return_value = ({"stations": 123} if url.endswith("/json/stats")
+                                   else [{"name": f"von {host}", "url": "http://a"}])
             return r
         return get, calls
 
@@ -754,10 +755,10 @@ class TestRadioBrowser(Base):
         self.assertEqual(res[0]["name"], "von fi1.api.radio-browser.info")
         self.assertEqual(calls, ["de1.api.radio-browser.info", "fi1.api.radio-browser.info",
                                  "fi1.api.radio-browser.info"])     # danach zuerst der funktionierende
-        self.assertEqual(self.rb.servers(), ["de1.api.radio-browser.info", "fi1.api.radio-browser.info",
-                                             "de2.api.radio-browser.info"])   # feste Liste ergänzt
+        self.assertEqual(self.rb.servers(), ["https://de1.api.radio-browser.info", "https://fi1.api.radio-browser.info",
+                                             "https://de2.api.radio-browser.info"])   # feste Liste ergänzt
         st = self.client.get("/api/radiobrowser").get_json()
-        self.assertEqual((st["mode"], st["current"]), ("auto", "fi1.api.radio-browser.info"))
+        self.assertEqual((st["mode"], st["current"]), ("auto", "https://fi1.api.radio-browser.info"))
 
     def test_fixed_server_has_no_fallback(self):
         self.assertEqual(self.client.put("/api/radiobrowser", json={"server": "de1.api.radio-browser.info"}).status_code, 200)
@@ -769,10 +770,11 @@ class TestRadioBrowser(Base):
         self.assertEqual(calls, ["de1.api.radio-browser.info"])
 
     def test_setting_is_validated_and_can_be_reset(self):
-        for bad in ("evil.example.com", "https://de1.api.radio-browser.info/", "de1.api.radio-browser.info.evil.com"):
+        # fremde Server nur über „Eigener Server“ (mit Prüfung), nicht direkt als Auswahl
+        for bad in ("evil.example.com", "de1.api.radio-browser.info.evil.com", "ftp://x", "https://a/?q=1"):
             self.assertEqual(self.client.put("/api/radiobrowser", json={"server": bad}).status_code, 400, bad)
-        self.client.put("/api/radiobrowser", json={"server": "nl1.api.radio-browser.info"})
-        self.assertEqual(self.client.get("/api/radiobrowser").get_json()["server"], "nl1.api.radio-browser.info")
+        self.client.put("/api/radiobrowser", json={"server": "https://nl1.api.radio-browser.info/"})
+        self.assertEqual(self.client.get("/api/radiobrowser").get_json()["server"], "https://nl1.api.radio-browser.info")
         st = self.client.put("/api/radiobrowser", json={"server": ""}).get_json()
         self.assertEqual(st["mode"], "auto")
 
@@ -782,7 +784,48 @@ class TestRadioBrowser(Base):
             st = self.client.get("/api/radiobrowser").get_json()
         finally:
             os.environ.pop("RADIOBROWSER_API")
-        self.assertEqual((st["mode"], st["server"], st["from_env"]), ("fixed", "at1.api.radio-browser.info", True))
+        self.assertEqual((st["mode"], st["server"], st["from_env"]), ("fixed", "https://at1.api.radio-browser.info", True))
+
+    def test_hostname_from_version_319_still_works(self):
+        self.common.save_setting("radiobrowser_server", "de2.api.radio-browser.info")
+        self.assertEqual(self.client.get("/api/radiobrowser").get_json()["server"], "https://de2.api.radio-browser.info")
+
+    def test_custom_server_is_checked_added_and_tried_first(self):
+        get, calls = self.responder()
+        with mock.patch.object(self.rb.requests, "get", side_effect=get):
+            r = self.client.post("/api/radiobrowser/custom", json={"url": "http://192.168.178.20:8080/json/"})
+            self.assertEqual(r.status_code, 200, r.get_json())
+            self.assertEqual(r.get_json()["custom"], ["http://192.168.178.20:8080"])
+            self.assertEqual(r.get_json()["stations"], 123)
+            calls.clear()
+            self.client.get("/api/search?name=x")
+        self.assertEqual(calls, ["192.168.178.20:8080"])            # automatisch: eigener Server zuerst
+        dup = self.client.post("/api/radiobrowser/custom", json={"url": "http://192.168.178.20:8080"})
+        self.assertEqual(dup.status_code, 400)
+        listed = self.client.post("/api/radiobrowser/custom", json={"url": "de1.api.radio-browser.info"})
+        self.assertEqual(listed.status_code, 400)                   # offizieller Server steht schon zur Auswahl
+
+    def test_custom_server_must_answer_like_radio_browser(self):
+        get, _ = self.responder(down={"rb.example.org"})
+        with mock.patch.object(self.rb.requests, "get", side_effect=get):
+            r = self.client.post("/api/radiobrowser/custom", json={"url": "rb.example.org"})
+        self.assertEqual(r.status_code, 502)
+        self.assertIn("rb.example.org", r.get_json()["error"])
+        notrb = mock.Mock(raise_for_status=lambda: None)
+        notrb.json.return_value = {"hello": "world"}
+        with mock.patch.object(self.rb.requests, "get", return_value=notrb):
+            self.assertEqual(self.client.post("/api/radiobrowser/custom", json={"url": "other.example.org"}).status_code, 502)
+        self.assertEqual(self.client.get("/api/radiobrowser").get_json()["custom"], [])
+        for bad in ("", "javascript:alert(1)", "http://user:pw@x.example"):
+            self.assertEqual(self.client.post("/api/radiobrowser/custom", json={"url": bad}).status_code, 400, bad)
+
+    def test_custom_server_can_be_fixed_and_removed(self):
+        get, _ = self.responder()
+        with mock.patch.object(self.rb.requests, "get", side_effect=get):
+            self.client.post("/api/radiobrowser/custom", json={"url": "https://rb.example.org"})
+        self.assertEqual(self.client.put("/api/radiobrowser", json={"server": "https://rb.example.org"}).get_json()["mode"], "fixed")
+        st = self.client.delete("/api/radiobrowser/custom?url=https://rb.example.org").get_json()
+        self.assertEqual((st["custom"], st["mode"]), ([], "auto"))      # fest gewählter Server entfernt → automatisch
 
     def test_dns_failure_uses_builtin_list(self):
         with mock.patch.object(self.rb, "_lookup_srv", side_effect=OSError("kein DNS")):

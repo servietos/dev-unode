@@ -766,20 +766,25 @@ $("#mz-auto").addEventListener("click", () => { $("#mz-ip").value = ""; saveMz("
 
 // Einrichtung: Senderdatenbank (Radio-Browser-Server)
 let rb = null;
+const rbLabel = (u) => String(u || "").replace(/^https:\/\//, "");
 function renderRb() {
   if (!rb) return;
   const sel = $("#rb-server");
-  const known = [...new Set([...(rb.servers || []), rb.server].filter(Boolean))];
+  const mine = rb.custom || [];
+  const known = [...new Set([...mine, ...(rb.servers || []), rb.server].filter(Boolean))];
   if (document.activeElement !== sel) {
-    sel.innerHTML = `<option value="">${t("Automatisch")}</option>` + known.map((h) => `<option value="${esc(h)}">${esc(h)}</option>`).join("");
+    sel.innerHTML = `<option value="">${t("Automatisch")}</option>` + known.map((h) =>
+      `<option value="${esc(h)}">${esc(rbLabel(h))}${mine.includes(h) ? " · " + t("eigener") : ""}</option>`).join("");
     sel.value = rb.from_env ? "" : rb.server;
   }
-  const mode = rb.mode === "fixed" ? t("fest: {s}", { s: esc(rb.server) }) + (rb.from_env ? t(" (aus RADIOBROWSER_API)") : "") : t("automatisch");
+  $("#rb-custom").innerHTML = mine.map((u) => `<li><code>${esc(u)}</code>
+    <button type="button" class="btn ghost small danger" data-rb-remove="${esc(u)}">${t("Entfernen")}</button></li>`).join("");
+  const mode = rb.mode === "fixed" ? t("fest: {s}", { s: esc(rbLabel(rb.server)) }) + (rb.from_env ? t(" (aus RADIOBROWSER_API)") : "") : t("automatisch");
   $("#rb-info").innerHTML = `
     <dt>${t("Auswahl")}</dt><dd>${mode}</dd>
-    <dt>${t("Zuletzt benutzt")}</dt><dd>${rb.current ? `${esc(rb.current)} · ${ago(rb.ok_at)}` : t("noch keine Abfrage seit dem Start")}</dd>
+    <dt>${t("Zuletzt benutzt")}</dt><dd>${rb.current ? `${esc(rbLabel(rb.current))} · ${ago(rb.ok_at)}` : t("noch keine Abfrage seit dem Start")}</dd>
     ${rb.error ? `<dt>${t("Fehler")}</dt><dd>${esc(t(`Radio Browser nicht erreichbar (${rb.error})`))}</dd>` : ""}
-    <dt>${t("Bekannte Server")}</dt><dd>${known.map(esc).join(", ") || "–"}</dd>`;
+    <dt>${t("Bekannte Server")}</dt><dd>${known.map((u) => esc(rbLabel(u))).join(", ") || "–"}</dd>`;
 }
 async function loadRb() {
   try { rb = await api("api/radiobrowser"); renderRb(); } catch (e) { /* Einrichtung bleibt ohne Angaben */ }
@@ -789,7 +794,7 @@ $("#rb-form").addEventListener("submit", async (e) => {
   try {
     rb = await api("api/radiobrowser", { method: "PUT", body: { server: $("#rb-server").value } });
     renderRb();
-    toast(rb.mode === "fixed" ? t("Radio Browser: fest {s}", { s: rb.server }) : t("Radio Browser: automatisch"));
+    toast(rb.mode === "fixed" ? t("Radio Browser: fest {s}", { s: rbLabel(rb.server) }) : t("Radio Browser: automatisch"));
   } catch (err) { toast(err.message, true); }
 });
 $("#rb-test").addEventListener("click", async () => {
@@ -797,9 +802,28 @@ $("#rb-test").addEventListener("click", async () => {
   try {
     const r = await api("api/radiobrowser/test", { method: "POST" });
     rb = r; renderRb();
-    toast(t("{s} antwortet · {n} Sender", { s: r.current, n: Number(r.stations || 0).toLocaleString(LOCALE) }));
+    toast(t("{s} antwortet · {n} Sender", { s: rbLabel(r.current), n: Number(r.stations || 0).toLocaleString(LOCALE) }));
   } catch (err) { toast(err.message, true); loadRb(); }
   finally { btn.disabled = false; }
+});
+$("#rb-add").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const url = $("#rb-url").value.trim();
+  if (!url) return;
+  const btn = e.target.querySelector("button"); btn.disabled = true;
+  try {
+    const r = await api("api/radiobrowser/custom", { method: "POST", body: { url } });
+    rb = r; renderRb(); $("#rb-url").value = "";
+    toast(t("{s} hinzugefügt · {n} Sender", { s: rbLabel(r.custom[r.custom.length - 1]), n: Number(r.stations || 0).toLocaleString(LOCALE) }));
+  } catch (err) { toast(err.message, true); }
+  finally { btn.disabled = false; }
+});
+$("#rb-custom").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-rb-remove]"); if (!b) return;
+  try {
+    rb = await api("api/radiobrowser/custom?url=" + encodeURIComponent(b.dataset.rbRemove), { method: "DELETE" });
+    renderRb(); toast(t("{s} entfernt", { s: rbLabel(b.dataset.rbRemove) }));
+  } catch (err) { toast(err.message, true); }
 });
 
 // ---------- Zuletzt gespielt ----------

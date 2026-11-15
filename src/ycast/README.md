@@ -27,7 +27,8 @@ Basis ist [YCast 1.1.0 von milaq](https://github.com/milaq/YCast) (PyPI), ergän
 - **Senderdatenbank**: Suche und Marantz-Menüs nutzen den [Community Radio Browser](https://www.radio-browser.info).
   Die Server werden per DNS (`_api._tcp.radio-browser.info`) ermittelt, ergänzt um de1/de2; „Automatisch“
   weicht bei Ausfall auf den nächsten aus, ein fester Server lässt sich unter „Einrichtung“ wählen
-  (oder per `RADIOBROWSER_API`). Ersetzt die Abfrage des Original-YCast, die keinen Ausweichserver
+  (oder per `RADIOBROWSER_API`). Eigene Server (z. B. ein Spiegel im Heimnetz, auch `http://IP:Port`)
+  lassen sich dort hinzufügen; YCast prüft sie per `/json/stats` und fragt sie bei „Automatisch“ zuerst. Ersetzt die Abfrage des Original-YCast, die keinen Ausweichserver
   und kein Zeitlimit kennt.
 - **Komfort**: „Zuletzt gespielt“ (`data/recent.json`) und Ausschalt-Timer (Standby nach Ablauf).
 - **HTTPS-Relay**: Receiver können kein HTTPS. YCast schreibt `https://` normalerweise auf
