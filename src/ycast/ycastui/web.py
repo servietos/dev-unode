@@ -342,7 +342,59 @@ def marantz_status():
             st["playing"] = st["transport"] in marantz.PLAYING_STATES
         except marantz.MarantzError:
             pass
+    # Senderinfo nur, solange der Marantz die UPnP-Quelle spielt (sonst wäre sie veraltet)
+    upnp = st["source"].upper() in UPNP_SOURCES
+    st["now"] = now_playing(ip) if upnp and st["transport"] not in ("", "NO_MEDIA_PRESENT") else None
     return jsonify({"configured": True, "how": how, "reachable": True, **sleep, **st})
+
+
+UPNP_SOURCES = ("SERVER", "DLNA", "UPNP")
+
+
+def now_playing(ip):
+    """Welcher Sender läuft per UPnP, mit Format und Bitrate aus „Zuletzt gespielt“."""
+    try:
+        url, title = marantz.media_info(ip)
+    except marantz.MarantzError:
+        return None
+    if not url:
+        return None
+    hit = next((r for r in load_recent() if r.get("url") == url), {})
+    return {"url": url, "station": hit.get("name") or title, "format": hit.get("format", ""),
+            "kbps": hit.get("kbps") or 0, "out": hit.get("out", "")}
+
+
+CODEC_LABELS = {"mp3": "MP3", "aac": "AAC", "aac-he": "HE-AAC", "opus": "Opus", "vorbis": "Vorbis", "flac": "FLAC"}
+
+
+def format_label(content_type="", codec=""):
+    if codec:
+        return CODEC_LABELS.get(codec, codec.upper())
+    ct = (content_type or "").lower()
+    for key, label in (("aacp", "HE-AAC"), ("aac", "AAC"), ("mp4", "AAC"), ("m4a", "AAC"), ("mpeg", "MP3"),
+                       ("opus", "Opus"), ("ogg", "Ogg"), ("flac", "FLAC"), ("wma", "WMA"), ("wav", "WAV")):
+        if key in ct:
+            return label
+    return ""
+
+
+def kbps(icy_br):
+    """„icy-br“ ist meist „128“, manchmal „128,128“."""
+    try:
+        v = int(str(icy_br or "").split(",")[0].strip())
+    except ValueError:
+        return 0
+    return v if 0 < v < 10000 else 0
+
+
+def stream_info(info, codec=None, hls_source=False):
+    """Format, Bitrate und – bei Umwandlung – was beim Marantz ankommt."""
+    out = {"format": format_label(info.get("type", ""), codec), "kbps": kbps(info.get("bitrate"))}
+    if hls_source:
+        out["format"] = f"HLS · {out['format']}" if out["format"] else "HLS"
+    if codec and hls.output_for(codec)[0][1] == "libmp3lame":
+        out["out"] = "MP3 192 kbit/s"
+    return out
 
 
 # Einschlaf-Timer: schaltet den Marantz nach Ablauf in Standby (läuft im Web-Dienst)
@@ -406,10 +458,10 @@ def load_recent():
 _recent_lock = threading.Lock()
 
 
-def remember(name, url):
+def remember(name, url, info=None):
     with _recent_lock:
         items = [r for r in load_recent() if r.get("url") != url]
-        items.insert(0, {"name": name, "url": url, "t": int(time.time())})
+        items.insert(0, {"name": name, "url": url, "t": int(time.time()), **(info or {})})
         try:
             common._atomic_write(RECENT_FILE, json.dumps(items[:RECENT_MAX], ensure_ascii=False, indent=1))
         except OSError as e:
@@ -496,7 +548,7 @@ def marantz_play():
         if codec is None:
             return err("Dieser HLS-Stream lässt sich nicht umwandeln (nicht erreichbar oder ohne Audio)", 502)
         used = marantz.play_url(ip, stream_for_marantz(url, "hls", hls_ext(codec)), name, hls.mime_candidates(codec))
-        remember(name, url)
+        remember(name, url, stream_info(info, codec, hls_source=True))
         return jsonify({"ok": True, "via": "hls", "codec": codec, "mime": used})
     try:
         mimes = marantz.mime_candidates(info.get("type", ""), url)
@@ -512,13 +564,13 @@ def marantz_play():
         if "aacp" in info.get("type", "").lower() and codec == "aac":
             codec = "aac-he"        # ffprobe meldet implizites HE-AAC oft als LC: sicherheitshalber MP3
         used = marantz.play_url(ip, stream_for_marantz(url, "hls", hls_ext(codec)), name, hls.mime_candidates(codec))
-        remember(name, url)
+        remember(name, url, stream_info(info, codec))
         return jsonify({"ok": True, "via": "convert", "codec": codec, "mime": used})
     ctype = info.get("type", "")
     relay = needs_relay(url, ctype)
     target = stream_for_marantz(url, "relay", common.stream_ext(ctype, url)) if relay else url
     used = marantz.play_url(ip, target, name, mimes)
-    remember(name, url)
+    remember(name, url, stream_info(info))
     via = "relay" if relay else "direct"
     return jsonify({"ok": True, "via": via, "via_relay": via == "relay", "mime": used})
 

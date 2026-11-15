@@ -10,7 +10,8 @@ import re
 import time
 import xml.etree.ElementTree as ET
 from html import escape as xml_escape
-from urllib.parse import urljoin
+from html import unescape
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 import requests
 
@@ -258,3 +259,18 @@ def play_pause(ip, action):
         return "upnp"
     command(ip, action)
     return "goform"
+
+
+def media_info(ip):
+    """(Adresse, Titel) des per UPnP geladenen Streams; die Quelladresse steckt bei Relay und
+    Umwandlung im Parameter „url“."""
+    text = _soap(check_ip(ip), "GetMediaInfo")
+    m = re.search(r"<CurrentURI>(.*?)</CurrentURI>", text, re.S)
+    uri = unescape(m.group(1).strip()) if m else ""
+    meta = re.search(r"<CurrentURIMetaData>(.*?)</CurrentURIMetaData>", text, re.S)
+    t = re.search(r"<dc:title>(.*?)</dc:title>", unescape(meta.group(1)) if meta else "", re.S)
+    title = unescape(t.group(1).strip()) if t else ""
+    parts = urlsplit(uri)
+    if re.match(r"^/(relay|hls)/", parts.path):
+        uri = (parse_qs(parts.query).get("url") or [uri])[0]
+    return uri, title

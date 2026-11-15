@@ -629,10 +629,22 @@ function renderMarantz() {
     setDial(0); return;
   }
   ph.dataset.state = "on";
-  const lines = (mz.lines || []).filter((l) => l && !/^now playing$/i.test(l));
-  src.textContent = sourceName(mz);
-  title.textContent = lines[0] || sourceName(mz) || "Bereit";
-  sub.textContent = lines.slice(1, 3).join(" · ");
+  const lines = (mz.lines || []).map((l) => l.replace(/\s+/g, " ").trim()).filter((l) => l && !/^now playing$/i.test(l));
+  const n = mz.now;
+  if (n && n.station) {
+    // Von YCast gestartet: Sendername groß, darunter der Titel aus dem Stream, oben Format und Bitrate
+    const same = (a) => a.toLowerCase() === n.station.toLowerCase();
+    const rate = [n.format, n.kbps ? `${n.kbps} kbit/s` : ""].filter(Boolean).join(" · ");
+    src.textContent = (n.out ? `${rate || "Stream"} → ${n.out}` : rate) || "YCast";
+    title.textContent = n.station;
+    sub.textContent = lines.filter((l) => !same(l)).slice(0, 2).join(" · ");
+    if (n.url && n.url !== playingUrl) { playingUrl = n.url; renderStations(); }
+  } else {
+    src.textContent = sourceName(mz);
+    title.textContent = lines[0] || sourceName(mz) || "Bereit";
+    sub.textContent = lines.slice(1, 3).join(" · ");
+  }
+  [src, title, sub].forEach((el) => (el.title = el.textContent));
   vol.textContent = mz.mute ? "Stumm" : `Lautstärke ${mz.volume ?? "–"}`;
   note.textContent = "";
   setDial(mz.mute ? 0 : (mz.volume || 0) / (mz.volume_max || 60));

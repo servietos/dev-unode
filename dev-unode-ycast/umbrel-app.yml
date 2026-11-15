@@ -3,7 +3,7 @@ id: dev-unode-ycast
 name: YCast
 tagline: Internetradio für AV-Receiver mit vTuner (Marantz, Denon, Yamaha, Onkyo …)
 category: media
-version: "3.1.7"
+version: "3.1.8"
 port: 3848
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/ycast/ycastui/static/icon.svg
 description: >-
@@ -56,11 +56,14 @@ developer: servietos
 website: https://github.com/servietos/dev-unode/tree/master/src/ycast
 repo: https://github.com/servietos/dev-unode/tree/master/src/ycast
 support: https://github.com/servietos/dev-unode/issues
-gallery: []
+gallery:
+  - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-1.jpg
+  - https://raw.githubusercontent.com/servietos/dev-unode/master/gallery/ycast-2.jpg
 releaseNotes: >-
-  Neue Taste „Abspielen/Pause“ zwischen „Vorheriger“ und „Nächster Sender“. Ist am Marantz nichts
-  geladen, startet sie den zuletzt gespielten Sender. Die Lautstärke hat jetzt eine eigene Zeile
-  mit „Stumm“, „−“, Regler und „+“, die Tasten sind auch auf schmalen Handys immer sichtbar.
+  Das Display zeigt bei Sendern, die YCast startet, jetzt den Sendernamen, darunter den laufenden
+  Titel aus dem Stream und oben Format und Bitrate (z. B. „MP3 · 128 kbit/s“, bei Umwandlung
+  „Opus → MP3 192 kbit/s“). „Neue Kategorie“ steht neben „Umbenennen“ und „Löschen“, dadurch hat
+  die Kategorienleiste auf dem Handy die volle Breite.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

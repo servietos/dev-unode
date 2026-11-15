@@ -246,6 +246,7 @@ class FakeMarantz:
 
     def __init__(self):
         self.power, self.volume, self.mute, self.calls, self.soap = "STANDBY", 3, "off", [], []
+        self.net = "IRADIO"
 
     def get(self, url, timeout=None, **kw):
         r = mock.Mock(ok=True, status_code=200)
@@ -263,7 +264,7 @@ class FakeMarantz:
                       f"<MasterVolume><value>{self.volume - 80}.0</value></MasterVolume><Mute><value>{self.mute}</value></Mute></item>")
         elif "NetAudio_StatusXml" in url:
             r.text = ("<item><szLine><value>Now Playing</value><value>Bayern 3</value><value>Musik</value><value></value></szLine>"
-                      "<NetFuncSelect><value>IRADIO</value></NetFuncSelect></item>")
+                      f"<NetFuncSelect><value>{self.net}</value></NetFuncSelect></item>")
         elif "description.xml" in url:
             r.text = ("<root><service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>"
                       "<controlURL>/AVTransport/ctrl</controlURL></service></root>")
@@ -287,7 +288,9 @@ class TestMarantz(Base):
         self.p2 = mock.patch.object(self.m.requests, "post", side_effect=self.fake.post)
         self.p3 = mock.patch.object(self.m.time, "sleep", lambda s: None)
         self.stream_type = "audio/mpeg"
-        self.p4 = mock.patch.object(self.web, "probe", side_effect=lambda url: {"ok": True, "type": self.stream_type})
+        self.stream_br = ""
+        self.p4 = mock.patch.object(self.web, "probe", side_effect=lambda url: {
+            "ok": True, "type": self.stream_type, "bitrate": self.stream_br})
         for p in (self.p1, self.p2, self.p3, self.p4):
             p.start()
         self.common.save_setting("marantz_ip", "192.168.178.56")
@@ -464,6 +467,54 @@ class TestMarantz(Base):
                 s = self.client.get("/api/marantz").get_json()
         self.assertIsNone(s["playing"])
         self.assertEqual(len(lookups), 3)                 # einmal je Port, danach Pause
+
+    def upnp_media(self, uri, title, state="PLAYING"):
+        """UPnP-Antworten für Statusabfragen, wie sie der M-CR510 liefert (DIDL doppelt maskiert)."""
+        didl = self.m._didl(title, uri, "audio/mpeg")
+
+        def post(url, data=None, headers=None, timeout=None):
+            action = headers["SOAPACTION"]
+            if "GetTransportInfo" in action:
+                text = f"<CurrentTransportState>{state}</CurrentTransportState>"
+            elif "GetMediaInfo" in action:
+                text = (f"<CurrentURI>{self.m.xml_escape(uri)}</CurrentURI>"
+                        f"<CurrentURIMetaData>{self.m.xml_escape(didl)}</CurrentURIMetaData>")
+            else:
+                text = "<ok/>"
+            return mock.Mock(ok=True, status_code=200, text=text)
+        return mock.patch.object(self.m.requests, "post", side_effect=post)
+
+    def test_now_playing_shows_station_format_and_bitrate(self):
+        self.stream_br = "128,128"
+        r = self.client.post("/api/marantz/play", json={"name": "FM4", "url": "https://orf.example/fm4-q2a"})
+        relayed = self.web.stream_for_marantz("https://orf.example/fm4-q2a", "relay", "mp3")
+        item = self.client.get("/api/recent").get_json()["items"][0]
+        self.assertEqual((item["format"], item["kbps"]), ("MP3", 128))
+        self.fake.net = "SERVER"
+        with self.upnp_media(relayed, "FM4"):
+            now = self.client.get("/api/marantz").get_json()["now"]
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(now, {"url": "https://orf.example/fm4-q2a", "station": "FM4", "format": "MP3",
+                               "kbps": 128, "out": ""})
+
+    def test_now_playing_for_unknown_stream_uses_upnp_title(self):
+        self.fake.power, self.fake.net = "ON", "SERVER"
+        with self.upnp_media("http://other.example/live.mp3", "Fremder Sender"):
+            now = self.client.get("/api/marantz").get_json()["now"]
+        self.assertEqual((now["station"], now["kbps"]), ("Fremder Sender", 0))
+
+    def test_no_now_playing_on_other_source(self):
+        self.fake.power = "ON"                             # Quelle IRADIO: UPnP-Adresse wäre veraltet
+        with self.upnp_media("http://other.example/live.mp3", "Alt"):
+            self.assertIsNone(self.client.get("/api/marantz").get_json()["now"])
+
+    def test_converted_stream_reports_output(self):
+        self.stream_type = "application/ogg"
+        with mock.patch.object(self.web.hls, "available", return_value=True), \
+             mock.patch.object(self.web.hls, "probe", return_value=(0, "opus")):
+            self.client.post("/api/marantz/play", json={"name": "DLF", "url": "https://dlf.example/dlf.opus"})
+        item = self.client.get("/api/recent").get_json()["items"][0]
+        self.assertEqual((item["format"], item["out"]), ("Opus", "MP3 192 kbit/s"))
 
     def test_ip_must_be_private(self):
         self.assertEqual(self.client.put("/api/marantz/settings", json={"ip": "8.8.8.8"}).status_code, 400)

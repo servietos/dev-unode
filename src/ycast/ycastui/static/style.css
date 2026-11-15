@@ -353,8 +353,6 @@ dialog::backdrop { background: rgba(0,0,0,.5); backdrop-filter: blur(2px); }
   .knob.small { width: 36px; height: 36px; }
   .knob.play { width: 50px; height: 50px; }
   .controls { gap: 8px; }
-  .cats-bar { flex-wrap: wrap; }
-  .cats-bar .btn { margin-left: auto; }
   .list-head .row { width: 100%; }
   .st-play { width: 40px; height: 40px; padding: 0; justify-content: center; }
   .st-play .st-play-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

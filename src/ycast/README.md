@@ -4,13 +4,18 @@ vTuner-Ersatz für AV-Receiver und Netzwerk-Player mit eigener Weboberfläche, a
 [umbrelOS](https://umbrel.com) im Community App Store
 [`servietos/dev-unode`](https://github.com/servietos/dev-unode). Getestet mit einem Marantz M-CR510.
 
+![YCast am Desktop: Display mit Sender, laufendem Titel und Bitrate, Bedienung und Senderliste](../../gallery/ycast-1.jpg)
+
+![YCast auf dem Handy, dunkel und hell](../../gallery/ycast-2.jpg)
+
 Basis ist [YCast 1.1.0 von milaq](https://github.com/milaq/YCast) (PyPI), ergänzt um:
 
 - **Weboberfläche** (Umbrel-Dashboard): Kategorien und Sender verwalten, Drag & Drop,
   vorhören im Browser, Stream-Test, Suche im Community Radio Browser, Import/Export der
   `stations.yml`, Status, Abruf-Log des Receivers, DNS-Prüfung, Netzwerk-Einstellung.
-- **Fernbedienung** für Denon/Marantz-Netzwerkgeräte (getestet M-CR510): Ein/Standby, Lautstärke,
-  Stumm, Display mit dem laufenden Titel und „Abspielen“ bei jedem Sender. Status und Befehle über
+- **Fernbedienung** für Denon/Marantz-Netzwerkgeräte (getestet M-CR510): Ein/Standby, Abspielen/Pause,
+  Vorheriger/Nächster Sender, Lautstärke, Stumm und „Abspielen“ bei jedem Sender. Das Display zeigt
+  Sendername, laufenden Titel aus dem Stream (ICY) sowie Format und Bitrate. Status und Befehle über
   die Webschnittstelle des Geräts (`/goform/…`, bewusst nicht Telnet, damit die Hersteller-App frei
   bleibt), Abspielen per UPnP AVTransport. Die Geräte-IP wird aus den Abrufen erkannt oder fest
   eingetragen; im Gerät muss Netzwerk-Standby aktiv sein.
