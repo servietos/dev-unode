@@ -154,12 +154,33 @@ class WebTests(unittest.TestCase):
         self.assertEqual(ok["thesis"]["order_id"], ok["order"]["id"])
         pos = {p["symbol"]: p for p in self.client.get("/api/broker/positions").json()}
         self.assertEqual(set(pos), {"AAPL", "EUNL.DE"})
+        # Stop und Ziel stehen an der Position; der Core hat keins
+        self.assertEqual((pos["AAPL"]["stop"], pos["AAPL"]["target"]), (190, 220))
+        self.assertIsNone(pos["EUNL.DE"]["stop"])
+        # Stop nachziehen: nur nach oben und unter dem letzten Kurs
+        self.assertEqual(self.client.post("/api/trade/stop/AAPL", json={"stop": 185}).status_code, 422)
+        self.assertEqual(self.client.post("/api/trade/stop/AAPL", json={"stop": 200}).status_code, 422)
+        self.assertEqual(self.client.post("/api/trade/stop/EUNL.DE", json={"stop": 90}).status_code, 404)
+        up = self.client.post("/api/trade/stop/AAPL", json={"stop": 195}).json()
+        self.assertEqual((up["old_stop"], up["stop"]), (190, 195))
+        self.assertEqual(self.client.get("/api/broker/positions").json()[0]["stop"], 195)
         h = self.client.get("/api/broker/history?period=1M").json()
         self.assertEqual(h["equity_idx"][0], 100.0)
         self.assertEqual(self.client.delete("/api/trade/orders/not-an-id").status_code, 400)
         closed = self.client.post("/api/trade/close/AAPL").json()
         self.assertEqual(closed["status"], "filled")
         self.assertEqual(self.client.post("/api/trade/close/AAPL").status_code, 404)
+        # Von Hand geschlossen: die These zur Order ist beendet und zählt nicht in die Trefferquote
+        th = next(t for t in self.client.get("/api/theses").json() if t["id"] == ok["thesis"]["id"])
+        self.assertEqual(th["status"], "cancelled")
+        self.assertIn("von Hand geschlossen", th["note"])
+        # Ereignisse in Klartext statt JSON
+        texts = [e["text"] for e in self.client.get("/api/events?important=true").json()]
+        self.assertTrue(any(t.startswith("Gekauft: AAPL") for t in texts), texts)
+        self.assertTrue(any(t.startswith("Stop AAPL nachgezogen: 190,00 → 195,00") for t in texts), texts)
+        self.assertTrue(any(t.startswith("AAPL von Hand verkauft") for t in texts), texts)
+        self.assertFalse(any("{" in t for t in texts))
+        self.assertTrue(self.client.get("/api/status").json()["advisor"]["auto_trade"] in (True, False))
 
     def test_advisor_token_is_never_returned(self):
         token = "sk-ant-oat01-" + "y" * 40

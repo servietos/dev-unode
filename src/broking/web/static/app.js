@@ -56,6 +56,8 @@ function segmented(el, onChange) {
   return () => $("button[aria-pressed=true]", el)?.dataset.v;
 }
 
+const isPhone = () => window.matchMedia("(max-width: 760px)").matches;
+
 // --- Navigation -------------------------------------------------------------------------
 const PAGES = ["dashboard", "markt", "handel", "journal", "hilfe", "einstellungen"];
 const loaders = {};
@@ -173,6 +175,11 @@ async function loadStatus() {
   $("#nav-due").textContent = s.due_theses;
   $("#mode-pill").textContent = s.paper_trading ? "Paper-Trading" : "LIVE";
   $("#mode-pill").className = `pill ${s.paper_trading ? "good" : "bad"}`;
+  const adv = s.advisor || {}, advOn = adv.enabled && adv.token_configured;
+  $("#statusbar").innerHTML = `
+    <span class="pill ${s.paper_trading ? "good" : "bad"}">${s.paper_trading ? "Paper-Trading · kein echtes Geld" : "LIVE"}</span>
+    <a href="#einstellungen" class="pill ${advOn && adv.auto_trade ? "warn" : ""}">${!advOn ? "Claude aus" : adv.auto_trade ? "Claude kauft automatisch" : "Claude schlägt nur vor"}</a>
+    <span class="pill">${s.next_run ? `Nächster Lauf ${fmtDate(s.next_run)}` : "Zeitplan aus"}</span>`;
 
   const steps = { fetch: "lade Kurse", screen: "rechne Screen", evaluate: "werte Thesen aus", sync: "gleiche Depot ab", advise: "Claude bewertet" };
   let line = "";
@@ -250,7 +257,7 @@ const histSeg = segmented($("#hist-seg"), () => loadHistory());
 
 loaders.dashboard = async () => {
   const [b] = await Promise.all([loadBroker().catch(() => null), loadStatus().catch(() => null), loadScreen().catch(() => null),
-    loadStatsKpi(), loadAdvisor().catch(() => null)]);
+    loadStatsKpi(), loadAdvisor().catch(() => null), loadFeed().catch(() => null)]);
   const a = b && !b.error ? b.account : null;
   if (a) {
     const eq = num(a.equity), last = num(a.last_equity), day = eq - last, total = eq - num(a.start_cash);
@@ -329,6 +336,14 @@ async function loadAdvisor() {
   return a;
 }
 
+const TONE = { good: "pos", bad: "neg", info: "" };
+const eventRow = (e) => `<li><span class="feed-time muted small">${e.ts.length > 10 ? fmtDate(e.ts) : fmtDay(e.ts)}</span><span class="${TONE[e.tone] || ""}">${esc(e.text)}</span></li>`;
+
+async function loadFeed() {
+  const ev = await api("/api/events?limit=5&important=true");
+  $("#feed").innerHTML = ev.length ? ev.map(eventRow).join("") : `<li class="muted">Noch nichts passiert. Der nächste Lauf lädt Kurse und bewertet die Kandidaten.</li>`;
+}
+
 async function loadStatsKpi() {
   const st = await api("/api/stats");
   const t = st.total;
@@ -350,6 +365,7 @@ async function loadHistory() {
     const series = [{ label: "Depot", color: "var(--series-1)", values: h.equity_idx }];
     if (h.benchmark && h.benchmark_idx.some((v) => v != null)) series.push({ label: `Benchmark ${h.benchmark}`, color: "var(--series-2)", values: h.benchmark_idx });
     legend($("#eq-legend"), series);
+    el.classList.toggle("is-empty", h.dates.length < 2);
     if (h.dates.length < 2) { el.innerHTML = `<p class="empty">Noch zu wenig Depot-Historie – die Kurve wächst mit jedem Handelstag.</p>`; return; }
     lineChart(el, { dates: h.dates, series, baseline: 100, valueFmt: (v) => fmt(v, 1), label: "Depot gegen Benchmark, indexiert" });
   } catch (e) { el.innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
@@ -426,6 +442,7 @@ $("#btn-thesis").addEventListener("click", () => {
   const f = $("#thesis-form"), mt = pxData?.metrics;
   f.ticker.value = selected;
   if (mt) { f.entry.value = mt.close.toFixed(2); f.target.value = (mt.close + 3 * mt.atr14).toFixed(2); f.stop.value = (mt.close - 1.5 * mt.atr14).toFixed(2); }
+  thesisFormWanted = true;
   location.hash = "journal";
   setTimeout(() => f.rationale.focus(), 50);
 });
@@ -442,10 +459,12 @@ loaders.handel = async () => {
   $("#ticket-src").className = `pill ${ok ? "good" : "bad"}`;
   if (!ok) {
     const msg = esc(b?.error || "Depot nicht erreichbar");
-    $("#pos-table tbody").innerHTML = `<tr><td colspan="7" class="empty">${msg}</td></tr>`;
+    $("#pos-table tbody").innerHTML = `<tr><td colspan="8" class="empty">${msg}</td></tr>`;
     $("#orders-table tbody").innerHTML = `<tr><td colspan="7" class="empty">${msg}</td></tr>`;
     return;
   }
+  if (ticketProposal || ticketTicker || !isPhone()) $("#ticket-details").open = true;
+  else if (!tf.ticker.value) $("#ticket-details").open = false;
   if (ticketProposal) { fillProposal(ticketProposal); ticketProposal = null; }
   else if (ticketTicker) { tf.ticker.value = ticketTicker; tf.thesis_id.value = ""; ticketTicker = null; prefill(); }
   loadPositions($("#pos-table tbody")).catch((e) => toast(e.message));
@@ -453,22 +472,48 @@ loaders.handel = async () => {
 };
 $("#btn-refresh-trade").addEventListener("click", () => loaders.handel());
 
+// Abstand von Stop und Ziel zum aktuellen Kurs – das, was man bei einer Swing-Position wissen will
+function stopTarget(p) {
+  if (p.stop == null && p.target == null) return `<span class="muted">–</span>`;
+  const dist = (v) => (p.current_price ? signed((v / num(p.current_price) - 1) * 100, 1, " %") : "");
+  return `${p.stop != null ? `<span class="neg">${fmt(p.stop)}</span> <span class="muted small">${dist(p.stop)}</span>` : "–"}
+    <span class="sub">${p.target != null ? `<span class="pos">${fmt(p.target)}</span> ${dist(p.target)}` : "kein Ziel"}</span>`;
+}
+
 async function loadPositions(tbody, short = false) {
   const ps = await api("/api/broker/positions");
   const total = ps.reduce((s, p) => s + num(p.market_value), 0), pl = ps.reduce((s, p) => s + num(p.unrealized_pl), 0);
   if (!short) $("#pos-total").innerHTML = ps.length ? `${money(total)} · <span class="${cls(pl)}">${signed(pl)} €</span>` : "";
-  const cols = short ? 4 : 7;
+  const cols = short ? 4 : 8;
   const tag = (p) => `<span class="sub">${p.sleeve === "core" ? "Core" : "Satellit"}</span>`;
   tbody.innerHTML = ps.length ? ps.map((p) => short ? `
-    <tr><td class="sym">${esc(p.symbol)}${tag(p)}</td><td class="num">${fmt(p.qty, 4)}</td><td class="num">${money(p.market_value)}</td>
+    <tr><td class="sym">${esc(p.symbol)}${tag(p)}</td><td class="num">${stopTarget(p)}</td><td class="num">${money(p.market_value)}</td>
     <td class="num ${cls(p.unrealized_pl)}">${signed(num(p.unrealized_plpc) * 100, 1, " %")}</td></tr>` : `
-    <tr><td class="sym">${esc(p.symbol)}${tag(p)}</td><td class="num">${fmt(p.qty, 4)}</td><td class="num">${money(p.avg_entry_price, p.currency)}</td>
-    <td class="num">${money(p.current_price, p.currency)}<span class="sub ${cls(p.change_today)}">${signed(num(p.change_today) * 100, 2, " %")}</span></td>
-    <td class="num">${money(p.market_value)}</td>
-    <td class="num ${cls(p.unrealized_pl)}">${signed(p.unrealized_pl)} €<span class="sub">${signed(num(p.unrealized_plpc) * 100, 1, " %")}</span></td>
-    <td><button class="btn sm danger" data-close="${esc(p.symbol)}">Schließen</button></td></tr>`).join("")
+    <tr><td class="sym full">${esc(p.symbol)}${tag(p)}</td><td class="num" data-l="Stück">${fmt(p.qty, 4)}</td><td class="num" data-l="Einstand">${money(p.avg_entry_price, p.currency)}</td>
+    <td class="num" data-l="Kurs">${money(p.current_price, p.currency)}<span class="sub ${cls(p.change_today)}">${signed(num(p.change_today) * 100, 2, " %")}</span></td>
+    <td class="num" data-l="Stop / Ziel">${stopTarget(p)}</td>
+    <td class="num" data-l="Wert">${money(p.market_value)}</td>
+    <td class="num ${cls(p.unrealized_pl)}" data-l="Gewinn/Verlust">${signed(p.unrealized_pl)} €<span class="sub">${signed(num(p.unrealized_plpc) * 100, 1, " %")}</span></td>
+    <td class="full row-actions">${p.stop != null ? `<button class="btn sm" data-stop="${esc(p.symbol)}">Stop nachziehen</button>` : ""}
+      <button class="btn sm danger" data-close="${esc(p.symbol)}">Schließen</button></td></tr>`).join("")
     : `<tr><td colspan="${cols}" class="empty">Keine offenen Positionen.</td></tr>`;
   $$("[data-close]", tbody).forEach((b) => b.addEventListener("click", () => closePosition(b.dataset.close)));
+  $$("[data-stop]", tbody).forEach((b) => b.addEventListener("click", () => raiseStop(ps.find((p) => p.symbol === b.dataset.stop))));
+}
+
+async function raiseStop(p) {
+  const ok = await confirmDialog(`Stop für ${p.symbol} nachziehen`, `
+    <p>Aktueller Stop <b>${money(p.stop, p.currency)}</b>, letzter Kurs ${money(p.current_price, p.currency)}.
+      Der neue Stop muss dazwischen liegen – ein Stop wird nur angehoben, nie gesenkt.</p>
+    <label>Neuer Stop (${esc(p.currency)})<input id="new-stop" type="number" step="any" min="${p.stop}" max="${p.current_price}" inputmode="decimal"></label>`, "Stop anheben");
+  if (!ok) return;
+  const v = Number($("#new-stop").value);
+  if (!v) { toast("Kein Stop eingegeben"); return; }
+  try {
+    const r = await api(`/api/trade/stop/${encodeURIComponent(p.symbol)}`, { method: "POST", body: { stop: v } });
+    toast(`Stop ${p.symbol} angehoben auf ${fmt(r.stop)}`);
+  } catch (e) { toast(e.message); }
+  loaders.handel();
 }
 
 async function closePosition(sym) {
@@ -476,7 +521,7 @@ async function closePosition(sym) {
   if (!ok) return;
   try {
     const r = await api(`/api/trade/close/${encodeURIComponent(sym)}`, { method: "POST" });
-    toast(`${sym} verkauft · Ergebnis ${signed(r.realized_pl_eur)} €`);
+    toast(`${sym} verkauft · Ergebnis ${signed(r.realized_pl_eur)} € · zugehörige These beendet`);
   }
   catch (e) { toast(e.message); }
   loaders.handel();
@@ -489,12 +534,12 @@ async function loadOrders() {
   const LABEL = { new: "neu", accepted: "angenommen", pending_new: "wartet", partially_filled: "teilweise", filled: "ausgeführt", canceled: "storniert", expired: "abgelaufen", rejected: "abgelehnt", held: "wartet (Bracket)", replaced: "ersetzt" };
   const row = (o, leg = false) => `
     <tr${leg ? ' class="muted"' : ""}>
-      <td>${leg ? "" : fmtDate(o.created_at)}</td>
+      <td ${leg ? "" : 'data-l="Zeit"'}>${leg ? "" : fmtDate(o.created_at)}</td>
       <td class="sym">${leg ? "↳" : esc(o.symbol)}</td>
-      <td>${esc(o.side === "buy" ? "Kauf" : "Verkauf")} ${esc({ limit: leg ? "Ziel" : "Limit", stop: "Stop", market: "Markt" }[o.type] || o.type)}${o.order_class === "bracket" && !leg ? " · Bracket" : ""}</td>
-      <td class="num">${fmt(o.filled_qty, 4)}/${fmt(o.qty, 4)}</td>
-      <td class="num">${fmt(o.limit_price ?? o.stop_price)}</td>
-      <td>${esc(LABEL[o.status] || o.status)}${o.filled_avg_price ? `<span class="sub">Ø ${fmt(o.filled_avg_price)}${o.realized_pl_eur != null ? ` · ${signed(o.realized_pl_eur)} €` : ""}</span>` : ""}${o.note ? `<span class="sub">${esc(o.note)}</span>` : ""}</td>
+      <td data-l="Art">${esc(o.side === "buy" ? "Kauf" : "Verkauf")} ${esc({ limit: leg ? "Ziel" : "Limit", stop: "Stop", market: "Markt" }[o.type] || o.type)}${o.order_class === "bracket" && !leg ? " · Bracket" : ""}</td>
+      <td class="num" data-l="Stück (ausgeführt/gesamt)">${fmt(o.filled_qty, 4)}/${fmt(o.qty, 4)}</td>
+      <td class="num" data-l="Limit / Stop">${fmt(o.limit_price ?? o.stop_price)}</td>
+      <td data-l="Status">${esc(LABEL[o.status] || o.status)}${o.filled_avg_price ? `<span class="sub">Ø ${fmt(o.filled_avg_price)}${o.realized_pl_eur != null ? ` · ${signed(o.realized_pl_eur)} €` : ""}</span>` : ""}${o.note ? `<span class="sub">${esc(o.note)}</span>` : ""}</td>
       <td>${st === "open" && ["new", "held"].includes(o.status) ? `<button class="btn sm" data-cancel="${esc(o.id)}">Stornieren</button>` : ""}</td>
     </tr>`;
   tb.innerHTML = os.length ? os.map((o) => row(o) + (o.legs || []).map((l) => row(l, true)).join("")).join("")
@@ -540,7 +585,7 @@ function renderTicketSum() {
   const items = [
     ["Volumen", `${money(vol)}${eq ? ` · ${fmt((vol / eq) * 100, 1)} %` : ""}`],
     ["Risiko bis Stop", `${money(risk)}${eq ? ` · ${fmt((risk / eq) * 100, 2)} %` : ""}`],
-    ["Chance bis Ziel", money(reward)], ["Chance/Risiko", risk > 0 ? `${fmt(reward / risk, 1)} : 1` : "–"],
+    ["Chance bis Ziel", money(reward)], ["Chance/Risiko vor Gebühren", risk > 0 ? `${fmt(reward / risk, 1)} : 1` : "–"],
   ];
   $("#ticket-sum").innerHTML = items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
 }
@@ -593,7 +638,8 @@ tf.addEventListener("submit", async (e) => {
     const r = await api("/api/trade/check", { method: "POST", body: o });
     checkedOrder = o;
     $("#btn-send").disabled = false;
-    $("#ticket-result").innerHTML = `<div class="result ok"><span class="status ok">Prüfung bestanden</span>
+    const pricey = r.odds && r.odds.breakeven_pct >= 50;
+    $("#ticket-result").innerHTML = `<div class="result ${pricey ? "warn" : "ok"}"><span class="status ${pricey ? "" : "ok"}">${pricey ? "Limits eingehalten – aber nach Gebühren ungünstig" : "Prüfung bestanden"}</span>
       <p class="small">Letzter Kurs ${fmt(r.last_price)} · ${money(r.risk.value_eur)} + ${money(r.risk.fee_eur)} Gebühr · max. ${fmt(r.risk.suggested_qty, 4)} Stück nach Limits. Order kann gesendet werden.</p>${oddsLine(r.odds)}</div>`;
   } catch (err) { checkedOrder = null; $("#btn-send").disabled = true; showViolations(err); }
 });
@@ -627,10 +673,16 @@ $("#btn-send").addEventListener("click", async () => {
 // --- Journal ----------------------------------------------------------------------------
 const STATUS_LABEL = { open: "offen", hit: "Treffer", miss: "Fehlschlag", cancelled: "storniert" };
 
+let thesisFormWanted = false;
+
 loaders.journal = async () => {
+  const td = $("#thesis-details");
+  if (thesisFormWanted || !isPhone()) td.open = true;
+  else if (!$("#thesis-form").ticker.value) td.open = false;
+  thesisFormWanted = false;
   const filter = $("#thesis-filter").value;
   const [list, st, acts] = await Promise.all([
-    api(`/api/theses${filter ? `?status=${filter}` : ""}`), api("/api/stats"), api("/api/actions?limit=60"),
+    api(`/api/theses${filter ? `?status=${filter}` : ""}`), api("/api/stats"), api("/api/events?limit=60"),
   ]);
   const kpi = (label, r, sub) => `<div class="kpi"><div class="kpi-label">${esc(label)}</div>
     <div class="kpi-value">${r.hit_rate == null ? "–" : Math.round(r.hit_rate * 100) + " %"}</div>
@@ -648,10 +700,12 @@ loaders.journal = async () => {
           <span class="pill ${pill}">${due ? "fällig" : STATUS_LABEL[t.status]}</span></div>
         <div class="small muted">Einstieg ${fmt(t.entry)}${t.stop ? ` · Stop ${fmt(t.stop)}` : ""} · Frist ${fmtDay(t.deadline)} · ${esc(t.model || "–")}${t.order_id ? " · mit Order" : ""}</div>
         <p>${esc(t.rationale)}</p>
-        ${t.status === "open" ? `<div class="actions">
+        ${t.status === "open" ? `<details class="fold manual"><summary>Von Hand auswerten</summary>
+            <p class="muted small">Normalerweise wertet die App Thesen selbst aus, sobald Ziel, Stop oder Frist erreicht sind.</p>
+            <div class="actions">
             <input type="number" step="any" placeholder="Kurs" aria-label="Kurs bei Auswertung">
             <button class="btn sm" data-status="hit">Treffer</button><button class="btn sm" data-status="miss">Fehlschlag</button>
-            <button class="btn sm" data-status="cancelled">Stornieren</button></div>`
+            <button class="btn sm" data-status="cancelled">Stornieren</button></div></details>`
           : `<div class="small muted">${t.resolved_price != null ? `Ausgewertet bei ${fmt(t.resolved_price)} · ` : ""}${fmtDate(t.resolved_at)}${t.note ? ` · ${esc(t.note)}` : ""}</div>`}
       </div>`;
   }).join("") : `<p class="empty">Keine Thesen in dieser Ansicht.</p>`;
@@ -663,14 +717,9 @@ loaders.journal = async () => {
     } catch (e) { toast(e.message); }
   }));
 
-  const label = (a) => a.action ? { order: "Order", cancel: "Storno", close: "Position geschlossen", core_buy: "Core-Kauf", paper_reset: "Depot neu gestartet",
-    config_migrated: "Konfiguration aktualisiert", advisor_run: "Claude-Bewertung", advisor_token_saved: "Claude-Token gespeichert",
-    advisor_token_deleted: "Claude-Token entfernt", advisor_auto_order: "Auto-Order (Claude-Vorschlag)" }[a.action] || a.action
-    : a.hook ? `Hook ${a.hook}` : "Eintrag";
-  $("#action-table tbody").innerHTML = acts.length ? acts.map((a) => {
-    const { ts, ...rest } = a;
-    return `<tr><td>${fmtDate(ts)}</td><td>${esc(label(a))}</td><td><code>${esc(JSON.stringify(rest)).slice(0, 400)}</code></td></tr>`;
-  }).join("") : `<tr><td colspan="3" class="empty">Noch keine Aktionen protokolliert.</td></tr>`;
+  $("#action-table tbody").innerHTML = acts.length ? acts.map((e) =>
+    `<tr><td>${e.ts.length > 10 ? fmtDate(e.ts) : fmtDay(e.ts)}</td><td class="wrap ${TONE[e.tone] || ""}">${esc(e.text)}</td></tr>`).join("")
+    : `<tr><td colspan="2" class="empty">Noch keine Aktionen protokolliert.</td></tr>`;
 };
 $("#thesis-filter").addEventListener("change", () => loaders.journal());
 

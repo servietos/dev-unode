@@ -3,7 +3,7 @@ id: dev-unode-broking
 name: Broking
 tagline: Aktien, ETFs und Krypto screenen, Thesen führen, im Paper-Depot (EUR) handeln
 category: finance
-version: "0.3.5"
+version: "0.3.6"
 port: 3847
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/broking/web/static/icon.svg
 description: >-
@@ -29,10 +29,10 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/broking
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Kosten sichtbar: Jeder Vorschlag und jedes geprüfte Ticket zeigt, was nach Gebühren bleibt und ab welcher
-  Trefferquote sich der Trade lohnt. Neue Kachel „Trades netto“ mit dem echten Ergebnis beendeter Trades.
-  Titel mit Quartalszahlen in den nächsten 7 Tagen werden nicht mehr vorgeschlagen. Rücktest der Regeln
-  (tools/backtest.py), Ergebnis in der Hilfe. Fix: Ein unvollständiger Kurs-Download löscht die Historie nicht mehr.
+  Bedienung: Positionen zeigen Stop und Ziel mit Abstand zum Kurs, Stops lassen sich nachziehen. Dashboard mit
+  Statuszeile und Liste „Zuletzt passiert“. Aktionsprotokoll in Klartext. Am Handy stehen Positionen und
+  Thesen zuerst, Formulare sind eingeklappt, Tabellen erscheinen als Karten. Einstellungen aufgeräumt.
+  Eine von Hand geschlossene Position beendet jetzt auch ihre These.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

@@ -289,7 +289,7 @@ def auto_execute(p: dict, model: str, cfg: dict, client: PaperBroker) -> dict:
     else:
         order = {"ticker": p["ticker"], "qty": p["qty"], "price": p["price"], "stop": p["stop"],
                  "target": p["target"], "horizon_days": p["horizon_days"], "rationale": p["rationale"],
-                 "model": model, "thesis_id": p["thesis_id"]}
+                 "model": model, "thesis_id": p["thesis_id"], "source": "advisor"}
         try:
             placed = trading.place(client, order, cfg)
             res = {"status": "placed", "order_id": placed["order"].get("id")}

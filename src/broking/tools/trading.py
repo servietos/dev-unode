@@ -212,7 +212,7 @@ def place(client: PaperBroker, order: dict, cfg: dict, now: dt.datetime | None =
                 journal.resolve(thesis["id"], "cancelled", note=f"Order nicht angenommen: {e}"[:300])
             raise
         thesis = journal.attach_order(thesis["id"], res.get("id"))
-        journal.log_action({"source": "web", "action": "order", "order_id": res.get("id"),
+        journal.log_action({"source": o.get("source") or "web", "action": "order", "order_id": res.get("id"),
                             "client_order_id": coid, "thesis_id": thesis["id"], "order": o,
                             "status": res.get("status")})
     sync_portfolio(client)
@@ -280,5 +280,19 @@ def close(client: PaperBroker, symbol: str) -> dict:
     res = client.close_position(sym)
     journal.log_action({"source": "web", "action": "close", "symbol": sym, "order_id": res.get("id"),
                         "realized_pl_eur": res.get("realized_pl_eur")})
+    # Die These zur Order ist damit erledigt – sonst würde sie später als Treffer/Fehlschlag gewertet,
+    # obwohl der Trade längst beendet ist. „storniert“ zählt nicht in die Trefferquote.
+    for t in journal.load_theses():
+        if t["status"] == "open" and t["ticker"] == sym and t.get("order_id"):
+            journal.resolve(t["id"], "cancelled", res.get("filled_avg_price"),
+                            f"Position von Hand geschlossen, Ergebnis {res.get('realized_pl_eur')} €")
+    sync_portfolio(client)
+    return res
+
+
+def raise_stop(client: PaperBroker, symbol: str, stop: float) -> dict:
+    """Stop nachziehen (nur nach oben). Die These behält ihren ursprünglichen Stop als Prognose."""
+    res = client.raise_stop(symbol.upper(), round_px(float(stop)))
+    journal.log_action({"source": "web", "action": "stop_raised", **res})
     sync_portfolio(client)
     return res

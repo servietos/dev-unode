@@ -261,7 +261,8 @@ def status():
         "due_theses": len(journal.due_theses()),
         "broker": "paper",
         "broker_configured": True,
-        "advisor": {"enabled": advisor.settings(cfg)["enabled"], "token_configured": advisor.load_token() is not None},
+        "advisor": {"enabled": advisor.settings(cfg)["enabled"], "token_configured": advisor.load_token() is not None,
+                    "auto_trade": bool(advisor.settings(cfg)["auto_trade"])},
     }
 
 
@@ -356,6 +357,80 @@ def actions(limit: int = Query(100, ge=1, le=1000)):
         return []
     lines = path.read_text(encoding="utf-8").splitlines()[-limit:]
     return [json.loads(line) for line in reversed(lines) if line.strip()]
+
+
+# --- Ereignisse in Klartext (Dashboard „Zuletzt passiert“ und Aktionsprotokoll) -----------
+
+def _n(x, d: int = 2) -> str:
+    return "–" if not isinstance(x, (int, float)) else f"{x:,.{d}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _eur(x, sign: bool = False) -> str:
+    if not isinstance(x, (int, float)):
+        return "–"
+    return f"{'+' if sign and x > 0 else '−' if x < 0 else ''}{_n(abs(x))} €"
+
+
+IMPORTANT = {"order", "advisor_auto_order", "advisor_run", "core_buy", "close", "stop_raised", "cancel", "paper_reset"}
+
+
+def describe(a: dict) -> tuple[str, str]:
+    """Ein Protokolleintrag als deutscher Satz plus Ton (good/bad/info)."""
+    act = a.get("action")
+    o = a.get("order") if isinstance(a.get("order"), dict) else {}
+    sym = a.get("ticker") or a.get("symbol") or o.get("ticker") or ""
+    if act == "order":
+        how = "Automatisch gekauft" if o.get("source") == "advisor" else "Gekauft"
+        return (f"{how}: {sym}, {_n(o.get('qty'), 4)} Stück zu {_n(o.get('price'))} · "
+                f"Stop {_n(o.get('stop'))} · Ziel {_n(o.get('target'))}"), "good"
+    if act == "advisor_auto_order":
+        if a.get("status") == "placed":
+            return f"Claude-Vorschlag {sym} automatisch gebucht", "good"
+        return f"Claude-Vorschlag {sym} nicht gebucht: {'; '.join(a.get('reasons') or ['abgelehnt'])}", "bad"
+    if act == "advisor_run":
+        p = a.get("proposals") or []
+        return f"Claude-Bewertung ({a.get('model') or '?'}): " + (f"Vorschläge {', '.join(p)}" if p else "kein Vorschlag"), "info"
+    if act == "core_buy":
+        return f"Core aufgefüllt: {sym} für {_eur(a.get('value_eur'))}", "info"
+    if act == "close":
+        pl = a.get("realized_pl_eur")
+        return f"{sym} von Hand verkauft · Ergebnis {_eur(pl, True)}", "good" if isinstance(pl, (int, float)) and pl > 0 else "bad"
+    if act == "stop_raised":
+        return f"Stop {sym} nachgezogen: {_n(a.get('old_stop'))} → {_n(a.get('stop'))}", "info"
+    simple = {"cancel": "Order storniert", "paper_reset": "Paper-Depot neu gestartet",
+              "config_migrated": "Konfiguration aktualisiert", "advisor_token_saved": "Claude-Token gespeichert",
+              "advisor_token_deleted": "Claude-Token entfernt"}
+    if act in simple:
+        return simple[act], "info"
+    if a.get("hook"):
+        return f"Hook {a['hook']}: {str(a.get('decision') or a.get('reason') or '')[:120]}".rstrip(": "), "info"
+    return str(act or "Eintrag"), "info"
+
+
+@app.get("/api/events")
+def events(limit: int = Query(60, ge=1, le=500), important: bool = False):
+    """Protokoll plus ausgelöste Stops und erreichte Ziele aus dem Depot, neueste zuerst."""
+    out = []
+    for a in actions(1000):
+        if important and a.get("action") not in IMPORTANT:
+            continue
+        if a.get("action") == "advisor_auto_order" and a.get("status") == "placed":
+            continue  # steht schon als „Automatisch gekauft“ da
+        text, tone = describe(a)
+        out.append({"ts": a.get("ts") or "", "text": text, "tone": tone})
+    try:
+        for o in client().orders("all", 500):
+            for leg in o.get("legs", []):
+                if leg.get("status") != "filled":
+                    continue
+                pl = leg.get("realized_pl_eur")
+                what = "Stop ausgelöst" if leg.get("type") == "stop" else "Ziel erreicht"
+                out.append({"ts": leg.get("filled_at") or "", "tone": "good" if isinstance(pl, (int, float)) and pl > 0 else "bad",
+                            "text": f"{leg['symbol']}: {what}, verkauft zu {_n(leg.get('filled_avg_price'))} · Ergebnis {_eur(pl, True)}"})
+    except BrokerError:
+        pass
+    out.sort(key=lambda e: e["ts"], reverse=True)
+    return out[:limit]
 
 
 class RiskIn(BaseModel):
@@ -602,6 +677,16 @@ def trade_cancel(order_id: str):
 @app.post("/api/trade/close/{symbol}")
 def trade_close(symbol: str):
     return trading.close(client(), check_ticker(symbol))
+
+
+class StopIn(BaseModel):
+    stop: float = Field(gt=0, allow_inf_nan=False)
+
+
+@app.post("/api/trade/stop/{symbol}")
+def trade_stop(symbol: str, s: StopIn):
+    """Stop nachziehen: nur nach oben, nie über den letzten Kurs."""
+    return trading.raise_stop(client(), check_ticker(symbol), s.stop)
 
 
 @app.get("/api/trade/core")

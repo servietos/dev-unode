@@ -250,7 +250,11 @@ class PaperBroker:
                 prev = rows[-2]["close"] if len(rows) > 1 else last
                 rate = self._fx(sym, fx)
                 value = p["qty"] * last * rate
+                legs = [leg for leg in self._open_legs(st, sym) if leg["status"] == "new"]
+                stops = [leg["stop_price"] for leg in legs if leg["type"] == "stop"]
+                targets = [leg["limit_price"] for leg in legs if leg["type"] == "limit"]
                 out.append({
+                    "stop": max(stops) if stops else None, "target": min(targets) if targets else None,
                     "symbol": sym, "qty": round(p["qty"], 6), "avg_entry_price": round(p["avg_entry_price"], 4),
                     "current_price": round(last, 4), "currency": currency(sym),
                     "market_value": round(value, 2), "cost_basis": round(p["cost_eur"], 2),
@@ -361,6 +365,24 @@ class PaperBroker:
                     self._save(st)
                     return
             raise BrokerError("Order nicht gefunden", 404)
+
+    def raise_stop(self, symbol: str, new_stop: float) -> dict:
+        """Aktiven Stop einer Position anheben. Senken ist nicht erlaubt (Stops nur nachziehen)."""
+        sym = symbol.upper()
+        with _lock:
+            st, _ = self._state()
+            legs = [leg for leg in self._open_legs(st, sym) if leg["type"] == "stop" and leg["status"] == "new"]
+            if sym not in st["positions"] or not legs:
+                raise BrokerError(f"Kein aktiver Stop für {sym}", 404)
+            old, last = max(leg["stop_price"] for leg in legs), self.last_price(sym)
+            if not new_stop > old:
+                raise BrokerError(f"Stops nur nachziehen: der neue Stop muss über {old} liegen", 422)
+            if last is None or new_stop >= last:
+                raise BrokerError(f"Der Stop muss unter dem letzten Kurs ({last}) liegen", 422)
+            for leg in legs:
+                leg["stop_price"] = new_stop
+            self._save(st)
+            return {"symbol": sym, "old_stop": old, "stop": new_stop}
 
     def close_position(self, symbol: str) -> dict:
         sym = symbol.upper()

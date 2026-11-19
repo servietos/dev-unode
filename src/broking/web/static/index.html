@@ -17,7 +17,7 @@
       <a href="#handel" data-page="handel"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3" fill="none" stroke-width="2"/></svg><span>Handel</span></a>
       <a href="#journal" data-page="journal"><svg viewBox="0 0 24 24"><path d="M6 3h11a2 2 0 012 2v16l-4-2-4 2-4-2-3 2V5a2 2 0 012-2zm2 5h8M8 12h8" fill="none" stroke-width="2"/></svg><span>Journal</span><b class="count" id="nav-due" hidden></b></a>
       <a href="#hilfe" data-page="hilfe"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke-width="2"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.6-1.5 1-1.5 2M12 17h.01" fill="none" stroke-width="2"/></svg><span>Hilfe</span></a>
-      <a href="#einstellungen" data-page="einstellungen"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke-width="2"/><circle cx="16" cy="7" r="2" fill="none" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke-width="2"/></svg><span>Einstellungen</span></a>
+      <a href="#einstellungen" data-page="einstellungen"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke-width="2"/><circle cx="16" cy="7" r="2" fill="none" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke-width="2"/></svg><span data-short="Optionen">Einstellungen</span></a>
     </nav>
     <div class="sidebar-foot">
       <div class="pill good" id="mode-pill">Paper-Trading</div>
@@ -33,6 +33,7 @@
         <div><h1>Dashboard</h1><p class="muted" id="dash-sub">Überblick über Depot, Signale und Thesen</p></div>
         <div class="actions"><button class="btn" data-run="all">Alles aktualisieren</button></div>
       </header>
+      <div class="statusbar" id="statusbar" aria-live="polite"></div>
       <div class="kpis">
         <div class="kpi"><div class="kpi-label">Depotwert</div><div class="kpi-value" id="k-equity">–</div><div class="kpi-sub" id="k-equity-sub"></div></div>
         <div class="kpi"><div class="kpi-label">Heute</div><div class="kpi-value" id="k-day">–</div><div class="kpi-sub" id="k-day-sub"></div></div>
@@ -50,6 +51,10 @@
         <div class="props" id="adv-wrap"></div>
         <details class="rejects" id="adv-more" hidden><summary>Verworfen und ausgelassen</summary><div id="adv-rejects"></div></details>
       </div>
+      <div class="card" id="feed-card">
+        <div class="card-head"><h2>Zuletzt passiert</h2><a href="#journal" class="link">Alles →</a></div>
+        <ul class="feed" id="feed"></ul>
+      </div>
       <div class="grid g-2-1">
         <div class="card">
           <div class="card-head">
@@ -62,20 +67,20 @@
         <div class="card">
           <div class="card-head"><h2>Status</h2></div>
           <dl class="facts">
-            <div><dt>Core / Satellit / Cash</dt><dd id="s-alloc">–</dd></div>
-            <div><dt>Letzter Screen</dt><dd id="s-last">–</dd></div>
-            <div><dt>Nächster Lauf</dt><dd id="s-next">–</dd></div>
-            <div><dt>Kandidaten</dt><dd id="s-cands">–</dd></div>
+            <div><dt>Aufteilung Core / Satellit / Cash</dt><dd id="s-alloc">–</dd></div>
+            <div><dt>Kandidaten zuletzt berechnet</dt><dd id="s-last">–</dd></div>
+            <div><dt>Nächster automatischer Lauf</dt><dd id="s-next">–</dd></div>
+            <div><dt>Kandidaten im Screen</dt><dd id="s-cands">–</dd></div>
             <div><dt>Offene Thesen</dt><dd id="s-open">–</dd></div>
-            <div><dt>Fällige Thesen</dt><dd id="s-due">–</dd></div>
-            <div><dt>Job</dt><dd id="s-job">–</dd></div>
+            <div><dt>Thesen mit abgelaufener Frist</dt><dd id="s-due">–</dd></div>
+            <div><dt>Hintergrundlauf</dt><dd id="s-job">–</dd></div>
           </dl>
         </div>
       </div>
       <div class="grid g-1-1">
         <div class="card">
           <div class="card-head"><h2>Positionen</h2><a href="#handel" class="link">Alle →</a></div>
-          <div class="table-wrap"><table class="table" id="dash-pos"><thead><tr><th>Titel</th><th class="num">Stück</th><th class="num">Wert</th><th class="num">G/V</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrap"><table class="table" id="dash-pos"><thead><tr><th>Titel</th><th class="num">Stop / Ziel</th><th class="num">Wert</th><th class="num">G/V</th></tr></thead><tbody></tbody></table></div>
         </div>
         <div class="card">
           <div class="card-head"><h2>Top-Kandidaten</h2><a href="#markt" class="link">Screen →</a></div>
@@ -131,7 +136,8 @@
       </header>
       <div class="grid g-1-2">
         <form class="card" id="ticket" autocomplete="off">
-          <div class="card-head"><h2>Order-Ticket</h2><span class="pill" id="ticket-src"></span></div>
+          <details id="ticket-details" class="fold" open>
+          <summary class="card-head"><h2>Order-Ticket <span class="muted small">(Kauf von Hand)</span></h2><span class="pill" id="ticket-src"></span></summary>
           <div class="form-row">
             <label>Titel<input name="ticker" required placeholder="z. B. AAPL" list="universe-list"></label>
             <button type="button" class="btn" id="btn-prefill">Vorschlag laden</button>
@@ -139,9 +145,9 @@
           <datalist id="universe-list"></datalist>
           <div class="form-grid">
             <label>Stück (Bruchteile möglich)<input name="qty" type="number" min="0" step="any" required></label>
-            <label>Limit <span class="cur muted"></span><input name="price" type="number" step="any" required></label>
-            <label>Stop-Loss <span class="cur muted"></span><input name="stop" type="number" step="any" required></label>
-            <label>Ziel <span class="cur muted"></span><input name="target" type="number" step="any" required></label>
+            <label><span>Limit <span class="cur muted"></span></span><input name="price" type="number" step="any" required></label>
+            <label><span>Stop-Loss <span class="cur muted"></span></span><input name="stop" type="number" step="any" required></label>
+            <label><span>Ziel <span class="cur muted"></span></span><input name="target" type="number" step="any" required></label>
             <label>Frist (Tage)<input name="horizon_days" type="number" min="1" max="90" value="10" required></label>
             <label>Quelle<input name="model" value="manuell" maxlength="60"></label>
           </div>
@@ -153,12 +159,13 @@
             <button class="btn primary" type="button" id="btn-send" disabled>Order senden</button>
           </div>
           <div id="ticket-result" aria-live="polite"></div>
+          </details>
         </form>
         <div class="stack">
           <div class="card">
             <div class="card-head"><h2>Positionen</h2><span class="muted small" id="pos-total"></span></div>
-            <div class="table-wrap"><table class="table" id="pos-table">
-              <thead><tr><th>Titel</th><th class="num">Stück</th><th class="num">Einstand</th><th class="num">Kurs</th><th class="num">Wert</th><th class="num">G/V</th><th></th></tr></thead><tbody></tbody>
+            <div class="table-wrap"><table class="table stack" id="pos-table">
+              <thead><tr><th>Titel</th><th class="num">Stück</th><th class="num">Einstand</th><th class="num">Kurs</th><th class="num">Stop / Ziel</th><th class="num">Wert</th><th class="num">G/V</th><th></th></tr></thead><tbody></tbody>
             </table></div>
           </div>
           <div class="card">
@@ -166,7 +173,7 @@
               <h2>Orders</h2>
               <div class="seg" id="orders-seg"><button data-v="open" aria-pressed="true">Offen</button><button data-v="closed">Erledigt</button></div>
             </div>
-            <div class="table-wrap"><table class="table" id="orders-table">
+            <div class="table-wrap"><table class="table stack" id="orders-table">
               <thead><tr><th>Zeit</th><th>Titel</th><th>Art</th><th class="num">Stück</th><th class="num">Limit/Stop</th><th>Status</th><th></th></tr></thead><tbody></tbody>
             </table></div>
           </div>
@@ -183,7 +190,8 @@
       <div class="kpis" id="model-stats"></div>
       <div class="grid g-1-2">
         <form class="card" id="thesis-form">
-          <div class="card-head"><h2>Neue These</h2></div>
+          <details id="thesis-details" class="fold" open>
+          <summary class="card-head"><h2>Neue These <span class="muted small">(Prognose von Hand)</span></h2></summary>
           <p class="muted small">„Titel steigt/fällt innerhalb von N Tagen über/unter Ziel, weil …“</p>
           <div class="form-grid">
             <label>Titel<input name="ticker" required placeholder="AAPL" list="universe-list"></label>
@@ -196,6 +204,7 @@
           <label>Begründung<textarea name="rationale" rows="3" required></textarea></label>
           <label>Quelle / Modell<input name="model" value="manuell"></label>
           <div class="actions"><button class="btn primary" type="submit">These speichern</button><span id="thesis-msg" class="small"></span></div>
+          </details>
         </form>
         <div class="card">
           <div class="card-head">
@@ -210,7 +219,7 @@
       </div>
       <div class="card">
         <div class="card-head"><h2>Aktionsprotokoll</h2></div>
-        <div class="table-wrap"><table class="table" id="action-table"><thead><tr><th>Zeit</th><th>Aktion</th><th>Details</th></tr></thead><tbody></tbody></table></div>
+        <div class="table-wrap"><table class="table" id="action-table"><thead><tr><th>Zeit</th><th>Was</th></tr></thead><tbody></tbody></table></div>
       </div>
     </section>
 
@@ -273,7 +282,7 @@
         <div class="card">
           <h2>Schutzmechanismen</h2>
           <ul>
-            <li><b>Stop ist Pflicht</b> bei jeder Satellit-Order.</li>
+            <li><b>Stop ist Pflicht</b> bei jeder Satellit-Order. Unter Handel → Positionen kannst du ihn mit „Stop nachziehen“ anheben, wenn der Kurs gestiegen ist. Senken geht nicht, und der Stop muss unter dem letzten Kurs bleiben.</li>
             <li><b>Risiko-Limits</b> (Einstellungen): maximale Position, Risiko je Trade, Tagesverlust, Drawdown, Gebühren-Anteil.</li>
             <li><b>Nur Titel aus dem Universum</b> in EUR oder USD; neue Titel trägst du selbst ein.</li>
             <li><b>Token</b> liegt nur auf dem Umbrel, wird nie angezeigt und nur als Umgebungsvariable an Claude übergeben.</li>
@@ -283,10 +292,10 @@
         <div class="card">
           <h2>Bereiche der App</h2>
           <dl class="facts">
-            <div><dt>Dashboard</dt><dd>Depotwert, Vergleich mit Benchmark, Claude-Bewertung, Positionen, Top-Kandidaten, Status</dd></div>
+            <div><dt>Dashboard</dt><dd>Statuszeile (Paper, Claude, nächster Lauf), Kennzahlen, Claude-Bewertung, „Zuletzt passiert“, Vergleich mit Benchmark, Positionen</dd></div>
             <div><dt>Markt</dt><dd>Screen-Ergebnis, Kurs-Chart mit SMA 50/200, Ticket oder These zum gewählten Titel</dd></div>
-            <div><dt>Handel</dt><dd>Order-Ticket mit Prüfung, Positionen schließen, Orders stornieren</dd></div>
-            <div><dt>Journal</dt><dd>Thesen, Trefferquote je Modell, Aktionsprotokoll</dd></div>
+            <div><dt>Handel</dt><dd>Positionen mit Stop und Ziel (Abstand zum Kurs in %), Stop nachziehen, Position schließen, Orders, Order-Ticket für Käufe von Hand</dd></div>
+            <div><dt>Journal</dt><dd>Thesen, Trefferquote je Modell, Aktionsprotokoll in Klartext. Schließt du eine Position von Hand, wird ihre These als „storniert“ beendet und zählt nicht in die Trefferquote.</dd></div>
             <div><dt>Einstellungen</dt><dd>Depot zurücksetzen, Aufteilung, Limits, Screen, Universum, Zeitplan, Claude (Token, Modell, Automatik)</dd></div>
           </dl>
         </div>
@@ -304,61 +313,8 @@
 
     <!-- Einstellungen -->
     <section class="page" id="page-einstellungen" hidden>
-      <header class="page-head"><div><h1>Einstellungen</h1><p class="muted">Paper-Depot, Aufteilung, Universum, Limits und Zeitplan</p></div></header>
+      <header class="page-head"><div><h1>Einstellungen</h1><p class="muted">Claude, Paper-Depot, Aufteilung und Zeitplan · Limits, Screen und Universum unter „Erweitert“</p></div></header>
       <div class="grid g-1-1">
-        <form class="card" id="reset-form" autocomplete="off">
-          <div class="card-head"><h2>Paper-Depot</h2><span class="pill good">Paper · EUR</span></div>
-          <div id="broker-info" class="muted small"></div>
-          <p class="small">Simuliert mit Tagesschlusskursen, Slippage und Bitpanda-Gebühren (je Wertpapier-Order pauschal,
-            Krypto prozentual). Echte Orders gibt es erst in Phase 3 über Bitpanda – das braucht eine bewusste Code-Änderung.</p>
-          <h3>Neu starten</h3>
-          <p class="muted small">Löscht Positionen, Orders und Depot-Historie. Thesen und Aktionsprotokoll bleiben.</p>
-          <div class="form-grid two">
-            <label>Startkapital (€)<input name="start_cash_eur" type="number" min="100" step="1" required></label>
-            <label>Zur Bestätigung RESET eintippen<input name="confirm" autocomplete="off" spellcheck="false"></label>
-          </div>
-          <div class="actions">
-            <button class="btn danger" type="submit">Depot neu starten</button>
-            <span id="reset-msg" class="small"></span>
-          </div>
-        </form>
-        <form class="card" id="settings-form">
-          <div class="card-head"><h2>Aufteilung (Core-Satellite)</h2></div>
-          <div class="form-grid">
-            <label>Core-Titel<input name="core_ticker" list="universe-list" spellcheck="false"></label>
-            <label>Core-Ziel %<input name="core_pct" type="number" min="0" max="100" step="any"></label>
-            <label>Satellit max. %<input name="satellite_pct" type="number" min="0" max="100" step="any"></label>
-            <label>Toleranz %<input name="rebalance_drift_pct" type="number" min="0" max="25" step="any"></label>
-          </div>
-          <p class="muted small">Der Core ist zugleich die Messlatte. Liegt er mehr als die Toleranz unter dem Ziel, bietet das Dashboard „Core auffüllen“ an.</p>
-          <h3>Risiko-Limits</h3>
-          <div class="form-grid">
-            <label>Max. Position %<input name="max_position_pct" type="number" step="any"></label>
-            <label>Max. Risiko/Trade %<input name="max_risk_per_trade_pct" type="number" step="any"></label>
-            <label>Max. Tagesverlust %<input name="max_daily_loss_pct" type="number" step="any"></label>
-            <label>Max. Drawdown %<input name="max_drawdown_pct" type="number" step="any"></label>
-            <label>Max. Satellit-Positionen<input name="max_open_positions" type="number" min="1"></label>
-            <label>Mindestorder €<input name="min_order_eur" type="number" min="0" step="any"></label>
-            <label>Max. Gebühr %<input name="max_fee_pct" type="number" step="any"></label>
-          </div>
-          <label class="check"><input type="checkbox" name="enforce_market_hours"> Orders nur zu Börsenzeiten</label>
-          <h3>Screen</h3>
-          <div class="form-grid">
-            <label>Top N<input name="top_n" type="number" min="1" max="50"></label>
-            <label>Min. Historie<input name="min_history_days" type="number" min="200"></label>
-            <label>Min. Ø-Volumen<input name="min_avg_volume" type="number" min="0"></label>
-            <label>RSI min<input name="rsi_min" type="number" min="0" max="100"></label>
-            <label>RSI max<input name="rsi_max" type="number" min="0" max="100"></label>
-          </div>
-          <h3>Universum &amp; Whitelist</h3>
-          <p class="muted small">Ein Kürzel pro Zeile in Yahoo-Schreibweise: US-Werte ohne Endung (AAPL), Xetra mit .DE (SAP.DE), Krypto mit -EUR (BTC-EUR). Nur EUR- und USD-Titel.</p>
-          <textarea name="universe" rows="6" spellcheck="false"></textarea>
-          <label>Benchmark<input name="benchmark"></label>
-          <h3>Zeitplan</h3>
-          <label class="check"><input type="checkbox" name="schedule_enabled"> Mo–Fr automatisch: Kurse, Screen, Thesen auswerten, Depot abgleichen</label>
-          <label>Uhrzeiten (HH:MM, kommagetrennt, <span id="sched-tz"></span>)<input name="schedule_times"></label>
-          <div class="actions"><button class="btn primary" type="submit">Speichern</button><span id="settings-msg" class="small"></span></div>
-        </form>
         <div class="card" id="advisor-settings">
           <div class="card-head"><h2>Claude (Morgenbewertung)</h2><span class="pill" id="adv-pill">–</span></div>
           <p class="small">Nach dem ersten Lauf des Tages bewertet Claude die Top-Kandidaten und schlägt bis zu drei
@@ -391,6 +347,61 @@
             </div>
           </form>
         </div>
+        <form class="card" id="reset-form" autocomplete="off">
+          <div class="card-head"><h2>Paper-Depot</h2><span class="pill good">Paper · EUR</span></div>
+          <div id="broker-info" class="muted small"></div>
+          <p class="small">Simuliert mit Tagesschlusskursen, Slippage und Bitpanda-Gebühren (je Wertpapier-Order pauschal,
+            Krypto prozentual). Echte Orders gibt es erst in Phase 3 über Bitpanda – das braucht eine bewusste Code-Änderung.</p>
+          <h3>Neu starten</h3>
+          <p class="muted small">Löscht Positionen, Orders und Depot-Historie. Thesen und Aktionsprotokoll bleiben.</p>
+          <div class="form-grid two">
+            <label>Startkapital (€)<input name="start_cash_eur" type="number" min="100" step="1" required></label>
+            <label>Zur Bestätigung RESET eintippen<input name="confirm" autocomplete="off" spellcheck="false"></label>
+          </div>
+          <div class="actions">
+            <button class="btn danger" type="submit">Depot neu starten</button>
+            <span id="reset-msg" class="small"></span>
+          </div>
+        </form>
+        <form class="card" id="settings-form">
+          <div class="card-head"><h2>Aufteilung (Core-Satellite)</h2></div>
+          <div class="form-grid">
+            <label>Core-Titel<input name="core_ticker" list="universe-list" spellcheck="false"></label>
+            <label>Core-Ziel %<input name="core_pct" type="number" min="0" max="100" step="any"></label>
+            <label>Satellit max. %<input name="satellite_pct" type="number" min="0" max="100" step="any"></label>
+            <label>Toleranz %<input name="rebalance_drift_pct" type="number" min="0" max="25" step="any"></label>
+          </div>
+          <p class="muted small">Der Core ist zugleich die Messlatte. Liegt er mehr als die Toleranz unter dem Ziel, bietet das Dashboard „Core auffüllen“ an.</p>
+          <details class="fold adv"><summary>Erweitert: Risiko-Limits, Screen, Universum</summary>
+          <h3>Risiko-Limits</h3>
+          <div class="form-grid">
+            <label>Max. Position %<input name="max_position_pct" type="number" step="any"></label>
+            <label>Max. Risiko/Trade %<input name="max_risk_per_trade_pct" type="number" step="any"></label>
+            <label>Max. Tagesverlust %<input name="max_daily_loss_pct" type="number" step="any"></label>
+            <label>Max. Drawdown %<input name="max_drawdown_pct" type="number" step="any"></label>
+            <label>Max. Satellit-Positionen<input name="max_open_positions" type="number" min="1"></label>
+            <label>Mindestorder €<input name="min_order_eur" type="number" min="0" step="any"></label>
+            <label>Max. Gebühr %<input name="max_fee_pct" type="number" step="any"></label>
+          </div>
+          <label class="check"><input type="checkbox" name="enforce_market_hours"> Orders nur zu Börsenzeiten</label>
+          <h3>Screen</h3>
+          <div class="form-grid">
+            <label>Top N<input name="top_n" type="number" min="1" max="50"></label>
+            <label>Min. Historie<input name="min_history_days" type="number" min="200"></label>
+            <label>Min. Ø-Volumen<input name="min_avg_volume" type="number" min="0"></label>
+            <label>RSI min<input name="rsi_min" type="number" min="0" max="100"></label>
+            <label>RSI max<input name="rsi_max" type="number" min="0" max="100"></label>
+          </div>
+          <h3>Universum &amp; Whitelist</h3>
+          <p class="muted small">Ein Kürzel pro Zeile in Yahoo-Schreibweise: US-Werte ohne Endung (AAPL), Xetra mit .DE (SAP.DE), Krypto mit -EUR (BTC-EUR). Nur EUR- und USD-Titel.</p>
+          <textarea name="universe" rows="6" spellcheck="false"></textarea>
+          <label>Benchmark<input name="benchmark"></label>
+          </details>
+          <h3>Zeitplan</h3>
+          <label class="check"><input type="checkbox" name="schedule_enabled"> Mo–Fr automatisch: Kurse, Screen, Thesen auswerten, Depot abgleichen</label>
+          <label><span>Uhrzeiten (HH:MM, kommagetrennt, <span id="sched-tz"></span>)</span><input name="schedule_times"></label>
+          <div class="actions"><button class="btn primary" type="submit">Speichern</button><span id="settings-msg" class="small"></span></div>
+        </form>
       </div>
     </section>
   </main>

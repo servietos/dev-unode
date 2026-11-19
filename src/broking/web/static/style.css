@@ -261,6 +261,28 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .prop-why { margin: 0; color: var(--text-2); line-height: 1.45; }
 .prop-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
 
+/* Statuszeile, Ereignisse, Einklapp-Bereiche */
+.statusbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.statusbar a.pill { text-decoration: none; }
+.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.feed li { display: flex; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--grid); line-height: 1.4; }
+.feed li:last-child { border-bottom: none; }
+.feed-time { flex: none; width: 104px; }
+.table td.wrap { white-space: normal; }
+.chart.is-empty { height: auto; }
+.result.warn { background: var(--warn-soft); }
+details.fold > summary { cursor: pointer; list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::after { content: "▾"; color: var(--muted); margin-left: auto; padding-left: 8px; }
+details.fold[open] > summary::after { content: "▴"; }
+details.fold > summary.card-head h2 { flex: 1; }
+details.fold:not([open]) > summary.card-head { margin-bottom: 0; }
+details.fold.adv, details.fold.manual { margin-top: 14px; }
+details.fold.adv > summary, details.fold.manual > summary { display: flex; font-size: 12px; font-weight: 600; color: var(--text-2); }
+.row-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+td.row-actions { display: table-cell; text-align: right; }
+td.row-actions .btn + .btn { margin-left: 6px; }
+
 /* Responsive */
 @media (max-width: 1100px) {
   .g-2-1, .g-1-1, .g-1-2 { grid-template-columns: minmax(0, 1fr); }
@@ -284,6 +306,27 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
   .prop-nums { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .props { grid-template-columns: minmax(0, 1fr); }
   .card { padding: 14px 14px; }
+  /* Kurzer Menüname */
+  .nav a span[data-short] { font-size: 0; }
+  .nav a span[data-short]::before { content: attr(data-short); font-size: 10px; }
+  /* Listen zuerst, Formulare danach */
+  #ticket, #thesis-form { order: 2; }
+  .feed li { flex-direction: column; gap: 0; }
+  .feed-time { width: auto; }
+  /* Tabellen mit vielen Spalten als Karten */
+  .table.stack thead { display: none; }
+  .table.stack tr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; padding: 12px 0; border-bottom: 1px solid var(--grid); }
+  .table.stack tbody tr:last-child { border-bottom: none; }
+  .table.stack td { border: none; padding: 0; white-space: normal; text-align: left; }
+  .table.stack td[data-l]::before { content: attr(data-l); display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+  .table.stack td.full, .table.stack td.empty { grid-column: 1 / -1; }
+  .table.stack td.sym { font-size: 15px; }
+  .table.stack td:empty { display: none; }
+  td.row-actions { display: flex; text-align: left; justify-content: flex-start; }
+  td.row-actions .btn + .btn { margin-left: 0; }
+  /* Kandidaten: Nummer und ATR ausblenden, damit nichts abgeschnitten wird */
+  #cand-table th:nth-child(1), #cand-table td:nth-child(1), #cand-table th:nth-child(7), #cand-table td:nth-child(7) { display: none; }
+  #cand-table th, #cand-table td { padding: 9px 5px; }
   .form-grid.two { grid-template-columns: 1fr; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .kpi-value { font-size: 20px; }
