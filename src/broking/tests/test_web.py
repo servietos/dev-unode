@@ -27,8 +27,8 @@ class WebTests(unittest.TestCase):
         os.environ.update(BROKING_DATA_DIR=str(d), BROKING_JOURNAL_DIR=str(d / "journal"),
                           BROKING_CONFIG=str(d / "config.json"))
         # Module neu laden, damit sie die Pfade aus der Umgebung übernehmen
-        import advisor, broker, common, evaluate_theses, fetch_prices, instruments, journal, risk_check, screen, trading  # noqa: E401
-        for mod in (common, instruments, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading, advisor):
+        import advisor, broker, common, evaluate_theses, fetch_earnings, fetch_prices, instruments, journal, risk_check, screen, trading  # noqa: E401
+        for mod in (common, instruments, fetch_earnings, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading, advisor):
             importlib.reload(mod)
         import web.app as webapp
         cls.webapp = importlib.reload(webapp)
@@ -41,8 +41,8 @@ class WebTests(unittest.TestCase):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-        import advisor, broker, common, evaluate_theses, fetch_prices, journal, risk_check, screen, trading  # noqa: E401
-        for mod in (common, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading, advisor):
+        import advisor, broker, common, evaluate_theses, fetch_earnings, fetch_prices, journal, risk_check, screen, trading  # noqa: E401
+        for mod in (common, fetch_earnings, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading, advisor):
             importlib.reload(mod)
         cls.tmp.cleanup()
 

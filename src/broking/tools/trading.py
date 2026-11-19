@@ -82,6 +82,22 @@ def live_portfolio(client: PaperBroker) -> dict:
     return with_pending(sync_portfolio(client), client.orders("open", 500))
 
 
+def net_odds(ticker: str, qty: float, price: float, stop: float, target: float, cfg: dict, rate: float) -> dict | None:
+    """Was bleibt nach Gebühren und Slippage? Gewinn am Ziel, Verlust am Stop (EUR) und die Trefferquote,
+    ab der sich der Trade im Schnitt lohnt. Bei kleinen Positionen frisst die Gebühr das Chance/Risiko auf."""
+    if not (qty and qty > 0 and stop < price < target and rate > 0):
+        return None
+    t = ticker.upper()
+    slip = cfg["fees"]["slippage_pct"] / 100
+    buy, at_target, at_stop = qty * price * rate, qty * target * rate, qty * stop * rate
+    fee_buy = risk_check.fee_eur(t, buy, cfg)
+    win = at_target - buy - fee_buy - risk_check.fee_eur(t, at_target, cfg)
+    loss = buy - at_stop * (1 - slip) + fee_buy + risk_check.fee_eur(t, at_stop, cfg)
+    return {"net_win_eur": round(win, 2), "net_loss_eur": round(loss, 2),
+            "net_crv": round(win / loss, 2) if loss > 0 else None,
+            "breakeven_pct": round(100 * loss / (win + loss), 1) if win > 0 else 100.0}
+
+
 def ticket(client: PaperBroker, ticker: str, cfg: dict) -> dict:
     """Vorschlag für Limit, Stop, Ziel und Stückzahl auf Basis des aktuellen Depots."""
     t = ticker.upper()
@@ -100,6 +116,7 @@ def ticket(client: PaperBroker, ticker: str, cfg: dict) -> dict:
         "stale": stale_reason(client, t),
         "currency": currency(t), "fx": round(rate, 6), "atr": round(a, 4),
         "stop": stop, "target": target, "qty": qty, "value_eur": round(qty * price * rate, 2),
+        "odds": net_odds(t, qty, price, stop, target, cfg, rate),
         "portfolio": pf,
     }
 
@@ -159,7 +176,8 @@ def check(client: PaperBroker, order: dict, cfg: dict, now: dt.datetime | None =
     violations += risk["violations"]
     if violations:
         raise OrderRejected(violations, risk)
-    return {"order": order, "risk": risk, "portfolio": pf, "last_price": last, "fx": rate}
+    return {"order": order, "risk": risk, "portfolio": pf, "last_price": last, "fx": rate,
+            "odds": net_odds(order["ticker"], order["qty"], order["price"], order["stop"], order["target"], cfg, rate)}
 
 
 def proposal_thesis(order: dict) -> dict | None:

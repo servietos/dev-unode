@@ -278,6 +278,14 @@ loaders.dashboard = async () => {
   $$("#dash-cands [data-pick]").forEach((a) => a.addEventListener("click", () => (selected = a.dataset.pick)));
 };
 
+// Was nach Gebühren übrig bleibt – ab 50 % nötiger Trefferquote als Warnung
+function oddsLine(o) {
+  if (!o) return "";
+  const hard = o.breakeven_pct >= 50;
+  return `<p class="odds small ${hard ? "neg" : "muted"}">Nach Gebühren: +${money(o.net_win_eur)} am Ziel, −${money(o.net_loss_eur)} am Stop.
+    Lohnt sich erst ab <b>${fmt(o.breakeven_pct, 0)} %</b> Trefferquote${hard ? " – die Gebühr frisst das Chance/Risiko auf" : ""}.</p>`;
+}
+
 function autoCell(auto, i) {
   if (auto?.status === "placed") return `<span class="pill good">automatisch gebucht</span>`;
   const why = auto ? `<div class="small muted">${esc((auto.reasons || []).join("; "))}</div>` : "";
@@ -307,6 +315,7 @@ async function loadAdvisor() {
         <div><dt>Verlustgrenze (Stop)</dt><dd>${money(p.stop, p.currency)}</dd></div>
         <div><dt>Gewinnziel</dt><dd>${money(p.target, p.currency)}</dd></div>
       </dl>
+      ${oddsLine(p.odds)}
       <p class="prop-why">${esc(p.rationale)}</p>
       <div class="prop-foot">${autoCell(p.auto, i)}</div>
     </div>`).join("");
@@ -325,6 +334,12 @@ async function loadStatsKpi() {
   const t = st.total;
   $("#k-hit").textContent = t.hit_rate == null ? "–" : `${Math.round(t.hit_rate * 100)} %`;
   $("#k-hit-sub").textContent = t.hit + t.miss ? `${t.hit} von ${t.hit + t.miss} Thesen · ${st.open} offen` : `${st.open} offen, noch keine ausgewertet`;
+  const tr = st.trades, el = $("#k-trades");
+  el.textContent = tr && tr.count ? `${tr.net_eur >= 0 ? "+" : "−"}${money(Math.abs(tr.net_eur))}` : "–";
+  el.className = `kpi-value ${tr && tr.count ? (tr.net_eur >= 0 ? "pos" : "neg") : ""}`;
+  $("#k-trades-sub").textContent = !tr ? "" : tr.count
+    ? `${tr.wins} von ${tr.count} im Plus · ${money(tr.fees_eur)} Gebühren gesamt`
+    : `noch kein Trade beendet · ${money(tr.fees_eur)} Gebühren bisher`;
   return st;
 }
 
@@ -579,7 +594,7 @@ tf.addEventListener("submit", async (e) => {
     checkedOrder = o;
     $("#btn-send").disabled = false;
     $("#ticket-result").innerHTML = `<div class="result ok"><span class="status ok">Prüfung bestanden</span>
-      <p class="small">Letzter Kurs ${fmt(r.last_price)} · ${money(r.risk.value_eur)} + ${money(r.risk.fee_eur)} Gebühr · max. ${fmt(r.risk.suggested_qty, 4)} Stück nach Limits. Order kann gesendet werden.</p></div>`;
+      <p class="small">Letzter Kurs ${fmt(r.last_price)} · ${money(r.risk.value_eur)} + ${money(r.risk.fee_eur)} Gebühr · max. ${fmt(r.risk.suggested_qty, 4)} Stück nach Limits. Order kann gesendet werden.</p>${oddsLine(r.odds)}</div>`;
   } catch (err) { checkedOrder = null; $("#btn-send").disabled = true; showViolations(err); }
 });
 

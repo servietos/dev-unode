@@ -62,6 +62,15 @@ def download(ticker: str, period: str) -> list[dict]:
     return frame_to_rows(df) if df is not None and not df.empty else []
 
 
+def merge(old: list[dict], new: list[dict]) -> list[dict]:
+    """Neue Kerzen ersetzen alte am selben Tag, ältere Historie bleibt erhalten. Liefert Yahoo einmal nur
+    wenige Tage (kam vor: eine einzige Kerze), würde ein blindes Überschreiben die Historie löschen –
+    und ohne 200 Tage fällt der Titel aus dem Screen."""
+    by_date = {r["date"]: r for r in old}
+    by_date.update({r["date"]: r for r in new})
+    return [by_date[d] for d in sorted(by_date)]
+
+
 def fetch(tickers: list[str], period: str = "2y", force: bool = False,
           prices_dir: Path = PRICES_DIR, downloader=download) -> dict:
     result = {"fetched": [], "cached": [], "failed": {}}
@@ -73,7 +82,7 @@ def fetch(tickers: list[str], period: str = "2y", force: bool = False,
             rows = downloader(t, period)
             if not rows:
                 raise ValueError("keine Daten")
-            write_prices(t, rows, prices_dir)
+            write_prices(t, merge(read_prices(t, prices_dir), rows), prices_dir)
             result["fetched"].append(t)
         except Exception as e:  # ein Ticker darf den Lauf nicht abbrechen
             result["failed"][t] = str(e)[:200]

@@ -256,6 +256,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .prop-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
 .prop-nums dt { font-size: 11px; color: var(--muted); }
 .prop-nums dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.odds { margin: 0; line-height: 1.45; }
+.result .odds { margin-top: 6px; }
 .prop-why { margin: 0; color: var(--text-2); line-height: 1.45; }
 .prop-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
 

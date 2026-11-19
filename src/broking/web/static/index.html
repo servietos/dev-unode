@@ -37,7 +37,8 @@
         <div class="kpi"><div class="kpi-label">Depotwert</div><div class="kpi-value" id="k-equity">–</div><div class="kpi-sub" id="k-equity-sub"></div></div>
         <div class="kpi"><div class="kpi-label">Heute</div><div class="kpi-value" id="k-day">–</div><div class="kpi-sub" id="k-day-sub"></div></div>
         <div class="kpi"><div class="kpi-label">Cash (frei)</div><div class="kpi-value" id="k-cash">–</div><div class="kpi-sub" id="k-cash-sub"></div></div>
-        <div class="kpi"><div class="kpi-label">Trefferquote</div><div class="kpi-value" id="k-hit">–</div><div class="kpi-sub" id="k-hit-sub"></div></div>
+        <div class="kpi"><div class="kpi-label">Trades netto</div><div class="kpi-value" id="k-trades">–</div><div class="kpi-sub" id="k-trades-sub"></div></div>
+        <div class="kpi"><div class="kpi-label">Trefferquote (Thesen)</div><div class="kpi-value" id="k-hit">–</div><div class="kpi-sub" id="k-hit-sub"></div></div>
       </div>
       <div class="notice" id="core-notice" hidden>
         <div id="core-notice-text"></div>
@@ -238,7 +239,7 @@
           <h2>Claude-Bewertung</h2>
           <p>Python wählt die Top-Kandidaten aus dem Screen aus und berechnet je Titel Kurs, ATR, Stop (1,5 × ATR unter Kurs), Ziel (3 × ATR über Kurs, also Chance/Risiko 2:1) und die zulässige Stückzahl. Claude bekommt diese Fakten plus Depot, offene Thesen und die letzten Treffer/Fehlschläge und wählt höchstens so viele Käufe, wie Satellit-Plätze frei sind, <b>oder keinen</b>.</p>
           <p><b>Bewertungsraster:</b> Trend intakt (Kurs über SMA 50 über SMA 200), Momentum positiv, RSI bevorzugt 50–70, nicht weit über der SMA 50, ausreichend Volumen, Chance/Risiko mindestens 2:1, keine doppelten Wetten, kein Wiederholen zuletzt gescheiterter Muster.</p>
-          <p><b>Grenzen:</b> Claude sieht keine Nachrichten, Quartalszahlen oder Termine. Es hat keine Werkzeuge und kein Internet, nur die gelieferten Zahlen. Jeder Vorschlag wird danach von Python geprüft (Titel in der Liste, Stop &lt; Kurs &lt; Ziel, Frist 10–56 Tage, freie Plätze) und als <b>These</b> ins Journal geschrieben. Die Trefferquote je Modell zeigt dir, ob die Bewertung etwas taugt.</p>
+          <p><b>Grenzen:</b> Claude sieht keine Nachrichten; von Terminen kennt es nur den nächsten Quartalstermin. Es hat keine Werkzeuge und kein Internet, nur die gelieferten Zahlen. Jeder Vorschlag wird danach von Python geprüft (Titel in der Liste, Stop &lt; Kurs &lt; Ziel, Frist 10–56 Tage, freie Plätze) und als <b>These</b> ins Journal geschrieben. Die Trefferquote je Modell zeigt dir, ob die Bewertung etwas taugt.</p>
         </div>
         <div class="card">
           <h2>Automatisch buchen (Schalter)</h2>
@@ -252,6 +253,22 @@
           </ul>
           <p><b>Lehnt eine Prüfung ab,</b> wird die Order nicht umgebaut. Der Grund steht im Bericht („abgelehnt“), die These bleibt als Prognose im Journal, und du kannst sie bei Bedarf selbst über das Ticket freigeben.</p>
           <p><b>Was der Schalter nie tut:</b> verkaufen, den Core auffüllen, Stops ändern, Limits lockern oder echtes Geld bewegen. Verkäufe laufen nur über Stop, Ziel oder dich. Dies ist ein Test für Phase 1: Beobachte die Trefferquote, bevor du irgendetwas Echtes erwägst.</p>
+        </div>
+        <div class="card">
+          <h2>Kosten und was der Rücktest zeigt</h2>
+          <p><b>Gebühren entscheiden.</b> Jede Order kostet im Modell 1 € (Wertpapiere) bzw. 1,49 % (Krypto), dazu 0,1 % Slippage am Stop. Bei einer Position von rund 120 € sind Kauf und Verkauf zusammen etwa 1,7 % – das macht aus einem Chance/Risiko von 2 : 1 ungefähr 0,8 : 1. Statt 33 % brauchst du dann rund 55 % Treffer, nur um bei null zu landen. Die App zeigt diese Zahl an jedem Vorschlag und nach „Prüfen“ im Ticket („lohnt sich erst ab … % Trefferquote“).</p>
+          <p><b>Rücktest der Regeln</b> (Screen, Stop 1,5 × ATR, Ziel 3 × ATR, ohne Claude; 5 Jahre Kurse bis November 2026, 1.627 Signale):</p>
+          <ul>
+            <li>Ohne Kosten: 41 % Treffer bei nötigen 34 % – im Schnitt +0,75 % je Trade. Die Regeln haben in diesem starken Markt (Benchmark +73 %) einen kleinen Vorteil.</li>
+            <li>Mit Kosten bei 120 € je Position: nötig wären 51 %, erreicht 41 % – im Schnitt −1,05 % je Trade, in jedem Jahr ein Minus.</li>
+            <li>Mit Kosten bei 1.200 € je Position: nötig 38 %, erreicht 41 % – knapp im Plus (+0,36 % je Trade).</li>
+          </ul>
+          <p><b>Folgerung:</b> Mit 1.000 € Depot ist der Satellit ein Lernwerkzeug, kein Ertragsbringer. Er lohnt sich erst mit deutlich größeren Positionen – oder wenn Claudes Auswahl klar besser ist als die Regeln allein. Das zeigt die Kachel <b>„Trades netto“</b> im Dashboard: das echte Ergebnis beendeter Trades nach Gebühren. Die <b>Trefferquote</b> daneben zählt alle Thesen, auch solche ohne Order, und kennt keine Kosten.</p>
+          <p class="muted small">Selbst nachrechnen: <code>python tools/backtest.py</code>. Vereinfachungen: feste Positionsgröße, Wechselkurs konstant. Vergangene Kurse sagen nichts Sicheres über die Zukunft.</p>
+        </div>
+        <div class="card">
+          <h2>Quartalszahlen</h2>
+          <p>Einmal täglich lädt die App den nächsten Quartalstermin je Aktie (Yahoo Finance). Liegt er in den nächsten 7 Tagen, kommt der Titel gar nicht erst in Claudes Auswahl und steht unter „Verworfen und ausgelassen“. Spätere Termine sieht Claude und wählt die Frist passend. Ist kein Termin bekannt (ETFs, Krypto, Lücken bei Yahoo), blockiert das nichts – prüfe es dann selbst. Für Tickets, die du von Hand anlegst, gilt die Sperre nicht.</p>
         </div>
         <div class="card">
           <h2>Schutzmechanismen</h2>

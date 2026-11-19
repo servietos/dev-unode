@@ -14,8 +14,8 @@ TOKEN = "sk-ant-oat01-" + "x" * 40
 
 
 def reload_tools():
-    import advisor, broker, common, instruments, journal, risk_check, trading  # noqa: E401
-    for m in (common, instruments, journal, risk_check, broker, trading, advisor):
+    import advisor, broker, common, fetch_earnings, instruments, journal, risk_check, trading  # noqa: E401
+    for m in (common, instruments, fetch_earnings, journal, risk_check, broker, trading, advisor):
         importlib.reload(m)
     return advisor, broker, journal
 
@@ -150,6 +150,21 @@ class AdvisorTests(unittest.TestCase):
             self.advisor.trading.place = orig
         self.assertEqual(rep["proposals"][0]["auto"], {"status": "rejected", "reasons": ["Limit überschritten"]})
         self.assertEqual(self.b.orders("all", 50), [])
+
+    def test_earnings_soon_blocks_candidate_and_later_date_is_passed_on(self):
+        import datetime as dt
+        today = dt.date.fromisoformat(self.b.today())
+        (self.data / "earnings.json").write_text(json.dumps({"updated": "x", "dates": {
+            "AAPL": (today + dt.timedelta(days=3)).isoformat(),
+            "MSFT": (today + dt.timedelta(days=30)).isoformat()}}), encoding="utf-8")
+        facts = self.advisor.gather(self.cfg, self.b)
+        self.assertEqual([c["ticker"] for c in facts["candidates"]], ["MSFT"])
+        self.assertEqual(facts["candidates"][0]["earnings_date"], (today + dt.timedelta(days=30)).isoformat())
+        self.assertEqual([b["ticker"] for b in facts["blocked_by_earnings"]], ["AAPL"])
+        self.assertGreater(facts["candidates"][0]["breakeven_hit_rate_pct"], 33)
+        self.advisor.save_token(TOKEN)
+        rep = self.advisor.run(self.cfg, self.b, caller=self.fake({"summary": "nichts", "proposals": []})[0])
+        self.assertEqual([r["ticker"] for r in rep["rejected"]], ["AAPL"])
 
     def test_no_slots_skips_claude(self):
         self.advisor.save_token(TOKEN)

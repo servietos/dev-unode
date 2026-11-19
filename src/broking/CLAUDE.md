@@ -25,6 +25,8 @@ Rechnen, Risiko und Ausführung macht deterministischer Python-Code in `tools/`.
 | `python3 tools/risk_check.py size --price P --stop S --equity E --fx F` | Stückzahl nach Limits |
 | `python3 tools/evaluate_theses.py [--stats]` | Thesen auswerten, Trefferquote je Modell |
 | `python3 tools/journal.py list --status open` | offene Thesen |
+| `python3 tools/fetch_earnings.py` | nächster Quartalstermin je Aktie (einmal pro Tag) |
+| `python3 tools/backtest.py [--pos-eur 120 1200]` | Rücktest der Regeln mit Gebühren: Trefferquote, nötige Trefferquote, Netto je Trade |
 | `python3 tools/advisor.py run` | Morgenbewertung durch Claude im Container (App ruft das selbst auf) |
 
 Ablauf und Berichtsformat: Skill `trading-playbook`.

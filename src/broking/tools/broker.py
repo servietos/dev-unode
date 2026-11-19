@@ -281,6 +281,21 @@ class PaperBroker:
             dates = sorted(pts)
             return {"dates": dates, "equity": [pts[d] for d in dates]}
 
+    def closed_trades(self) -> dict:
+        """Abgeschlossene Satellit-Verkäufe: Ergebnis nach Gebühren (Kaufgebühr steckt im Einstand)."""
+        with _lock:
+            st, _ = self._state()
+            core = core_tickers(self.cfg)
+            sells = [x for o in st["orders"] for x in [o, *o.get("legs", [])]
+                     if x["side"] == "sell" and x["status"] == "filled" and x["symbol"] not in core
+                     and x.get("realized_pl_eur") is not None]
+            pl = [x["realized_pl_eur"] for x in sells]
+            wins = [p for p in pl if p > 0]
+            return {"count": len(pl), "wins": len(wins), "net_eur": round(sum(pl), 2),
+                    "avg_net_eur": round(sum(pl) / len(pl), 2) if pl else None,
+                    "fees_eur": round(sum(x.get("fee_eur") or 0 for o in st["orders"]
+                                          for x in [o, *o.get("legs", [])] if x["status"] == "filled"), 2)}
+
     # --- Schreiben -----------------------------------------------------------------------
 
     def _new_order(self, sym: str, side: str, qty: float, typ: str, coid: str | None, date: str, **kw) -> dict:

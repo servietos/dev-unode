@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 import advisor  # noqa: E402
 import broker  # noqa: E402
 import evaluate_theses  # noqa: E402
+import fetch_earnings  # noqa: E402
 import fetch_prices  # noqa: E402
 import journal  # noqa: E402
 import trading  # noqa: E402
@@ -103,6 +104,10 @@ class Jobs:
             if "fetch" in steps:
                 self.state["step"] = "fetch"
                 result["fetch"] = fetch_prices.fetch(fetch_prices.universe_with_fx(cfg), force=force)
+                try:  # Quartalstermine: einmal pro Tag, ein Ausfall darf den Lauf nicht stoppen
+                    result["earnings"] = fetch_earnings.fetch(cfg["universe"])
+                except Exception as e:
+                    result["earnings"] = {"error": str(e)[:200]}
             if "screen" in steps:
                 self.state["step"] = "screen"
                 res = screen.run(cfg["universe"], cfg["screen"], cfg["screen"]["top_n"],
@@ -453,7 +458,13 @@ def put_config(new: dict):
 
 @app.get("/api/stats")
 def stats():
-    return evaluate_theses.stats(journal.load_theses())
+    """Trefferquote der Thesen (Prognosen) plus das, was im Depot wirklich herauskam (nach Gebühren)."""
+    out = evaluate_theses.stats(journal.load_theses())
+    try:
+        out["trades"] = client().closed_trades()
+    except BrokerError:
+        out["trades"] = None
+    return out
 
 
 @app.post("/api/evaluate")
@@ -572,7 +583,7 @@ class OrderIn(BaseModel):
 @app.post("/api/trade/check")
 def trade_check(o: OrderIn):
     res = trading.check(client(), {**o.model_dump(), "ticker": check_ticker(o.ticker)}, load_config())
-    return {"approved": True, "risk": res["risk"], "last_price": res["last_price"]}
+    return {"approved": True, "risk": res["risk"], "last_price": res["last_price"], "odds": res["odds"]}
 
 
 @app.post("/api/trade/order")

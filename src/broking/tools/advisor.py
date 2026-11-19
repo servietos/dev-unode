@@ -26,18 +26,20 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
+import fetch_earnings
 import journal
 import risk_check
 import trading
 from broker import BrokerError, PaperBroker
-from common import DATA_DIR, ROOT, SCREENS_DIR, emit, load_config
+from common import DATA_DIR, SCREENS_DIR, emit, load_config
 
 SECRETS_PATH = DATA_DIR / "secrets.json"
 REPORTS_DIR = DATA_DIR / "reports"
 MODELS = ("sonnet", "opus", "haiku")
-DEFAULTS = {"enabled": False, "model": "sonnet", "top_n": 10, "auto_trade": False}
+DEFAULTS = {"enabled": False, "model": "sonnet", "top_n": 10, "auto_trade": False, "earnings_block_days": 7}
 TOKEN_RE = re.compile(r"^sk-ant-[A-Za-z0-9_\-]{20,400}$")
 HORIZON_MIN, HORIZON_MAX = 10, 56   # Swing 2–8 Wochen
 TIMEOUT_S = 300
@@ -100,17 +102,25 @@ def gather(cfg: dict, client: PaperBroker) -> dict:
     busy = {t["ticker"] for t in open_theses}
     positions = client.positions()
     busy |= {p["symbol"] for p in positions}
-    cands = []
+    cands, blocked = [], []
+    earnings = fetch_earnings.load()
+    block_days = int(settings(cfg)["earnings_block_days"])
     for c in screen.get("candidates", [])[: settings(cfg)["top_n"]]:
         if c["ticker"] in busy:
             continue
         k = trading.ticket(client, c["ticker"], cfg)
         if k["stale"] or not k["tradable"] or k["core"]:
             continue
+        due = fetch_earnings.days_until(earnings.get(c["ticker"]), client.today())
+        if due is not None and 0 <= due <= block_days:  # feste Regel: kein Einstieg kurz vor Quartalszahlen
+            blocked.append({"ticker": c["ticker"], "reason": f"Quartalszahlen am {earnings[c['ticker']]} (in {due} Tagen)"})
+            continue
         cands.append({
             "ticker": c["ticker"], "currency": k["currency"], "price": k["price"], "price_date": k["price_date"],
             "atr": k["atr"], "stop_atr": k["stop"], "target_atr": k["target"], "qty_by_limits": k["qty"],
             "value_eur": k["value_eur"],
+            "breakeven_hit_rate_pct": (k["odds"] or {}).get("breakeven_pct"),
+            "earnings_date": earnings.get(c["ticker"]),
             **{m: c.get(m) for m in ("score", "rsi14", "sma50", "sma200", "mom20_pct", "mom60_pct",
                                      "atr_pct", "vol_ratio", "dd_252_pct")},
         })
@@ -126,6 +136,7 @@ def gather(cfg: dict, client: PaperBroker) -> dict:
         "recent_results": [{"ticker": t["ticker"], "status": t["status"], "model": t.get("model")}
                            for t in journal.load_theses() if t["status"] in ("hit", "miss")][-8:],
         "candidates": cands,
+        "blocked_by_earnings": blocked,
     }
 
 
@@ -149,8 +160,12 @@ Bewertungsraster (je Kandidat, nur mit den gelieferten Zahlen):
 5. Chance/Risiko: Ziel − Kurs mindestens doppelt so groß wie Kurs − Stop.
 6. Streuung: Nicht zwei fast gleiche Wetten (gleiche Branche, gleiche Richtung) in einem Lauf.
 7. Lernen: `recent_results` zeigt letzte Treffer und Fehlschläge – wiederhole kein Muster, das zuletzt scheiterte.
-Du siehst keine Nachrichten und keine Termine: Quartalszahlen und Ereignisse kennst du nicht. Weise im `summary`
-darauf hin, wenn das für einen Vorschlag relevant sein könnte.
+8. Kosten: `breakeven_hit_rate_pct` ist die Trefferquote, ab der sich der Trade nach Gebühren und Slippage lohnt.
+   Über 50 % muss der Kandidat klar überdurchschnittlich sein – sonst auslassen. Nenne die Zahl im `summary`.
+9. Termine: `earnings_date` ist der nächste bekannte Quartalstermin (null = unbekannt). Titel mit Termin in den
+   nächsten Tagen hat Python schon aussortiert (`blocked_by_earnings`). Liegt der Termin innerhalb deiner Frist,
+   wähle die Frist so, dass sie davor endet, oder lass den Titel aus.
+Du siehst keine Nachrichten. Weise im `summary` darauf hin, wenn das für einen Vorschlag relevant sein könnte.
 - `summary`: höchstens 4 kurze Sätze zu Depot, Markt und Entscheidung, auf Deutsch.
 
 Antworte NUR mit einem JSON-Objekt in genau dieser Form, ohne weiteren Text:
@@ -179,8 +194,9 @@ def call_claude(prompt: str, token: str, model: str, runner=subprocess.run) -> d
     cmd = [exe, "-p", "--output-format", "json", "--model", model, "--max-turns", "1",
            "--disallowedTools", "Bash", "Edit", "Write", "MultiEdit", "NotebookEdit", "WebFetch", "WebSearch", "Task"]
     try:
+        # Neutrales Arbeitsverzeichnis: Projekt-CLAUDE.md und Skills gehören nicht in diesen Lauf (kostet nur Tokens)
         proc = runner(cmd, input=prompt, capture_output=True, text=True, encoding="utf-8",
-                      timeout=TIMEOUT_S, env=env, cwd=str(ROOT))
+                      timeout=TIMEOUT_S, env=env, cwd=tempfile.gettempdir())
     except subprocess.TimeoutExpired:
         raise AdvisorError(f"Claude hat nach {TIMEOUT_S} s nicht geantwortet")
     try:
@@ -248,7 +264,8 @@ def vet(data: dict, facts: dict, cfg: dict, client: PaperBroker) -> tuple[list[d
                                  trading.live_portfolio(client), cfg)
         ok.append({"ticker": t, "currency": c["currency"], "price": c["price"], "price_date": c["price_date"],
                    "stop": stop, "target": target, "horizon_days": horizon, "rationale": rationale,
-                   "qty": qty, "value_eur": round(qty * c["price"] * rate, 2)})
+                   "qty": qty, "value_eur": round(qty * c["price"] * rate, 2),
+                   "odds": trading.net_odds(t, qty, c["price"], stop, target, cfg, rate)})
     return ok, rejected
 
 
@@ -309,7 +326,8 @@ def run(cfg: dict | None = None, client: PaperBroker | None = None, caller=call_
     created = dt.datetime.now().astimezone().isoformat(timespec="seconds")
     facts = gather(cfg, client)
     report = {"created": created, "model": s["model"], "auto_trade": bool(s["auto_trade"]), "free_slots": facts["free_slots"],
-              "candidates": len(facts["candidates"]), "proposals": [], "rejected": [], "skipped": []}
+              "candidates": len(facts["candidates"]), "proposals": [],
+              "rejected": list(facts["blocked_by_earnings"]), "skipped": []}
     if not facts["candidates"] or not facts["free_slots"]:
         report["summary"] = ("Keine freien Satellit-Plätze." if not facts["free_slots"]
                              else "Keine handelbaren Kandidaten (Screen leer, Kurse alt oder schon im Depot).")
@@ -325,6 +343,7 @@ def run(cfg: dict | None = None, client: PaperBroker | None = None, caller=call_
             for p in ok:
                 p["auto"] = auto_execute(p, s["model"], cfg, client)
         skipped = data.get("skipped") if isinstance(data.get("skipped"), list) else []
+        rejected = [*rejected, *facts["blocked_by_earnings"]]
         report.update(summary=str(data.get("summary") or "")[:1200], proposals=ok, rejected=rejected,
                       skipped=[{"ticker": str(x.get("ticker", ""))[:15], "reason": str(x.get("reason", ""))[:200]}
                                for x in skipped if isinstance(x, dict)][:15],
