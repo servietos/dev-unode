@@ -57,7 +57,7 @@ function segmented(el, onChange) {
 }
 
 // --- Navigation -------------------------------------------------------------------------
-const PAGES = ["dashboard", "markt", "handel", "journal", "einstellungen"];
+const PAGES = ["dashboard", "markt", "handel", "journal", "hilfe", "einstellungen"];
 const loaders = {};
 
 function route() {
@@ -278,6 +278,13 @@ loaders.dashboard = async () => {
   $$("#dash-cands [data-pick]").forEach((a) => a.addEventListener("click", () => (selected = a.dataset.pick)));
 };
 
+function autoCell(auto, i) {
+  if (auto?.status === "placed") return `<span class="pill good">automatisch gebucht</span>`;
+  const why = auto ? `<div class="small muted">${esc((auto.reasons || []).join("; "))}</div>` : "";
+  const tag = auto ? `<span class="pill bad">${auto.status === "rejected" ? "abgelehnt" : "Fehler"}</span>` : "";
+  return `${tag}${why}<button class="btn sm primary" data-prop="${i}">Ticket öffnen</button>`;
+}
+
 async function loadAdvisor() {
   const a = await api("/api/advisor"), r = a.report, card = $("#advisor-card");
   card.hidden = !r && !a.enabled;
@@ -296,7 +303,7 @@ async function loadAdvisor() {
     <tr><td class="sym">${esc(p.ticker)}</td><td class="num">${money(p.price, p.currency)}</td>
       <td class="num">${money(p.stop, p.currency)}</td><td class="num">${money(p.target, p.currency)}</td>
       <td class="num">${p.horizon_days} T</td><td class="small">${esc(p.rationale)}</td>
-      <td><button class="btn sm primary" data-prop="${i}">Ticket öffnen</button></td></tr>`).join("");
+      <td>${autoCell(p.auto, i)}</td></tr>`).join("");
   $$("#adv-table [data-prop]").forEach((btn) => btn.addEventListener("click", () => {
     ticketProposal = { ...r.proposals[btn.dataset.prop], model: r.model, created: r.created };
     location.hash = "handel";
@@ -637,7 +644,7 @@ loaders.journal = async () => {
 
   const label = (a) => a.action ? { order: "Order", cancel: "Storno", close: "Position geschlossen", core_buy: "Core-Kauf", paper_reset: "Depot neu gestartet",
     config_migrated: "Konfiguration aktualisiert", advisor_run: "Claude-Bewertung", advisor_token_saved: "Claude-Token gespeichert",
-    advisor_token_deleted: "Claude-Token entfernt" }[a.action] || a.action
+    advisor_token_deleted: "Claude-Token entfernt", advisor_auto_order: "Auto-Order (Claude-Vorschlag)" }[a.action] || a.action
     : a.hook ? `Hook ${a.hook}` : "Eintrag";
   $("#action-table tbody").innerHTML = acts.length ? acts.map((a) => {
     const { ts, ...rest } = a;
@@ -708,7 +715,7 @@ const af = $("#advisor-form"), tkf = $("#token-form");
 
 async function loadAdvisorSettings() {
   const a = await api("/api/advisor");
-  af.enabled.checked = a.enabled; af.model.value = a.model; af.top_n.value = a.top_n;
+  af.enabled.checked = a.enabled; af.auto_trade.checked = !!a.auto_trade; af.model.value = a.model; af.top_n.value = a.top_n;
   const pill = $("#adv-pill");
   pill.textContent = !a.cli_available ? "CLI fehlt" : a.token_configured ? (a.enabled ? "aktiv" : "Token hinterlegt") : "kein Token";
   pill.className = `pill ${!a.cli_available ? "bad" : a.token_configured && a.enabled ? "good" : a.token_configured ? "" : "warn"}`;
@@ -739,7 +746,9 @@ af.addEventListener("submit", async (e) => {
   const msg = $("#advisor-msg");
   try {
     const c = await loadConfig();
-    await api("/api/config", { method: "PUT", body: { ...c, advisor: { enabled: af.enabled.checked, model: af.model.value, top_n: Number(af.top_n.value) } } });
+    if (af.auto_trade.checked && !c.advisor?.auto_trade &&
+        !(await confirmDialog("Automatisch buchen einschalten?", "<p>Ab dem nächsten Lauf bucht die App Claudes Vorschläge ohne Rückfrage als <b>Paper-Order</b>, sofern alle Risiko-Prüfungen bestehen. Es werden nur Käufe gebucht, nie Verkäufe, und es fließt kein echtes Geld.</p>", "Einschalten"))) return;
+    await api("/api/config", { method: "PUT", body: { ...c, advisor: { enabled: af.enabled.checked, auto_trade: af.auto_trade.checked, model: af.model.value, top_n: Number(af.top_n.value) } } });
     msg.className = "small status ok"; msg.textContent = "Gespeichert";
     loadConfig(); loadAdvisorSettings();
   } catch (err) { msg.className = "small status bad"; msg.textContent = err.message; }

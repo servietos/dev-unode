@@ -6,6 +6,8 @@ Rechnen, Risiko und Ausführung macht deterministischer Python-Code in `tools/`.
 ## Regeln
 - Nur Paper-Depot (EUR, simuliert mit Tageskursen und Bitpanda-Gebühren). Du handelst nicht:
   Order-Vorschläge nur als Tabelle, Timo gibt sie in der Weboberfläche frei. Ein Hook blockiert Broker-MCP-Orders.
+  Ausnahme in der App, nicht für dich: Der Schalter `advisor.auto_trade` (Standard aus) lässt Python die
+  geprüften Vorschläge der Morgenbewertung als Paper-Order buchen, über `trading.place` mit allen Prüfungen.
 - Strategie Core-Satellite: Core (`EUNL.DE`, ca. 75 %) ist Bestand und Benchmark, keine These.
   Satellit (max. 25 %, max. 3 Positionen): Swing 2–8 Wochen, Stop Pflicht. Kein Day-Trading, keine Leerverkäufe.
 - Jede Kaufidee wird zur messbaren These: `python3 tools/journal.py add …` (Ziel, Stop, Frist, Begründung, `--model`).

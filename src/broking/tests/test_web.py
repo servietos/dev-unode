@@ -177,9 +177,14 @@ class WebTests(unittest.TestCase):
     def test_advisor_config_validation(self):
         cfg = self.client.get("/api/config").json()
         saved = self.client.put("/api/config", json={**cfg, "advisor": {"enabled": True, "model": "haiku", "top_n": 5}}).json()
-        self.assertEqual(saved["advisor"], {"enabled": True, "model": "haiku", "top_n": 5})
-        self.assertEqual(self.client.put("/api/config", json={**cfg, "advisor": {"model": "gpt"}}).status_code, 400)
-        self.client.put("/api/config", json={**cfg, "advisor": {"enabled": False, "model": "sonnet", "top_n": 10}})
+        self.assertEqual(saved["advisor"], {"enabled": True, "model": "haiku", "top_n": 5, "auto_trade": False})
+        try:
+            on = self.client.put("/api/config", json={**cfg, "advisor": {"auto_trade": True}}).json()
+            self.assertTrue(on["advisor"]["auto_trade"])
+            self.assertEqual(self.client.put("/api/config", json={**cfg, "advisor": {"model": "gpt"}}).status_code, 400)
+        finally:
+            self.client.put("/api/config", json={**cfg, "advisor": {"enabled": False, "model": "sonnet", "top_n": 10,
+                                                                      "auto_trade": False}})
 
     def test_scheduler_runs_advisor_only_in_the_morning(self):
         import advisor

@@ -95,6 +95,46 @@ class AdvisorTests(unittest.TestCase):
         # Zweiter Lauf: AAPL hat jetzt eine offene These → nicht mehr Kandidat
         self.assertEqual([c["ticker"] for c in self.advisor.gather(self.cfg, self.b)["candidates"]], ["MSFT"])
 
+    def _answer_for_first_candidate(self):
+        k = self.advisor.gather(self.cfg, self.b)["candidates"][0]
+        return {"summary": "ok", "proposals": [
+            {"ticker": k["ticker"], "stop": k["stop_atr"], "target": k["target_atr"], "horizon_days": 21,
+             "rationale": "Kurs über SMA50."}]}
+
+    def test_auto_trade_off_places_no_order(self):
+        self.advisor.save_token(TOKEN)
+        rep = self.advisor.run(self.cfg, self.b, caller=self.fake(self._answer_for_first_candidate())[0])
+        self.assertFalse(rep["auto_trade"])
+        self.assertNotIn("auto", rep["proposals"][0])
+        self.assertEqual(self.b.orders("all", 50), [])
+
+    def test_auto_trade_on_books_bracket_with_thesis(self):
+        self.advisor.save_token(TOKEN)
+        cfg = {**self.cfg, "advisor": {"auto_trade": True},
+               "risk": {**self.cfg["risk"], "enforce_market_hours": False}}
+        rep = self.advisor.run(cfg, self.b, caller=self.fake(self._answer_for_first_candidate())[0])
+        p = rep["proposals"][0]
+        self.assertTrue(rep["auto_trade"])
+        self.assertEqual(p["auto"]["status"], "placed", p["auto"])
+        self.assertTrue(self.b.orders("all", 50))
+        self.assertEqual(self.journal.get_thesis(p["thesis_id"])["order_id"], p["auto"]["order_id"])
+
+    def test_auto_trade_rejection_is_reported_not_worked_around(self):
+        self.advisor.save_token(TOKEN)
+        cfg = {**self.cfg, "advisor": {"auto_trade": True}}
+        self.advisor.save_token(TOKEN)
+        orig = self.advisor.trading.place
+
+        def refuse(*a, **k):
+            raise self.advisor.trading.OrderRejected(["Limit überschritten"])
+        self.advisor.trading.place = refuse
+        try:
+            rep = self.advisor.run(cfg, self.b, caller=self.fake(self._answer_for_first_candidate())[0])
+        finally:
+            self.advisor.trading.place = orig
+        self.assertEqual(rep["proposals"][0]["auto"], {"status": "rejected", "reasons": ["Limit überschritten"]})
+        self.assertEqual(self.b.orders("all", 50), [])
+
     def test_no_slots_skips_claude(self):
         self.advisor.save_token(TOKEN)
         cfg = {**self.cfg, "risk": {**self.cfg["risk"], "max_open_positions": 0}}

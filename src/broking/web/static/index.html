@@ -16,6 +16,7 @@
       <a href="#markt" data-page="markt"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9M15 7h5v5" fill="none" stroke-width="2"/></svg><span>Markt</span></a>
       <a href="#handel" data-page="handel"><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3" fill="none" stroke-width="2"/></svg><span>Handel</span></a>
       <a href="#journal" data-page="journal"><svg viewBox="0 0 24 24"><path d="M6 3h11a2 2 0 012 2v16l-4-2-4 2-4-2-3 2V5a2 2 0 012-2zm2 5h8M8 12h8" fill="none" stroke-width="2"/></svg><span>Journal</span><b class="count" id="nav-due" hidden></b></a>
+      <a href="#hilfe" data-page="hilfe"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke-width="2"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.6-1.5 1-1.5 2M12 17h.01" fill="none" stroke-width="2"/></svg><span>Hilfe</span></a>
       <a href="#einstellungen" data-page="einstellungen"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke-width="2"/><circle cx="16" cy="7" r="2" fill="none" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke-width="2"/></svg><span>Einstellungen</span></a>
     </nav>
     <div class="sidebar-foot">
@@ -214,6 +215,78 @@
       </div>
     </section>
 
+    <!-- Hilfe -->
+    <section class="page" id="page-hilfe" hidden>
+      <header class="page-head"><div><h1>Hilfe</h1><p class="muted">Wie Broking arbeitet, was jeder Schalter tut und wo die Grenzen liegen</p></div></header>
+      <div class="help">
+        <div class="card">
+          <h2>Das Prinzip</h2>
+          <p>Broking ist ein <b>Paper-Depot</b>: Alles ist simuliert, mit Tagesschlusskursen von Yahoo Finance, Slippage und Bitpanda-Gebühren. Es fließt kein echtes Geld, und es gibt keine Verbindung zu einem Broker. Startkapital und Depot lassen sich in den Einstellungen zurücksetzen.</p>
+          <p><b>Core-Satellite:</b> Rund 75 % liegen als <b>Core</b> im ETF <code>EUNL.DE</code>. Er ist zugleich die Messlatte: Das Depot soll ihn schlagen. Rund 25 % sind der <b>Satellit</b>: höchstens 3 Swing-Positionen mit 2–8 Wochen Haltedauer, jede mit Stop-Loss und Ziel. Kein Day-Trading, keine Leerverkäufe.</p>
+          <p>Rechnen, Risiko und Ausführung macht deterministischer Code. Claude bewertet nur, was dieser Code vorbereitet, und rechnet nie selbst.</p>
+        </div>
+        <div class="card">
+          <h2>Der Tagesablauf</h2>
+          <ol>
+            <li><b>Kurse laden</b> (Yahoo, Cache pro Tag): US-Aktien, Xetra-Aktien und -ETFs, Krypto, dazu EURUSD.</li>
+            <li><b>Screen:</b> Filter nach Trend (Kurs über SMA 50/200), RSI-Band, Liquidität und Historie. Ergebnis ist die Kandidatenliste mit Score.</li>
+            <li><b>Thesen auswerten:</b> Fällige oder erreichte Thesen werden als Treffer oder Fehlschlag gewertet.</li>
+            <li><b>Depot abgleichen:</b> Limits, Stops und Ziele werden gegen die neuen Kurse geprüft, der Tageswert wird festgehalten.</li>
+            <li><b>Claude-Bewertung</b> (nur im ersten Lauf des Tages, wenn aktiviert und ein Token da ist): siehe unten.</li>
+          </ol>
+          <p>Der Zeitplan (Einstellungen) startet das Mo–Fr zu den eingetragenen Uhrzeiten. „Alles aktualisieren“ im Dashboard startet denselben Ablauf von Hand.</p>
+        </div>
+        <div class="card">
+          <h2>Claude-Bewertung</h2>
+          <p>Python wählt die Top-Kandidaten aus dem Screen aus und berechnet je Titel Kurs, ATR, Stop (1,5 × ATR unter Kurs), Ziel (3 × ATR über Kurs, also Chance/Risiko 2:1) und die zulässige Stückzahl. Claude bekommt diese Fakten plus Depot, offene Thesen und die letzten Treffer/Fehlschläge und wählt höchstens so viele Käufe, wie Satellit-Plätze frei sind, <b>oder keinen</b>.</p>
+          <p><b>Bewertungsraster:</b> Trend intakt (Kurs über SMA 50 über SMA 200), Momentum positiv, RSI bevorzugt 50–70, nicht weit über der SMA 50, ausreichend Volumen, Chance/Risiko mindestens 2:1, keine doppelten Wetten, kein Wiederholen zuletzt gescheiterter Muster.</p>
+          <p><b>Grenzen:</b> Claude sieht keine Nachrichten, Quartalszahlen oder Termine. Es hat keine Werkzeuge und kein Internet, nur die gelieferten Zahlen. Jeder Vorschlag wird danach von Python geprüft (Titel in der Liste, Stop &lt; Kurs &lt; Ziel, Frist 10–56 Tage, freie Plätze) und als <b>These</b> ins Journal geschrieben. Die Trefferquote je Modell zeigt dir, ob die Bewertung etwas taugt.</p>
+        </div>
+        <div class="card">
+          <h2>Automatisch buchen (Schalter)</h2>
+          <p><b>Aus (Standard):</b> Die Vorschläge stehen im Dashboard. Du öffnest das Ticket, prüfst und sendest die Order selbst.</p>
+          <p><b>An:</b> Nach der Bewertung bucht die App jeden Vorschlag selbst als <b>Paper-Order</b>. Sie nutzt dafür genau dieselbe Strecke wie dein Ticket:</p>
+          <ul>
+            <li>These steht vor der Order im Journal.</li>
+            <li>Limit = letzter Schlusskurs, höchstens 3 % Abweichung; Kurse über 4 Tage alt werden abgelehnt.</li>
+            <li>Bracket-Order mit Stop-Loss und Ziel.</li>
+            <li><code>risk_check</code> prüft Positionsgröße, Risiko je Trade, Tagesverlust, Drawdown, Mindestorder, Gebühren, Börsenzeiten und die Zahl der Satellit-Positionen.</li>
+          </ul>
+          <p><b>Lehnt eine Prüfung ab,</b> wird die Order nicht umgebaut. Der Grund steht im Bericht („abgelehnt“), die These bleibt als Prognose im Journal, und du kannst sie bei Bedarf selbst über das Ticket freigeben.</p>
+          <p><b>Was der Schalter nie tut:</b> verkaufen, den Core auffüllen, Stops ändern, Limits lockern oder echtes Geld bewegen. Verkäufe laufen nur über Stop, Ziel oder dich. Dies ist ein Test für Phase 1: Beobachte die Trefferquote, bevor du irgendetwas Echtes erwägst.</p>
+        </div>
+        <div class="card">
+          <h2>Schutzmechanismen</h2>
+          <ul>
+            <li><b>Stop ist Pflicht</b> bei jeder Satellit-Order.</li>
+            <li><b>Risiko-Limits</b> (Einstellungen): maximale Position, Risiko je Trade, Tagesverlust, Drawdown, Gebühren-Anteil.</li>
+            <li><b>Nur Titel aus dem Universum</b> in EUR oder USD; neue Titel trägst du selbst ein.</li>
+            <li><b>Token</b> liegt nur auf dem Umbrel, wird nie angezeigt und nur als Umgebungsvariable an Claude übergeben.</li>
+            <li><b>Aktionsprotokoll</b> (Journal) hält jede Order, jeden Lauf und jede Ablehnung fest, auch die automatischen.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Bereiche der App</h2>
+          <dl class="facts">
+            <div><dt>Dashboard</dt><dd>Depotwert, Vergleich mit Benchmark, Claude-Bewertung, Positionen, Top-Kandidaten, Status</dd></div>
+            <div><dt>Markt</dt><dd>Screen-Ergebnis, Kurs-Chart mit SMA 50/200, Ticket oder These zum gewählten Titel</dd></div>
+            <div><dt>Handel</dt><dd>Order-Ticket mit Prüfung, Positionen schließen, Orders stornieren</dd></div>
+            <div><dt>Journal</dt><dd>Thesen, Trefferquote je Modell, Aktionsprotokoll</dd></div>
+            <div><dt>Einstellungen</dt><dd>Depot zurücksetzen, Aufteilung, Limits, Screen, Universum, Zeitplan, Claude (Token, Modell, Automatik)</dd></div>
+          </dl>
+        </div>
+        <div class="card">
+          <h2>Wenn etwas nicht klappt</h2>
+          <ul>
+            <li><b>„Kurs ist N Tage alt“:</b> Erst „Alles aktualisieren“ oder „Kurse laden + Screen“.</li>
+            <li><b>Keine Claude-Bewertung:</b> Token hinterlegt, Schalter „bewerten“ aktiv, Zeitplan an? Die Bewertung läuft nur im ersten Zeitplan-Lauf des Tages oder über „Jetzt bewerten“.</li>
+            <li><b>Vorschlag abgelehnt:</b> Der Grund steht im Dashboard unter „Verworfen und ausgelassen“ bzw. an der Zeile. Häufig: Börse zu, Limit erreicht, zu wenig Cash oder kein freier Satellit-Platz.</li>
+            <li><b>Pillen „CLI fehlt“:</b> Die App läuft ohne Claude-Programm; das Image muss neu installiert werden.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
     <!-- Einstellungen -->
     <section class="page" id="page-einstellungen" hidden>
       <header class="page-head"><div><h1>Einstellungen</h1><p class="muted">Paper-Depot, Aufteilung, Universum, Limits und Zeitplan</p></div></header>
@@ -274,8 +347,8 @@
         <div class="card" id="advisor-settings">
           <div class="card-head"><h2>Claude (Morgenbewertung)</h2><span class="pill" id="adv-pill">–</span></div>
           <p class="small">Nach dem ersten Lauf des Tages bewertet Claude die Top-Kandidaten und schlägt bis zu drei
-            Satellit-Käufe vor. Jeder Vorschlag wird als These im Journal angelegt. Claude handelt nicht: Kaufen kannst nur du,
-            über „Ticket öffnen“ im Dashboard. Das zählt gegen das Nutzungslimit deines Claude-Abos.</p>
+            Satellit-Käufe vor. Jeder Vorschlag wird als These im Journal angelegt. Standardmäßig kaufst nur du,
+            über „Ticket öffnen“ im Dashboard – mit dem Schalter „automatisch buchen“ übernimmt das die App (siehe Hilfe). Das zählt gegen das Nutzungslimit deines Claude-Abos.</p>
           <form id="token-form" autocomplete="off">
             <h3>Token</h3>
             <p class="muted small">Im Terminal <code>claude setup-token</code> ausführen und das Token hier einfügen. Es wird nur auf dem Umbrel
@@ -290,6 +363,8 @@
           <form id="advisor-form">
             <h3>Lauf</h3>
             <label class="check"><input type="checkbox" name="enabled"> Jeden Morgen nach dem ersten Zeitplan-Lauf bewerten</label>
+            <label class="check"><input type="checkbox" name="auto_trade"> Vorschläge automatisch als Paper-Order buchen (ohne Rückfrage)</label>
+            <p class="muted small" id="auto-hint">Aus: Vorschläge warten im Dashboard auf deine Freigabe. An: Jeder Vorschlag geht durch dieselben Prüfungen wie ein Ticket und wird bei Erfolg sofort gebucht. Nur Käufe, nur Paper.</p>
             <div class="form-grid two">
               <label>Modell<select name="model"><option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku</option></select></label>
               <label>Kandidaten<input name="top_n" type="number" min="1" max="20"></label>

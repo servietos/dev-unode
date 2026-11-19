@@ -8,7 +8,11 @@ Ablauf:
 2. Claude (claude -p, ohne Werkzeuge) wählt aus und begründet – rechnet aber nichts selbst.
 3. Python prüft jeden Vorschlag (Titel aus der Liste, Stop < Kurs < Ziel, freie Plätze),
    legt ihn als These an (Modell = z. B. "sonnet") und speichert den Bericht in data/reports/.
-Claude handelt nicht: Freigabe nur durch Timo im Order-Ticket der Weboberfläche.
+Standard: Claude handelt nicht, Freigabe durch Timo im Order-Ticket der Weboberfläche.
+Optional (`advisor.auto_trade`, Schalter in den Einstellungen, standardmäßig aus): Python legt jeden
+geprüften Vorschlag als Paper-Order an – über dieselbe Strecke wie ein manuelles Ticket (`trading.place`:
+These vor Order, risk_check, Kurs-Aktualität, Bracket mit Stop und Ziel). Claude selbst führt nie etwas aus;
+lehnt eine Prüfung ab, wird nichts umgebaut, die Ablehnung steht im Bericht.
 
 Das Token (claude setup-token) liegt in data/secrets.json und verlässt die App nur als
 Umgebungsvariable CLAUDE_CODE_OAUTH_TOKEN für den claude-Prozess.
@@ -27,13 +31,13 @@ from pathlib import Path
 import journal
 import risk_check
 import trading
-from broker import PaperBroker
+from broker import BrokerError, PaperBroker
 from common import DATA_DIR, ROOT, SCREENS_DIR, emit, load_config
 
 SECRETS_PATH = DATA_DIR / "secrets.json"
 REPORTS_DIR = DATA_DIR / "reports"
 MODELS = ("sonnet", "opus", "haiku")
-DEFAULTS = {"enabled": False, "model": "sonnet", "top_n": 10}
+DEFAULTS = {"enabled": False, "model": "sonnet", "top_n": 10, "auto_trade": False}
 TOKEN_RE = re.compile(r"^sk-ant-[A-Za-z0-9_\-]{20,400}$")
 HORIZON_MIN, HORIZON_MAX = 10, 56   # Swing 2–8 Wochen
 TIMEOUT_S = 300
@@ -119,6 +123,8 @@ def gather(cfg: dict, client: PaperBroker) -> dict:
                       for p in positions],
         "open_theses": [{k: t.get(k) for k in ("ticker", "entry", "target", "stop", "deadline", "model")}
                         for t in open_theses],
+        "recent_results": [{"ticker": t["ticker"], "status": t["status"], "model": t.get("model")}
+                           for t in journal.load_theses() if t["status"] in ("hit", "miss")][-8:],
         "candidates": cands,
     }
 
@@ -134,6 +140,17 @@ Regeln:
 - `horizon_days` zwischen {hmin} und {hmax}.
 - Begründung: ein Satz, prüfbar (Trend, Momentum, RSI, Abstand zu SMA). Nicht „sieht stark aus“.
 - Überzeugt nichts, ist eine leere Liste die richtige Antwort.
+
+Bewertungsraster (je Kandidat, nur mit den gelieferten Zahlen):
+1. Trend: price über sma50 und sma50 über sma200 = intakt; darunter ablehnen.
+2. Momentum: mom20_pct und mom60_pct positiv und nicht überhitzt; RSI 50–70 bevorzugt, über 75 meist zu spät.
+3. Dehnung: Liegt price weit (> ca. 15 %) über sma50, ist der Einstieg riskant – eher auslassen.
+4. Handelbarkeit: vol_ratio ≥ 1 spricht für Beteiligung; sehr hohe atr_pct (> 6 %) heißt breite Stopps, kleine Position.
+5. Chance/Risiko: Ziel − Kurs mindestens doppelt so groß wie Kurs − Stop.
+6. Streuung: Nicht zwei fast gleiche Wetten (gleiche Branche, gleiche Richtung) in einem Lauf.
+7. Lernen: `recent_results` zeigt letzte Treffer und Fehlschläge – wiederhole kein Muster, das zuletzt scheiterte.
+Du siehst keine Nachrichten und keine Termine: Quartalszahlen und Ereignisse kennst du nicht. Weise im `summary`
+darauf hin, wenn das für einen Vorschlag relevant sein könnte.
 - `summary`: höchstens 4 kurze Sätze zu Depot, Markt und Entscheidung, auf Deutsch.
 
 Antworte NUR mit einem JSON-Objekt in genau dieser Form, ohne weiteren Text:
@@ -235,6 +252,28 @@ def vet(data: dict, facts: dict, cfg: dict, client: PaperBroker) -> tuple[list[d
     return ok, rejected
 
 
+# --- Automatisch handeln (optional) --------------------------------------------------------
+
+def auto_execute(p: dict, model: str, cfg: dict, client: PaperBroker) -> dict:
+    """Einen geprüften Vorschlag als Paper-Order buchen. Nie umgehen: jede Ablehnung wird nur berichtet."""
+    if not p["qty"] or p["qty"] <= 0:
+        res = {"status": "rejected", "reasons": ["Stückzahl nach Limits 0"]}
+    else:
+        order = {"ticker": p["ticker"], "qty": p["qty"], "price": p["price"], "stop": p["stop"],
+                 "target": p["target"], "horizon_days": p["horizon_days"], "rationale": p["rationale"],
+                 "model": model, "thesis_id": p["thesis_id"]}
+        try:
+            placed = trading.place(client, order, cfg)
+            res = {"status": "placed", "order_id": placed["order"].get("id")}
+        except trading.OrderRejected as e:
+            res = {"status": "rejected", "reasons": e.violations}
+        except BrokerError as e:
+            res = {"status": "error", "reasons": [str(e)[:200]]}
+    journal.log_action({"source": "advisor", "action": "advisor_auto_order", "ticker": p["ticker"],
+                        "thesis_id": p["thesis_id"], **res})
+    return res
+
+
 # --- Lauf --------------------------------------------------------------------------------
 
 def save_report(report: dict) -> None:
@@ -258,7 +297,7 @@ def run(cfg: dict | None = None, client: PaperBroker | None = None, caller=call_
         raise AdvisorError("Kein Claude-Token hinterlegt (Einstellungen → Claude)")
     created = dt.datetime.now().astimezone().isoformat(timespec="seconds")
     facts = gather(cfg, client)
-    report = {"created": created, "model": s["model"], "free_slots": facts["free_slots"],
+    report = {"created": created, "model": s["model"], "auto_trade": bool(s["auto_trade"]), "free_slots": facts["free_slots"],
               "candidates": len(facts["candidates"]), "proposals": [], "rejected": [], "skipped": []}
     if not facts["candidates"] or not facts["free_slots"]:
         report["summary"] = ("Keine freien Satellit-Plätze." if not facts["free_slots"]
@@ -271,6 +310,9 @@ def run(cfg: dict | None = None, client: PaperBroker | None = None, caller=call_
             th = journal.add_thesis(p["ticker"], "up", p["price"], p["target"], p["horizon_days"],
                                     p["rationale"], s["model"], p["stop"])
             p["thesis_id"] = th["id"]
+        if s["auto_trade"]:
+            for p in ok:
+                p["auto"] = auto_execute(p, s["model"], cfg, client)
         skipped = data.get("skipped") if isinstance(data.get("skipped"), list) else []
         report.update(summary=str(data.get("summary") or "")[:1200], proposals=ok, rejected=rejected,
                       skipped=[{"ticker": str(x.get("ticker", ""))[:15], "reason": str(x.get("reason", ""))[:200]}

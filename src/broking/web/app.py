@@ -423,7 +423,8 @@ def validate_config(new: dict) -> dict:
                         "times": times}
 
         adv = {**advisor.settings(base), **(new.get("advisor") or {})}
-        advisor_cfg = {"enabled": bool(adv["enabled"]), "model": str(adv["model"]), "top_n": int(adv["top_n"])}
+        advisor_cfg = {"enabled": bool(adv["enabled"]), "model": str(adv["model"]), "top_n": int(adv["top_n"]),
+                       "auto_trade": bool(adv["auto_trade"])}
         if advisor_cfg["model"] not in advisor.MODELS or not 1 <= advisor_cfg["top_n"] <= 20:
             raise ValueError(f"Claude: Modell aus {', '.join(advisor.MODELS)}, Kandidaten 1–20")
     except (KeyError, TypeError, AttributeError) as e:

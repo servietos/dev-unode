@@ -188,6 +188,10 @@ textarea[name="universe"] { font-family: ui-monospace, SFMono-Regular, Menlo, mo
 .table .sub { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
 .adv-summary { margin: 0 0 8px; line-height: 1.5; max-width: 80ch; }
 #advisor-settings form + form { margin-top: 8px; }
+.help { display: grid; gap: 16px; max-width: 80ch; }
+.help h2 { margin-top: 0; }
+.help p, .help li { line-height: 1.55; }
+.help ul, .help ol { padding-left: 20px; }
 .rejects { margin-top: 12px; font-size: 12px; color: var(--text-2); }
 .rejects summary { cursor: pointer; color: var(--muted); }
 .rejects ul { margin: 8px 0 0; padding-left: 18px; }
