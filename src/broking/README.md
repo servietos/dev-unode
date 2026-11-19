@@ -27,14 +27,30 @@ Echte Orders kommen erst in Phase 3 (Bitpanda-API) und brauchen eine eigene Brok
   Bracket-Order (Limit-Kauf + Stop-Loss + Take-Profit). Jede Order legt eine These an.
   Positionen schließen, Orders stornieren.
 - **Journal:** Thesen anlegen/auswerten (auch automatisch), Trefferquote je Quelle/Modell, Aktionsprotokoll
-- **Einstellungen:** Depot neu starten (Startkapital), Aufteilung, Limits, Universum, Zeitplan
+- **Einstellungen:** Depot neu starten (Startkapital), Aufteilung, Limits, Universum, Zeitplan, Claude-Token
 
 Zeitplan (Mo–Fr, Standard 07:30 und 22:30): Kurse laden → Screen → Thesen auswerten → Depot fortschreiben
-(offene Limits, Stops, Ziele) und Tageswert speichern.
+(offene Limits, Stops, Ziele) und Tageswert speichern. „Alles aktualisieren“ lädt die Kurse immer neu.
+Käufe mit einem Kurs älter als 4 Tage lehnt die App ab.
+
+## Claude-Morgenbewertung (optional)
+
+Nach dem ersten Zeitplan-Lauf des Tages ruft `tools/advisor.py` den eingebauten `claude`-CLI auf
+(`claude -p`, Werkzeuge gesperrt). Python liefert die Fakten – Top-Kandidaten mit Ticket-Vorschlag
+(Kurs, Stop/Ziel aus ATR, Stückzahl nach Limits), Depot, offene Thesen. Claude wählt höchstens so viele
+Titel, wie Satellit-Plätze frei sind, und begründet sie. Python prüft jeden Vorschlag, legt ihn als These
+an (Modell = `sonnet` o. Ä., damit die Trefferquote je Modell messbar ist) und speichert den Bericht in
+`/data/reports/`. Das Dashboard zeigt ihn; „Ticket öffnen“ übernimmt den Vorschlag ins Order-Ticket, die
+Order wird mit Claudes These verknüpft. Claude handelt nie selbst.
+
+Einrichtung: im Terminal `claude setup-token` ausführen, das Token unter Einstellungen → Claude einfügen,
+„Jeden Morgen bewerten“ aktivieren. Das Token liegt in `/data/secrets.json` (Rechte 600), wird von der API
+nie zurückgegeben und nur als `CLAUDE_CODE_OAUTH_TOKEN` an den claude-Prozess übergeben. Telemetrie ist
+im Image abgeschaltet.
 
 ## Sicherheit
 
-- Nur Paper: kein Netzwerkzugriff auf Broker, keine Schlüssel nötig.
+- Nur Paper: kein Netzwerkzugriff auf Broker, keine Broker-Schlüssel nötig.
 - Jede Order wird serverseitig neu geprüft (`tools/trading.py` → `tools/risk_check.py`); Browserwerte zählen nicht.
 - Limits: Risiko je Trade, Positionsgröße, Satellit-Quote und -Anzahl, Mindestorder, Gebührenquote,
   Tagesverlust- und Drawdown-Stopp. Keine Leerverkäufe, keine Optionen.
@@ -64,4 +80,4 @@ Jeder Push, der `src/broking/` ändert, baut über `.github/workflows/broking-im
 Neue Version: `VERSION` erhöhen, denselben Tag in `dev-unode-broking/docker-compose.yml` und
 `version` in `dev-unode-broking/umbrel-app.yml` eintragen.
 
-Daten im Container: `/data` (`config.json`, `paper_account.json`, `portfolio.json`, `prices/`, `screens/`, `journal/`).
+Daten im Container: `/data` (`config.json`, `paper_account.json`, `portfolio.json`, `prices/`, `screens/`, `reports/`, `journal/`, `secrets.json`).

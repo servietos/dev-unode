@@ -23,5 +23,6 @@ Rechnen, Risiko und Ausführung macht deterministischer Python-Code in `tools/`.
 | `python3 tools/risk_check.py size --price P --stop S --equity E --fx F` | Stückzahl nach Limits |
 | `python3 tools/evaluate_theses.py [--stats]` | Thesen auswerten, Trefferquote je Modell |
 | `python3 tools/journal.py list --status open` | offene Thesen |
+| `python3 tools/advisor.py run` | Morgenbewertung durch Claude im Container (App ruft das selbst auf) |
 
 Ablauf und Berichtsformat: Skill `trading-playbook`.

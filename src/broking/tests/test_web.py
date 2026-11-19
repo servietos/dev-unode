@@ -27,8 +27,8 @@ class WebTests(unittest.TestCase):
         os.environ.update(BROKING_DATA_DIR=str(d), BROKING_JOURNAL_DIR=str(d / "journal"),
                           BROKING_CONFIG=str(d / "config.json"))
         # Module neu laden, damit sie die Pfade aus der Umgebung übernehmen
-        import broker, common, evaluate_theses, fetch_prices, instruments, journal, risk_check, screen, trading  # noqa: E401
-        for mod in (common, instruments, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading):
+        import advisor, broker, common, evaluate_theses, fetch_prices, instruments, journal, risk_check, screen, trading  # noqa: E401
+        for mod in (common, instruments, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading, advisor):
             importlib.reload(mod)
         import web.app as webapp
         cls.webapp = importlib.reload(webapp)
@@ -41,8 +41,8 @@ class WebTests(unittest.TestCase):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-        import broker, common, evaluate_theses, fetch_prices, journal, risk_check, screen, trading  # noqa: E401
-        for mod in (common, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading):
+        import advisor, broker, common, evaluate_theses, fetch_prices, journal, risk_check, screen, trading  # noqa: E401
+        for mod in (common, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading, advisor):
             importlib.reload(mod)
         cls.tmp.cleanup()
 
@@ -130,10 +130,10 @@ class WebTests(unittest.TestCase):
 
     def test_paper_trade_flow(self):
         from common import write_prices
-        from tests.helpers import make_rows
-        write_prices("AAPL", make_rows([200.0] * 30))
-        write_prices("EUNL.DE", make_rows([100.0] * 30))
-        write_prices("EURUSD=X", make_rows([1.25] * 30))
+        from tests.helpers import rows_until
+        write_prices("AAPL", rows_until([200.0] * 30))
+        write_prices("EUNL.DE", rows_until([100.0] * 30))
+        write_prices("EURUSD=X", rows_until([1.25] * 30))
         self.assertEqual(self.client.post("/api/broker/reset", json={"start_cash_eur": 1000, "confirm": "nein"}).status_code, 400)
         self.client.post("/api/broker/reset", json={"start_cash_eur": 1000, "confirm": "RESET"})
         b = self.client.get("/api/broker").json()
@@ -160,6 +160,39 @@ class WebTests(unittest.TestCase):
         closed = self.client.post("/api/trade/close/AAPL").json()
         self.assertEqual(closed["status"], "filled")
         self.assertEqual(self.client.post("/api/trade/close/AAPL").status_code, 404)
+
+    def test_advisor_token_is_never_returned(self):
+        token = "sk-ant-oat01-" + "y" * 40
+        a = self.client.get("/api/advisor").json()
+        self.assertEqual((a["token_configured"], a["enabled"], a["model"]), (False, False, "sonnet"))
+        self.assertEqual(self.client.post("/api/advisor/run").status_code, 400)
+        self.assertEqual(self.client.put("/api/advisor/token", json={"token": "abc"}).status_code, 400)
+        r = self.client.put("/api/advisor/token", json={"token": token})
+        self.assertEqual(r.json(), {"token_configured": True})
+        for path in ("/api/advisor", "/api/status", "/api/config", "/api/actions"):
+            self.assertNotIn(token, self.client.get(path).text, path)
+        self.assertTrue(self.client.get("/api/status").json()["advisor"]["token_configured"])
+        self.assertFalse(self.client.delete("/api/advisor/token").json()["token_configured"])
+
+    def test_advisor_config_validation(self):
+        cfg = self.client.get("/api/config").json()
+        saved = self.client.put("/api/config", json={**cfg, "advisor": {"enabled": True, "model": "haiku", "top_n": 5}}).json()
+        self.assertEqual(saved["advisor"], {"enabled": True, "model": "haiku", "top_n": 5})
+        self.assertEqual(self.client.put("/api/config", json={**cfg, "advisor": {"model": "gpt"}}).status_code, 400)
+        self.client.put("/api/config", json={**cfg, "advisor": {"enabled": False, "model": "sonnet", "top_n": 10}})
+
+    def test_scheduler_runs_advisor_only_in_the_morning(self):
+        import advisor
+        sch = self.webapp.Scheduler()
+        cfg = {"schedule": {"times": ["07:30", "22:30"]}, "advisor": {"enabled": True}}
+        self.assertNotIn("advise", sch.steps_for(cfg, "2026-11-19 07:30"))  # ohne Token nie
+        advisor.save_token("sk-ant-oat01-" + "z" * 40)
+        try:
+            self.assertEqual(sch.steps_for(cfg, "2026-11-19 07:30")[-1], "advise")
+            self.assertNotIn("advise", sch.steps_for(cfg, "2026-11-19 22:30"))
+            self.assertNotIn("advise", sch.steps_for({**cfg, "advisor": {"enabled": False}}, "2026-11-19 07:30"))
+        finally:
+            advisor.delete_token()
 
     def test_scheduler(self):
         sch = self.webapp.Scheduler()

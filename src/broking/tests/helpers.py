@@ -14,3 +14,11 @@ def make_rows(closes, volume=1_000_000, start_day=0):
          "low": c * 0.99, "close": c, "volume": volume}
         for i, c in enumerate(closes)
     ]
+
+
+def rows_until(closes, last=None, volume=1_000_000):
+    """Wie make_rows, aber die letzte Kerze liegt auf `last` (Standard: heute)."""
+    import datetime as dt
+
+    last = last or dt.date.today()
+    return make_rows(closes, volume, (last - dt.date(2025, 1, 1)).days - (len(closes) - 1))
