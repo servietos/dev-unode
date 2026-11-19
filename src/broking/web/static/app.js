@@ -299,12 +299,18 @@ async function loadAdvisor() {
   $("#adv-meta").textContent = `${r.model} · ${fmtDate(r.created)} · ${r.candidates} Kandidaten, ${r.free_slots} freie Plätze`;
   $("#adv-summary").textContent = r.summary || "";
   $("#adv-wrap").hidden = !r.proposals.length;
-  $("#adv-table tbody").innerHTML = r.proposals.map((p, i) => `
-    <tr><td class="sym">${esc(p.ticker)}</td><td class="num">${money(p.price, p.currency)}</td>
-      <td class="num">${money(p.stop, p.currency)}</td><td class="num">${money(p.target, p.currency)}</td>
-      <td class="num">${p.horizon_days} T</td><td class="small">${esc(p.rationale)}</td>
-      <td>${autoCell(p.auto, i)}</td></tr>`).join("");
-  $$("#adv-table [data-prop]").forEach((btn) => btn.addEventListener("click", () => {
+  $("#adv-wrap").innerHTML = r.proposals.map((p, i) => `
+    <div class="prop">
+      <div class="prop-head"><b class="sym">${esc(p.ticker)}</b><span class="muted small">Kauf-Idee · ${p.horizon_days} Tage</span></div>
+      <dl class="prop-nums">
+        <div><dt>Kurs</dt><dd>${money(p.price, p.currency)}</dd></div>
+        <div><dt>Verlustgrenze (Stop)</dt><dd>${money(p.stop, p.currency)}</dd></div>
+        <div><dt>Gewinnziel</dt><dd>${money(p.target, p.currency)}</dd></div>
+      </dl>
+      <p class="prop-why">${esc(p.rationale)}</p>
+      <div class="prop-foot">${autoCell(p.auto, i)}</div>
+    </div>`).join("");
+  $$("#adv-wrap [data-prop]").forEach((btn) => btn.addEventListener("click", () => {
     ticketProposal = { ...r.proposals[btn.dataset.prop], model: r.model, created: r.created };
     location.hash = "handel";
   }));

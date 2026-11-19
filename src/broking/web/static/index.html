@@ -33,6 +33,12 @@
         <div><h1>Dashboard</h1><p class="muted" id="dash-sub">Überblick über Depot, Signale und Thesen</p></div>
         <div class="actions"><button class="btn" data-run="all">Alles aktualisieren</button></div>
       </header>
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-label">Depotwert</div><div class="kpi-value" id="k-equity">–</div><div class="kpi-sub" id="k-equity-sub"></div></div>
+        <div class="kpi"><div class="kpi-label">Heute</div><div class="kpi-value" id="k-day">–</div><div class="kpi-sub" id="k-day-sub"></div></div>
+        <div class="kpi"><div class="kpi-label">Cash (frei)</div><div class="kpi-value" id="k-cash">–</div><div class="kpi-sub" id="k-cash-sub"></div></div>
+        <div class="kpi"><div class="kpi-label">Trefferquote</div><div class="kpi-value" id="k-hit">–</div><div class="kpi-sub" id="k-hit-sub"></div></div>
+      </div>
       <div class="notice" id="core-notice" hidden>
         <div id="core-notice-text"></div>
         <button class="btn primary" id="btn-core">Core auffüllen</button>
@@ -40,16 +46,8 @@
       <div class="card" id="advisor-card" hidden>
         <div class="card-head"><h2>Claude-Bewertung</h2><span class="muted small" id="adv-meta"></span></div>
         <p id="adv-summary" class="adv-summary"></p>
-        <div class="table-wrap" id="adv-wrap"><table class="table" id="adv-table">
-          <thead><tr><th>Titel</th><th class="num">Kurs</th><th class="num">Stop</th><th class="num">Ziel</th><th class="num">Frist</th><th>Begründung</th><th></th></tr></thead>
-          <tbody></tbody></table></div>
+        <div class="props" id="adv-wrap"></div>
         <details class="rejects" id="adv-more" hidden><summary>Verworfen und ausgelassen</summary><div id="adv-rejects"></div></details>
-      </div>
-      <div class="kpis">
-        <div class="kpi"><div class="kpi-label">Depotwert</div><div class="kpi-value" id="k-equity">–</div><div class="kpi-sub" id="k-equity-sub"></div></div>
-        <div class="kpi"><div class="kpi-label">Heute</div><div class="kpi-value" id="k-day">–</div><div class="kpi-sub" id="k-day-sub"></div></div>
-        <div class="kpi"><div class="kpi-label">Cash</div><div class="kpi-value" id="k-cash">–</div><div class="kpi-sub" id="k-cash-sub"></div></div>
-        <div class="kpi"><div class="kpi-label">Trefferquote</div><div class="kpi-value" id="k-hit">–</div><div class="kpi-sub" id="k-hit-sub"></div></div>
       </div>
       <div class="grid g-2-1">
         <div class="card">
