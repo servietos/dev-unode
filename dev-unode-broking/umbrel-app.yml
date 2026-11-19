@@ -3,7 +3,7 @@ id: dev-unode-broking
 name: Broking
 tagline: Aktien, ETFs und Krypto screenen, Thesen führen, im Paper-Depot (EUR) handeln
 category: finance
-version: "0.3.2"
+version: "0.3.3"
 port: 3847
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/broking/web/static/icon.svg
 description: >-
@@ -29,10 +29,9 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/broking
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Neu: Schalter „automatisch buchen“ (Einstellungen → Claude, standardmäßig aus). Ist er an, bucht
-  die App Claudes Vorschläge nach allen Risiko-Prüfungen selbst als Paper-Order; Ablehnungen stehen
-  im Bericht. Schärferes Bewertungsraster für Claude und eine neue Hilfe-Seite mit der genauen
-  Beschreibung von Ablauf, Schaltern und Grenzen.
+  Fix: Bei automatischem Buchen wird jede Order direkt vor dem Buchen neu bemessen. Zuvor konnte der
+  zweite Vorschlag eines Laufs knapp am Positionslimit scheitern, weil die erste Order (Gebühr, Cash)
+  den Depotstand verändert hatte. Die Limits selbst sind unverändert.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

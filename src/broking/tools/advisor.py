@@ -256,6 +256,17 @@ def vet(data: dict, facts: dict, cfg: dict, client: PaperBroker) -> tuple[list[d
 
 def auto_execute(p: dict, model: str, cfg: dict, client: PaperBroker) -> dict:
     """Einen geprüften Vorschlag als Paper-Order buchen. Nie umgehen: jede Ablehnung wird nur berichtet."""
+    # Mehrere Vorschläge wurden gegen denselben Depotstand bemessen; nach der ersten Order (Gebühr, Cash,
+    # Satellit-Anteil) hat sich der Stand geändert. Deshalb direkt vor dem Buchen neu bemessen – mit derselben
+    # Funktion wie beim Ticket (max_qty), nie über das Vorgeschlagene hinaus.
+    try:
+        now_max = risk_check.max_qty({"ticker": p["ticker"], "price": p["price"], "stop": p["stop"],
+                                      "fx": trading.fx_of(p["ticker"])}, trading.live_portfolio(client), cfg)
+        p["qty"] = min(p["qty"], now_max)
+        p["value_eur"] = round(p["qty"] * p["price"] * trading.fx_of(p["ticker"]), 2)
+    except BrokerError as e:
+        p["qty"] = 0
+        p["value_eur"] = 0.0
     if not p["qty"] or p["qty"] <= 0:
         res = {"status": "rejected", "reasons": ["Stückzahl nach Limits 0"]}
     else:

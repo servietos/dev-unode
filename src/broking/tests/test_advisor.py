@@ -119,6 +119,22 @@ class AdvisorTests(unittest.TestCase):
         self.assertTrue(self.b.orders("all", 50))
         self.assertEqual(self.journal.get_thesis(p["thesis_id"])["order_id"], p["auto"]["order_id"])
 
+    def test_auto_trade_resizes_to_current_portfolio_before_booking(self):
+        """Zweiter Vorschlag wurde gegen den Stand vor der ersten Order bemessen: nie über das aktuelle Limit."""
+        self.advisor.save_token(TOKEN)
+        cfg = {**self.cfg, "advisor": {"auto_trade": True},
+               "risk": {**self.cfg["risk"], "enforce_market_hours": False}}
+        k = self.advisor.gather(cfg, self.b)["candidates"][0]
+        stale_qty = k["qty_by_limits"] * 5  # viel zu groß, wie nach einer Depotänderung
+        p = {"ticker": k["ticker"], "qty": stale_qty, "price": k["price"], "stop": k["stop_atr"],
+             "target": k["target_atr"], "horizon_days": 21, "rationale": "Test", "thesis_id": None, "currency": "USD"}
+        th = self.journal.add_thesis(p["ticker"], "up", p["price"], p["target"], 21, "Test", "sonnet", p["stop"])
+        p["thesis_id"] = th["id"]
+        res = self.advisor.auto_execute(p, "sonnet", cfg, self.b)
+        self.assertEqual(res["status"], "placed", res)
+        self.assertLessEqual(p["qty"], k["qty_by_limits"] + 1e-9)
+        self.assertLess(p["qty"], stale_qty)
+
     def test_auto_trade_rejection_is_reported_not_worked_around(self):
         self.advisor.save_token(TOKEN)
         cfg = {**self.cfg, "advisor": {"auto_trade": True}}
