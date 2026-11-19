@@ -1,43 +1,45 @@
-import datetime as dt
 import importlib
 import json
 import os
-import stat
 import tempfile
 import unittest
 from pathlib import Path
 
 import tests.helpers  # noqa: F401  (sys.path)
-from tests.fake_alpaca import FakeAlpaca
 from tests.helpers import make_rows
 
-OPEN = dt.datetime(2026, 10, 28, 15, 0, tzinfo=dt.timezone.utc)  # Mi 11:00 New York
-ENV = ("BROKING_DATA_DIR", "BROKING_JOURNAL_DIR", "BROKING_CONFIG", "ALPACA_API_KEY", "ALPACA_SECRET_KEY")
+ENV = ("BROKING_DATA_DIR", "BROKING_JOURNAL_DIR", "BROKING_CONFIG")
+LAST = "2025-01-30"  # letzte Kerze von make_rows(…30 Tage)
 
 
 def reload_tools():
-    import broker, common, journal, risk_check, trading  # noqa: E401
-    for m in (common, journal, risk_check, broker, trading):
+    import broker, common, instruments, journal, risk_check, trading  # noqa: E401
+    for m in (common, instruments, journal, risk_check, broker, trading):
         importlib.reload(m)
     return broker, trading, journal
 
 
-class BrokerTradingTests(unittest.TestCase):
+def bar(date, o, h, low, c):
+    return {"date": date, "open": o, "high": h, "low": low, "close": c, "volume": 1_000_000}
+
+
+class PaperBrokerTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         d = Path(self.tmp.name)
         self.env = {k: os.environ.get(k) for k in ENV}
-        for k in ("ALPACA_API_KEY", "ALPACA_SECRET_KEY"):
-            os.environ.pop(k, None)
         os.environ.update(BROKING_DATA_DIR=str(d), BROKING_JOURNAL_DIR=str(d / "journal"),
                           BROKING_CONFIG=str(d / "config.json"))
         self.broker, self.trading, self.journal = reload_tools()
         from common import DEFAULT_CONFIG_PATH, load_config, write_prices
+        self.write_prices = write_prices
         self.cfg = load_config(DEFAULT_CONFIG_PATH)
-        write_prices("AAPL", make_rows([200.0] * 30))
-        self.fake = FakeAlpaca(price=200.0)
-        self.client = self.broker.Alpaca("KEYID123", "secretsecretsecret", transport=self.fake)
+        self.aapl = make_rows([200.0] * 30)
+        write_prices("AAPL", self.aapl)
+        write_prices("EUNL.DE", make_rows([100.0] * 30))
+        write_prices("EURUSD=X", make_rows([1.25] * 30))  # 1 $ = 0,80 €
         self.data = d
+        self.b = self.new_broker("2025-01-31")
 
     def tearDown(self):
         for k, v in self.env.items():
@@ -48,171 +50,144 @@ class BrokerTradingTests(unittest.TestCase):
         reload_tools()
         self.tmp.cleanup()
 
-    def order(self, **kw):
-        o = {"ticker": "AAPL", "qty": 40, "price": 200.0, "stop": 190.0, "target": 220.0,
-             "horizon_days": 10, "rationale": "Ausbruch über Widerstand"}
-        o.update(kw)
-        return o
+    def new_broker(self, today):
+        return self.broker.PaperBroker(self.cfg, today=today)
 
-    # --- broker.py ------------------------------------------------------------------
-    def test_tradable_symbol(self):
-        t = self.broker.tradable_symbol
-        self.assertTrue(t("AAPL") and t("brk.b") and t("SPY"))
-        self.assertFalse(t("SAP.DE") or t("EUNL.DE") or t("^GSPC") or t("TOOLONGX"))
+    def add_bars(self, *bars):
+        self.aapl += list(bars)
+        self.write_prices("AAPL", self.aapl)
 
-    def test_keys_roundtrip_with_private_file(self):
-        self.assertIsNone(self.broker.load_keys())
-        self.broker.save_keys(" KEYID123 ", "secretsecretsecret\n")
-        self.assertEqual(self.broker.load_keys(), ("KEYID123", "secretsecretsecret"))
-        mode = stat.S_IMODE(os.stat(self.broker.SECRETS_PATH).st_mode)
-        self.assertEqual(mode, 0o600)
-        self.broker.delete_keys()
-        self.assertIsNone(self.broker.load_keys())
+    def buy_aapl(self, limit=200.0, qty=0.5):
+        return self.b.submit_bracket("AAPL", qty, limit, 190.0, 220.0, "test-1")
 
-    def test_env_keys_win(self):
-        os.environ.update(ALPACA_API_KEY="ENVKEY12", ALPACA_SECRET_KEY="envsecretenvsecret")
-        self.assertEqual(self.broker.load_keys()[0], "ENVKEY12")
+    # --- Depot ---------------------------------------------------------------------------
 
-    def test_only_paper_url_and_headers(self):
-        self.client.account()
-        self.assertEqual(self.broker.PAPER_URL, "https://paper-api.alpaca.markets")
-        captured = {}
-        def spy(method, url, headers, body):
-            captured.update(url=url, headers=headers)
-            return 200, b"{}"
-        self.broker.Alpaca("KEYID123", "s" * 20, transport=spy).account()
-        self.assertTrue(captured["url"].startswith("https://paper-api.alpaca.markets/"))
-        self.assertEqual(captured["headers"]["APCA-API-KEY-ID"], "KEYID123")
+    def test_new_account(self):
+        a = self.b.account()
+        self.assertEqual((a["equity"], a["cash"], a["currency"]), (1000.0, 1000.0, "EUR"))
 
-    def test_errors_are_broker_errors(self):
-        bad = self.broker.Alpaca("BADKEY00", "x" * 20, transport=self.fake)
-        with self.assertRaises(self.broker.BrokerError) as cm:
-            bad.account()
-        self.assertIn("Schlüssel", str(cm.exception))
-        def down(*a):
-            raise OSError("timeout")
+    def test_marketable_bracket_fills_at_last_close_in_eur(self):
+        o = self.buy_aapl()
+        self.assertEqual(o["status"], "filled")
+        self.assertEqual(o["filled_avg_price"], 200.0)  # Limit deckelt die Slippage
+        self.assertEqual(o["filled_at"], LAST)
+        self.assertEqual([leg["status"] for leg in o["legs"]], ["new", "new"])
+        a = self.b.account()
+        self.assertAlmostEqual(a["cash"], 1000 - 0.5 * 200 * 0.8 - 1.0)
+        p = self.b.positions()[0]
+        self.assertEqual((p["symbol"], p["currency"], p["sleeve"]), ("AAPL", "USD", "satellite"))
+        self.assertAlmostEqual(p["market_value"], 80.0)
+        self.assertAlmostEqual(p["unrealized_pl"], -1.0)
+
+    def test_stop_first_with_gap(self):
+        self.buy_aapl()
+        self.add_bars(bar("2025-01-31", 185.0, 230.0, 180.0, 200.0))  # Gap unter Stop, später auch über Ziel
+        o = self.b.orders("closed")[0]
+        take, stop = o["legs"]
+        self.assertEqual((stop["status"], take["status"]), ("filled", "canceled"))
+        self.assertAlmostEqual(stop["filled_avg_price"], 185.0 * 0.999)  # Eröffnung, nicht Stop
+        self.assertEqual(self.b.positions(), [])
+        pnl = 0.5 * 185 * 0.999 * 0.8 - 1.0 - 81.0
+        self.assertAlmostEqual(stop["realized_pl_eur"], round(pnl, 2))
+
+    def test_target_hit(self):
+        self.buy_aapl()
+        self.add_bars(bar("2025-01-31", 205.0, 221.0, 199.0, 215.0))
+        take = self.b.orders("closed")[0]["legs"][0]
+        self.assertEqual((take["status"], take["filled_avg_price"]), ("filled", 220.0))
+
+    def test_limit_below_market_waits_and_binds_cash(self):
+        o = self.buy_aapl(limit=195.0)
+        self.assertEqual(o["status"], "new")
+        self.assertAlmostEqual(self.b.account()["buying_power"], 1000 - 0.5 * 195 * 0.8 - 1.0)
+        pf = self.trading.live_portfolio(self.b)
+        self.assertEqual(pf["positions"]["AAPL"]["qty"], 0.5)  # offene Käufe zählen gegen die Limits
+        self.add_bars(bar("2025-01-31", 198.0, 199.0, 194.0, 196.0))
+        filled = self.b.orders("open")[0]
+        self.assertEqual((filled["status"], filled["filled_avg_price"]), ("filled", 195.0))
+        self.assertEqual(filled["legs"][1]["active_from"], "2025-01-31")
+
+    def test_buy_without_cash_is_rejected(self):
+        o = self.buy_aapl(qty=10)
+        self.assertEqual(o["status"], "rejected")
+        self.assertEqual(self.b.positions(), [])
+
+    def test_cancel_and_close(self):
+        o = self.buy_aapl(limit=195.0)
+        self.b.cancel_order(o["id"])
+        self.assertEqual(self.b.orders("closed")[0]["status"], "canceled")
+        with self.assertRaises(self.broker.BrokerError) as e:
+            self.b.cancel_order(o["id"])
+        self.assertEqual(e.exception.status, 422)
+        self.buy_aapl()
+        res = self.b.close_position("AAPL")
+        self.assertEqual((res["side"], res["status"]), ("sell", "filled"))
+        self.assertEqual(self.b.orders("open"), [])
+        with self.assertRaises(self.broker.BrokerError) as e:
+            self.b.close_position("AAPL")
+        self.assertEqual(e.exception.status, 404)
+
+    def test_mark_history_and_day_pnl(self):
+        self.buy_aapl()
+        self.assertEqual(self.b.mark()["equity"], 999.0)
+        later = self.new_broker("2025-02-01")
+        self.assertEqual(later.account()["last_equity"], 999.0)
+        self.assertEqual(later.history("1M")["dates"], ["2025-01-31", "2025-02-01"])
+
+    def test_reset(self):
+        self.buy_aapl()
+        a = self.b.reset(5000)
+        self.assertEqual((a["equity"], a["start_cash"]), (5000.0, 5000.0))
+        self.assertEqual(self.b.orders("all"), [])
+
+    def test_missing_fx_is_an_error(self):
+        (self.data / "prices" / "EURUSD=X.csv").unlink()
         with self.assertRaises(self.broker.BrokerError):
-            self.broker.Alpaca("KEYID123", "x" * 20, transport=down).account()
+            self.buy_aapl()
 
-    def test_sync_portfolio(self):
-        self.fake.account["last_equity"] = "101000"
-        self.fake.positions = [{"symbol": "MSFT", "qty": "10", "avg_entry_price": "400", "current_price": "410"}]
-        pf = self.broker.sync_portfolio(self.client)
-        self.assertEqual(pf["day_pnl"], -1000.0)
-        self.assertEqual(pf["positions"]["MSFT"], {"qty": 10.0, "price": 410.0})
-        stored = json.loads((self.data / "portfolio.json").read_text())
-        self.assertEqual(stored["equity"], 100000.0)
+    # --- Handelsablauf -------------------------------------------------------------------
 
-    # --- trading.py -----------------------------------------------------------------
-    def test_ticket_suggests_levels(self):
-        t = self.trading.ticket(self.client, "aapl", self.cfg)
-        self.assertEqual(t["price_source"], "alpaca")
-        self.assertLess(t["stop"], t["price"])
-        self.assertGreater(t["target"], t["price"])
-        self.assertGreater(t["qty"], 0)
+    def order(self, **kw):
+        return {"ticker": "AAPL", "qty": 0.5, "price": 200.0, "stop": 190.0, "target": 220.0,
+                "horizon_days": 10, "rationale": "Test", "model": "test", **kw}
 
     def test_place_creates_bracket_and_thesis(self):
-        res = self.trading.place(self.client, self.order(), self.cfg, now=OPEN)
-        post = [c for c in self.fake.calls if c[0] == "POST"][0][2]
-        self.assertEqual(post["order_class"], "bracket")
-        self.assertEqual(post["side"], "buy")
-        self.assertEqual(post["stop_loss"], {"stop_price": "190.00"})
-        self.assertEqual(post["take_profit"], {"limit_price": "220.00"})
-        self.assertTrue(post["client_order_id"].startswith("broking-"))
-        th = res["thesis"]
-        self.assertEqual((th["ticker"], th["entry"], th["target"], th["stop"]), ("AAPL", 200.0, 220.0, 190.0))
-        self.assertEqual(th["order_id"], res["order"]["id"])
-        actions = (self.data / "journal" / "actions.jsonl").read_text().splitlines()
-        self.assertEqual(json.loads(actions[-1])["thesis_id"], th["id"])
+        res = self.trading.place(self.b, self.order(), self.cfg)
+        self.assertEqual(res["order"]["status"], "filled")
+        self.assertEqual(res["thesis"]["order_id"], res["order"]["id"])
+        self.assertEqual(res["thesis"]["stop"], 190.0)
+        pf = json.loads((self.data / "portfolio.json").read_text(encoding="utf-8"))
+        self.assertAlmostEqual(pf["positions"]["AAPL"]["price"], 160.0)  # EUR je Stück
 
-    def assertRejected(self, fragment, **kw):
-        with self.assertRaises(self.trading.OrderRejected) as cm:
-            self.trading.place(self.client, self.order(**kw), self.cfg, now=OPEN)
-        self.assertTrue(any(fragment in v for v in cm.exception.violations), cm.exception.violations)
-        self.assertFalse([c for c in self.fake.calls if c[0] == "POST"], "Order darf nicht rausgehen")
+    def test_rejections_never_book(self):
+        for bad in (self.order(qty=5), self.order(price=230.0), self.order(rationale=" "),
+                    self.order(stop=205.0), self.order(ticker="GME")):
+            with self.assertRaises((self.trading.OrderRejected, self.broker.BrokerError)):
+                self.trading.place(self.b, bad, self.cfg)
+        self.assertEqual(self.b.orders("all"), [])
+        self.assertEqual(self.journal.load_theses(), [])
 
-    def test_rejections_never_submit(self):
-        self.assertRejected("nicht handelbar", ticker="SAP.DE")
-        self.assertRejected("Stop < Limit < Ziel", target=195.0)
-        self.assertRejected("weicht", price=215.0, stop=205.0, target=230.0)
-        self.assertRejected("Begründung", rationale="  ")
-        self.assertRejected("Frist", horizon_days=0)
-        self.assertRejected("Risiko", qty=40, stop=150.0)
-        self.assertRejected("Whitelist", ticker="GME")
+    def test_core_only_via_buy_core(self):
+        with self.assertRaises(self.trading.OrderRejected) as e:
+            self.trading.check(self.b, self.order(ticker="EUNL.DE", price=100.0, stop=95.0, target=110.0), self.cfg)
+        self.assertTrue(any("Core" in v for v in e.exception.violations))
+        res = self.trading.buy_core(self.b, self.cfg)
+        self.assertEqual(len(res["orders"]), 1)
+        al = self.b.positions()[0]
+        self.assertEqual(al["sleeve"], "core")
+        self.assertGreater(al["market_value"], 740)
+        self.assertLessEqual(al["market_value"], 750)
+        again = self.trading.buy_core(self.b, self.cfg)  # schon am Ziel → nichts
+        self.assertEqual(again["orders"], [])
+        self.assertIn("EUNL.DE", again["skipped"])
 
-    def test_live_daily_loss_blocks(self):
-        self.fake.account["last_equity"] = "103000"  # -3 % heute
-        self.assertRejected("Tagesverlust")
-
-    def test_closed_market_blocks(self):
-        with self.assertRaises(self.trading.OrderRejected):
-            self.trading.place(self.client, self.order(), self.cfg,
-                               now=dt.datetime(2026, 10, 31, 15, 0, tzinfo=dt.timezone.utc))
-
-    def test_open_orders_count_against_limits(self):
-        # 1. Order belegt 40 × 200 = 8 % → zweite gleich große Order sprengt 10 %
-        self.trading.place(self.client, self.order(), self.cfg, now=OPEN)
-        self.fake.calls.clear()
-        self.assertRejected("Positionswert")
-
-    def test_pending_orders_bind_cash(self):
-        self.fake.account["cash"] = "9000"
-        self.fake.account["buying_power"] = "9000"
-        self.trading.place(self.client, self.order(ticker="MSFT", qty=20), self.cfg, now=OPEN)  # bindet 4000
-        self.fake.calls.clear()
-        self.assertRejected("Cash", qty=30)  # 6000 > 5000 Rest
-
-    def test_inf_rounding_and_missing_reference(self):
-        self.assertRejected("endliche", target=float("inf"))
-        self.assertRejected("Stop < Limit", price=200.004, stop=199.996)
-        self.assertRejected("3 ×", target=700.0)
-
-    def test_no_reference_price_rejects(self):
-        self.client.last_price = lambda sym: None
-        (self.data / "prices" / "AAPL.csv").unlink()
-        self.assertRejected("Referenzkurs")
-
-    def test_failed_submit_cancels_thesis(self):
-        self.fake.fail = None
-        orig = self.client.submit_bracket
-        def boom(*a, **k):
-            raise self.broker.BrokerError("Alpaca 422: insufficient buying power", 422)
-        self.client.submit_bracket = boom
-        with self.assertRaises(self.broker.BrokerError):
-            self.trading.place(self.client, self.order(), self.cfg, now=OPEN)
-        th = self.journal.load_theses()
-        self.assertEqual(len(th), 1)
-        self.assertEqual(th[0]["status"], "cancelled")
-        self.client.submit_bracket = orig
-
-    def test_close_cancels_bracket_legs_first(self):
-        self.trading.place(self.client, self.order(), self.cfg, now=OPEN)
-        self.fake.positions = [{"symbol": "AAPL", "qty": "40", "avg_entry_price": "200", "current_price": "201"}]
-        self.trading.close(self.client, "aapl", sleep=lambda s: None)
-        deletes = [c[1] for c in self.fake.calls if c[0] == "DELETE"]
-        self.assertTrue(deletes[0].startswith("/v2/orders/"))
-        self.assertEqual(deletes[-1], "/v2/positions/AAPL")
-
-    def test_close_tolerates_already_cancelled_and_waits(self):
-        leg = {"id": "leg-1", "symbol": "AAPL", "status": "held"}
-        self.fake.open_orders = [{"id": "p-1", "symbol": "AAPL", "side": "buy", "status": "accepted", "qty": "1",
-                                  "filled_qty": "1", "legs": [leg]}]
-        self.fake.positions = [{"symbol": "AAPL", "qty": "1", "avg_entry_price": "200", "current_price": "200"}]
-        real = self.client.cancel_order
-        def cancel(oid):
-            if oid == "leg-1":
-                raise self.broker.BrokerError("Alpaca 422: order is not cancelable", 422)
-            real(oid)
-        self.client.cancel_order = cancel
-        self.trading.close(self.client, "AAPL", sleep=lambda s: None)
-        self.assertEqual(self.fake.positions, [])
-
-    def test_close_gives_up_if_cancels_hang(self):
-        self.fake.open_orders = [{"id": "p-2", "symbol": "AAPL", "side": "sell", "status": "pending_cancel"}]
-        self.client.cancel_order = lambda oid: None
-        with self.assertRaises(self.broker.BrokerError):
-            self.trading.close(self.client, "AAPL", sleep=lambda s: None, wait_s=1)
-        self.assertFalse([c for c in self.fake.calls if c[1].startswith("/v2/positions/")])
+    def test_ticket_in_eur(self):
+        k = self.trading.ticket(self.b, "aapl", self.cfg)
+        self.assertEqual((k["currency"], k["fx"]), ("USD", 0.8))
+        self.assertLess(k["stop"], k["price"])
+        self.assertGreater(k["target"], k["price"])
+        self.assertLessEqual(k["value_eur"], 120.0)
+        self.assertGreater(k["qty"], 0)
 
 
 if __name__ == "__main__":

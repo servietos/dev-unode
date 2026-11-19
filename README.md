@@ -6,7 +6,7 @@ Contained apps (alle mit Weboberfläche über das Umbrel-Dashboard, x86 und ARM)
 
 | App | Zweck | Version |
 |---|---|---|
-| broking | Aktien-Screen, Thesen-Journal, Handel über Alpaca Paper-Trading (Quellcode in `src/broking`) | 0.2.0 |
+| broking | Screen (Aktien, ETFs, Krypto), Thesen-Journal, Paper-Depot in EUR mit Core-Satellite (Quellcode in `src/broking`) | 0.3.0 |
 | chromium | Browser im Browser (linuxserver/chromium) | 7b8e918f-ls63 |
 | claude-code | Claude Code im Browser-Terminal | 1.1.2 |
 | crafty | Crafty Controller: Minecraft-Server (Java & Bedrock) anlegen und verwalten | 4.11.0 |

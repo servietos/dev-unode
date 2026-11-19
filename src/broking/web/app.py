@@ -1,11 +1,11 @@
-"""Weboberfläche für broking: Kurse, Screen, Charts, Journal, Handel über Alpaca (Paper).
+"""Weboberfläche für broking: Kurse, Screen, Charts, Journal, Handel im Paper-Depot (EUR).
 
 Start lokal:   uvicorn web.app:app --port 8000   (aus dem Projektordner)
 Im Container:  siehe Dockerfile; Daten liegen dann unter BROKING_DATA_DIR=/data.
 
-Orders gehen ausschließlich an Alpaca Paper-Trading (feste URL in tools/broker.py) und
-werden serverseitig gegen risk_check und das Live-Depot geprüft. paper_trading lässt sich
-hier nicht abschalten. Schreibende API-Aufrufe brauchen den Header X-Broking (CSRF-Schutz).
+Orders gehen ausschließlich ans simulierte Paper-Depot (tools/broker.py) und werden
+serverseitig gegen risk_check geprüft. paper_trading lässt sich hier nicht abschalten.
+Schreibende API-Aufrufe brauchen den Header X-Broking (CSRF-Schutz).
 """
 from __future__ import annotations
 
@@ -33,21 +33,42 @@ import journal  # noqa: E402
 import trading  # noqa: E402
 import risk_check  # noqa: E402
 import screen  # noqa: E402
-from broker import Alpaca, BrokerError  # noqa: E402
+from broker import BrokerError, PaperBroker  # noqa: E402
 from common import (CONFIG_PATH, DEFAULT_CONFIG_PATH, JOURNAL_DIR, SCREENS_DIR,  # noqa: E402
                     load_config, read_prices)
 from indicators import sma_series  # noqa: E402
+from instruments import currency as currency_of  # noqa: E402
+from risk_check import core_tickers  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
 TICKER_RE = re.compile(r"^[A-Z0-9][A-Z0-9.\-^=]{0,14}$")
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+CONFIG_VERSION = 2
 
 
 def ensure_config() -> None:
-    """Beim ersten Start die mitgelieferte Konfiguration ins Datenvolume kopieren."""
+    """Beim ersten Start die mitgelieferte Konfiguration ins Datenvolume kopieren,
+    eine alte Konfiguration (v1, Alpaca/US) auf v2 (Paper-Depot EUR, Core-Satellite) heben."""
     if not CONFIG_PATH.exists():
         CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(DEFAULT_CONFIG_PATH, CONFIG_PATH)
+        return
+    cfg = load_config()
+    if cfg.get("version", 1) >= CONFIG_VERSION:
+        return
+    new = load_config(DEFAULT_CONFIG_PATH)
+    new["schedule"] = cfg.get("schedule", new["schedule"])  # Zeitplan des Nutzers behalten
+    backup = CONFIG_PATH.with_name("config.v1.json")
+    shutil.copyfile(CONFIG_PATH, backup)
+    _write_config(new)
+    journal.log_action({"source": "web", "action": "config_migrated", "from": cfg.get("version", 1),
+                        "to": CONFIG_VERSION, "backup": backup.name})
+
+
+def _write_config(cfg: dict) -> None:
+    tmp = CONFIG_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(CONFIG_PATH)
 
 
 def check_ticker(ticker: str) -> str:
@@ -80,19 +101,22 @@ class Jobs:
             cfg = load_config()
             if "fetch" in steps:
                 self.state["step"] = "fetch"
-                result["fetch"] = fetch_prices.fetch(cfg["universe"], force=force)
+                result["fetch"] = fetch_prices.fetch(fetch_prices.universe_with_fx(cfg), force=force)
             if "screen" in steps:
                 self.state["step"] = "screen"
-                res = screen.run(cfg["universe"], cfg["screen"], cfg["screen"]["top_n"])
+                res = screen.run(cfg["universe"], cfg["screen"], cfg["screen"]["top_n"],
+                                 exclude=core_tickers(cfg))
                 save_screen(res)
                 result["screen"] = {"passed": res["passed"], "screened": res["screened"]}
             if "evaluate" in steps:
                 self.state["step"] = "evaluate"
                 ev = evaluate_theses.evaluate()
                 result["evaluate"] = {"resolved": len(ev["resolved"])}
-            if "sync" in steps and broker.load_keys():
+            if "sync" in steps:  # Depot fortschreiben (Limits, Stops, Ziele) und Tageswert festhalten
                 self.state["step"] = "sync"
-                result["sync"] = {"equity": broker.sync_portfolio(Alpaca.from_config())["equity"]}
+                c = PaperBroker(cfg)
+                result["sync"] = {"equity": c.mark()["equity"]}
+                broker.sync_portfolio(c)
         except Exception as e:  # Fehler sichtbar machen statt den Thread still sterben zu lassen
             self.state["error"] = str(e)[:500]
         finally:
@@ -195,8 +219,7 @@ async def csrf_guard(request: Request, call_next):
 
 @app.exception_handler(BrokerError)
 def broker_error(_request, e: BrokerError):
-    code = 409 if "Schlüssel hinterlegt" in str(e) else 502
-    return JSONResponse({"detail": str(e)}, status_code=code)
+    return JSONResponse({"detail": str(e)}, status_code=e.status or 502)
 
 
 @app.exception_handler(trading.OrderRejected)
@@ -217,7 +240,8 @@ def status():
         "next_run": scheduler.next_run(cfg),
         "open_theses": sum(1 for t in journal.load_theses() if t["status"] == "open"),
         "due_theses": len(journal.due_theses()),
-        "broker_configured": broker.load_keys() is not None,
+        "broker": "paper",
+        "broker_configured": True,
     }
 
 
@@ -252,6 +276,7 @@ def prices(ticker: str, days: int = Query(250, ge=20, le=2000)):
     rnd = lambda v: None if v is None else round(v, 4)  # noqa: E731
     return {
         "ticker": t,
+        "currency": currency_of(t),
         "dates": [r["date"] for r in rows[start:]],
         "close": closes[start:],
         "sma50": [rnd(v) for v in s50[start:]],
@@ -352,23 +377,44 @@ def validate_config(new: dict) -> dict:
                 and screen_cfg["min_history_days"] >= 200):
             raise ValueError("Screen-Werte unplausibel (top_n 1–50, RSI 0–100, Historie ≥ 200)")
         risk_cfg = {**base["risk"]}
-        for k, hi in (("max_position_pct", 100), ("max_risk_per_trade_pct", 10), ("max_daily_loss_pct", 20)):
+        for k, lo, hi in (("max_position_pct", 0, 100), ("max_risk_per_trade_pct", 0, 10),
+                          ("max_daily_loss_pct", 0, 20), ("max_drawdown_pct", 0, 50),
+                          ("max_fee_pct", 0, 10), ("min_order_eur", -1, 10_000)):
             v = float(rk[k])
-            if not 0 < v <= hi:
-                raise ValueError(f"{k} muss zwischen 0 und {hi} liegen")
+            if not lo < v <= hi:
+                raise ValueError(f"{k} muss zwischen {max(lo, 0)} und {hi} liegen")
             risk_cfg[k] = v
         risk_cfg["max_open_positions"] = int(rk["max_open_positions"])
+        if not 1 <= risk_cfg["max_open_positions"] <= 30:
+            raise ValueError("max_open_positions muss 1–30 sein")
         risk_cfg["enforce_market_hours"] = bool(rk["enforce_market_hours"])
+
+        pf = new["portfolio"]
+        core = {check_ticker(str(t)): float(p) for t, p in pf["core"].items()}
+        sat, drift = float(pf["satellite_pct"]), float(pf["rebalance_drift_pct"])
+        if not all(0 < p <= 100 for p in core.values()) or not 0 <= sat <= 100 or sum(core.values()) + sat > 100:
+            raise ValueError("Core- und Satellit-Quote: je 0–100 %, zusammen höchstens 100 %")
+        if not 0 <= drift <= 25:
+            raise ValueError("Rebalancing-Toleranz muss 0–25 % sein")
+        missing = [t for t in core if t not in universe]
+        if missing:
+            raise ValueError(f"Core-Titel müssen im Universum stehen: {', '.join(missing)}")
+        portfolio_cfg = {**base["portfolio"], "core": core, "satellite_pct": sat, "rebalance_drift_pct": drift}
+
         times = sorted(set(sched.get("times", [])))
         if not all(TIME_RE.match(t) for t in times):
             raise ValueError("Zeitplan: Uhrzeiten im Format HH:MM")
         schedule_cfg = {"enabled": bool(sched.get("enabled")), "tz": base.get("schedule", {}).get("tz", "Europe/Berlin"),
                         "times": times}
-    except (KeyError, TypeError) as e:
+    except (KeyError, TypeError, AttributeError) as e:
         raise ValueError(f"Feld fehlt oder hat falschen Typ: {e}")
-    benchmark = check_ticker(str(new.get("benchmark", base.get("benchmark", "URTH"))))
+    unsupported = [t for t in universe if currency_of(t) is None]
+    if unsupported:
+        raise ValueError(f"Nur EUR- und USD-Titel möglich, nicht: {', '.join(unsupported)}")
+    benchmark = check_ticker(str(new.get("benchmark", base.get("benchmark", "EUNL.DE"))))
+    # paper_trading, broker und Gebühren sind über die Oberfläche nicht änderbar
     return {**base, "paper_trading": True, "universe": universe, "benchmark": benchmark,
-            "screen": screen_cfg, "risk": risk_cfg, "schedule": schedule_cfg}
+            "portfolio": portfolio_cfg, "screen": screen_cfg, "risk": risk_cfg, "schedule": schedule_cfg}
 
 
 @app.put("/api/config")
@@ -377,9 +423,7 @@ def put_config(new: dict):
         cfg = validate_config(new)
     except (ValueError, HTTPException) as e:
         raise HTTPException(400, getattr(e, "detail", None) or str(e))
-    tmp = CONFIG_PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    tmp.replace(CONFIG_PATH)
+    _write_config(cfg)
     return cfg
 
 
@@ -395,65 +439,66 @@ def evaluate():
     return evaluate_theses.evaluate()
 
 
-# --- Broker (Alpaca Paper) --------------------------------------------------------------
+# --- Broker (Paper-Depot, EUR) ----------------------------------------------------------
 
-def client() -> Alpaca:
-    return Alpaca.from_config()
+def client() -> PaperBroker:
+    return PaperBroker(load_config())
+
+
+def allocation(cfg: dict, account: dict, positions: list[dict]) -> dict:
+    eq = account["equity"] or 1
+    core = core_tickers(cfg)
+    core_v = sum(p["market_value"] for p in positions if p["symbol"] in core)
+    sat_v = sum(p["market_value"] for p in positions if p["symbol"] not in core)
+    target_core = sum(cfg["portfolio"]["core"].values())
+    return {
+        "core_pct": round(core_v / eq * 100, 1), "satellite_pct": round(sat_v / eq * 100, 1),
+        "cash_pct": round(account["cash"] / eq * 100, 1),
+        "target_core_pct": target_core, "target_satellite_pct": cfg["portfolio"]["satellite_pct"],
+        "core_below_target": core_v / eq * 100 < target_core - cfg["portfolio"]["rebalance_drift_pct"],
+        "satellite_positions": sum(1 for p in positions if p["symbol"] not in core),
+    }
 
 
 @app.get("/api/broker")
 def broker_status():
-    keys = broker.load_keys()
-    if not keys:
-        return {"configured": False, "paper": True}
-    out = {"configured": True, "paper": True, "key_id": broker.mask(keys[0])}
+    cfg = load_config()
+    out = {"configured": True, "paper": True, "broker": "paper", "core": cfg["portfolio"]["core"]}
     try:
-        c = client()
-        a, clock = c.account(), c.clock()
-        out.update(
-            account={k: a.get(k) for k in ("account_number", "status", "currency", "equity", "last_equity",
-                                           "cash", "buying_power", "trading_blocked", "pattern_day_trader")},
-            clock={k: clock.get(k) for k in ("is_open", "next_open", "next_close")},
-        )
+        c = PaperBroker(cfg)
+        a, ps = c.account(), c.positions()
+        out.update(account=a, allocation=allocation(cfg, a, ps))
     except BrokerError as e:
         out["error"] = str(e)
     return out
 
 
-class KeysIn(BaseModel):
-    key_id: str
-    secret: str  # Länge wird von Hand geprüft: Pydantic-Fehler würden den Wert zurückschicken
+class ResetIn(BaseModel):
+    start_cash_eur: float = Field(ge=100, le=10_000_000, allow_inf_nan=False)
+    confirm: str
 
 
-@app.put("/api/broker/keys")
-def broker_keys(k: KeysIn):
-    """Schlüssel erst gegen Alpaca prüfen, dann speichern."""
-    if not (8 <= len(k.key_id.strip()) <= 64 and 16 <= len(k.secret.strip()) <= 128):
-        raise HTTPException(400, "Key ID (8–64 Zeichen) oder Secret (16–128 Zeichen) hat eine unerwartete Länge")
-    acct = Alpaca(k.key_id.strip(), k.secret.strip()).account()
-    broker.save_keys(k.key_id, k.secret)
-    journal.log_action({"source": "web", "action": "broker_keys_saved", "key_id": broker.mask(k.key_id)})
-    return {"configured": True, "key_id": broker.mask(k.key_id), "account_number": acct.get("account_number")}
-
-
-@app.delete("/api/broker/keys")
-def broker_keys_delete():
-    broker.delete_keys()
-    journal.log_action({"source": "web", "action": "broker_keys_deleted"})
-    return {"configured": False}
+@app.post("/api/broker/reset")
+def broker_reset(r: ResetIn):
+    """Paper-Depot neu starten. Thesen und Aktionsprotokoll bleiben erhalten."""
+    if r.confirm != "RESET":
+        raise HTTPException(400, "Bestätigung fehlt")
+    a = client().reset(r.start_cash_eur)
+    broker.sync_portfolio(client())
+    journal.log_action({"source": "web", "action": "paper_reset", "start_cash_eur": r.start_cash_eur})
+    return a
 
 
 @app.get("/api/broker/positions")
 def broker_positions():
-    keep = ("symbol", "qty", "avg_entry_price", "current_price", "market_value", "cost_basis",
-            "unrealized_pl", "unrealized_plpc", "unrealized_intraday_pl", "change_today")
-    return [{k: p.get(k) for k in keep} for p in client().positions()]
+    return client().positions()
 
 
 @app.get("/api/broker/orders")
 def broker_orders(status: str = Query("open", pattern="^(open|closed|all)$")):
     keep = ("id", "client_order_id", "symbol", "side", "type", "order_class", "qty", "filled_qty",
-            "limit_price", "stop_price", "filled_avg_price", "status", "created_at", "filled_at")
+            "limit_price", "stop_price", "filled_avg_price", "status", "created_at", "filled_at",
+            "fee_eur", "realized_pl_eur", "note")
     out = []
     for o in client().orders(status, 100):
         row = {k: o.get(k) for k in keep}
@@ -465,10 +510,8 @@ def broker_orders(status: str = Query("open", pattern="^(open|closed|all)$")):
 @app.get("/api/broker/history")
 def broker_history(period: str = Query("3M", pattern="^(1M|3M|6M|1A)$")):
     """Depotwert und Benchmark, beide auf 100 indexiert (eine gemeinsame Achse)."""
-    h = client().portfolio_history(period)
-    dates = [dt.datetime.fromtimestamp(t, dt.timezone.utc).date().isoformat() for t in h.get("timestamp") or []]
-    equity = h.get("equity") or []
-    pairs = [(d, e) for d, e in zip(dates, equity) if e]
+    h = client().history(period)
+    pairs = [(d, e) for d, e in zip(h["dates"], h["equity"]) if e]
     if not pairs:
         return {"dates": [], "equity": [], "equity_idx": [], "benchmark": None, "benchmark_idx": []}
     dates, equity = [p[0] for p in pairs], [p[1] for p in pairs]
@@ -494,7 +537,7 @@ def trade_ticket(ticker: str):
 
 class OrderIn(BaseModel):
     ticker: str
-    qty: int = Field(gt=0, le=1_000_000)
+    qty: float = Field(gt=0, le=1_000_000, allow_inf_nan=False)
     price: float = Field(gt=0, allow_inf_nan=False)
     stop: float = Field(gt=0, allow_inf_nan=False)
     target: float = Field(gt=0, allow_inf_nan=False)
@@ -525,6 +568,16 @@ def trade_cancel(order_id: str):
 @app.post("/api/trade/close/{symbol}")
 def trade_close(symbol: str):
     return trading.close(client(), check_ticker(symbol))
+
+
+@app.get("/api/trade/core")
+def core_plan():
+    return trading.core_plan(client(), load_config())
+
+
+@app.post("/api/trade/core")
+def core_buy():
+    return trading.buy_core(client(), load_config())
 
 
 @app.get("/")

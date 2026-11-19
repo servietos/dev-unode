@@ -1,6 +1,9 @@
 {
-  "equity": 100000,
-  "cash": 100000,
+  "equity": 1000,
+  "cash": 250,
   "day_pnl": 0,
-  "positions": {}
+  "high_water": 1000,
+  "positions": {
+    "EUNL.DE": {"qty": 7.0, "price": 107.0}
+  }
 }

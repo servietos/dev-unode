@@ -1,92 +1,81 @@
+import importlib
 import json
-import time
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from tests.helpers import make_rows
-from tests.test_risk_check import NIGHT, OPEN
-from common import load_config, write_prices
-import hooks
+import tests.helpers  # noqa: F401  (sys.path)
 
-PORTFOLIO = {"equity": 100_000, "cash": 50_000, "day_pnl": 0, "positions": {}}
+HOOKS = Path(__file__).resolve().parent.parent / "tools" / "hooks.py"
 
 
 class HookTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        base = Path(self.tmp.name)
-        self.pf, self.prices, self.journal = base / "portfolio.json", base / "prices", base / "j"
-        self.pf.write_text(json.dumps({**PORTFOLIO, "synced_at": time.time()}))
-        write_prices("AAPL", make_rows([200.0]), self.prices)
+        self.env_before = os.environ.get("BROKING_JOURNAL_DIR")
+        os.environ["BROKING_JOURNAL_DIR"] = self.tmp.name
+        import common, journal, hooks  # noqa: E401
+        for m in (common, journal, hooks):
+            importlib.reload(m)
+        self.hooks = hooks
 
     def tearDown(self):
+        if self.env_before is None:
+            os.environ.pop("BROKING_JOURNAL_DIR", None)
+        else:
+            os.environ["BROKING_JOURNAL_DIR"] = self.env_before
         self.tmp.cleanup()
 
-    def pre(self, tool_input, now=OPEN, pf=None):
-        return hooks.pre({"tool_name": "mcp__alpaca__place_stock_order", "tool_input": tool_input},
-                         pf or self.pf, load_config(), self.prices, self.journal, now)
+    def code(self, tool, **tin):
+        return self.hooks.pre({"tool_name": tool, "tool_input": tin})[0]
 
-    def test_alpaca_bracket_order_approved(self):
-        code, msg = self.pre({"symbol": "aapl", "side": "BUY", "quantity": "40", "order_class": "bracket",
-                              "limit_price": 200, "stop_loss": {"stop_price": 190}})
-        self.assertEqual((code, msg), (0, ""))
-        logged = (self.journal / "actions.jsonl").read_text()
-        self.assertIn('"approved": true', logged)
+    def test_broker_orders_blocked_reads_allowed(self):
+        self.assertEqual(self.code("mcp__bitpanda__create_trade", asset="BTC"), 2)
+        self.assertEqual(self.code("mcp__claude_ai_Bitpanda__place_order"), 2)
+        self.assertEqual(self.code("mcp__alpaca__place_stock_order", symbol="AAPL"), 2)
+        self.assertEqual(self.code("mcp__bitpanda__get_prices"), 0)
+        self.assertEqual(self.code("mcp__bitpanda__list_trades"), 0)
+        log = (Path(self.tmp.name) / "actions.jsonl").read_text(encoding="utf-8")
+        self.assertIn("blockiert", log)
 
-    def test_market_order_uses_cached_close(self):
-        o = hooks.to_order({"symbol": "AAPL", "side": "buy", "qty": 10, "stop_loss": {"stop_price": 190}},
-                           self.prices)
-        self.assertEqual((o["price"], o["stop"]), (200.0, 190.0))
+    def test_protected_files(self):
+        for path in ("/data/config.json", "C:\\x\\data\\paper_account.json", "/app/tools/risk_check.py",
+                     "/data/journal/theses.jsonl", "/app/.claude/settings.json"):
+            self.assertEqual(self.code("Edit", file_path=path), 2, path)
+        self.assertEqual(self.code("Write", file_path="/app/notes/bericht.md"), 0)
+        self.assertEqual(self.code("Read", file_path="/data/secrets.json"), 2)
+        self.assertEqual(self.code("Read", file_path="/data/config.json"), 0)
 
-    def test_blocks_without_stop(self):
-        code, msg = self.pre({"symbol": "AAPL", "side": "buy", "qty": 10, "limit_price": 200, "order_class": "bracket"})
-        self.assertEqual(code, 2)
-        self.assertIn("Stop", msg)
-
-    def test_buy_stop_trigger_is_not_a_stop_loss(self):
-        # stop_price ist bei Stop-Limit-Käufen der Einstieg, kein Schutz → blockieren
-        code, msg = self.pre({"symbol": "AAPL", "side": "buy", "order_type": "stop_limit", "quantity": 50,
-                              "limit_price": 190, "stop_price": 185})
-        self.assertEqual(code, 2)
-        code, _ = self.pre({"symbol": "AAPL", "side": "buy", "order_class": "bracket", "quantity": 50,
-                            "limit_price": 190, "stop_price": 185})
-        self.assertEqual(code, 2)
-
-    def test_stale_portfolio_blocks(self):
-        self.pf.write_text(json.dumps({**PORTFOLIO, "synced_at": time.time() - 3600}))
-        code, msg = self.pre({"symbol": "AAPL", "side": "buy", "qty": 10, "order_class": "bracket",
-                              "limit_price": 200, "stop_loss": {"stop_price": 190}})
-        self.assertEqual(code, 2)
-        self.assertIn("älter", msg)
-
-    def test_reads_and_reducing_tools(self):
-        run = lambda name: hooks.pre({"tool_name": name, "tool_input": {"symbol": "AAPL"}}, self.pf,
-                                     load_config(), self.prices, self.journal, OPEN)[0]
-        self.assertEqual(run("mcp__alpaca__get_account_info"), 0)
-        self.assertEqual(run("mcp__alpaca__cancel_order_by_id"), 0)
-        self.assertEqual(run("mcp__alpaca__close_position"), 0)
-        self.assertEqual(run("mcp__alpaca__close_all_positions"), 2)
-        self.assertEqual(run("mcp__alpaca__replace_order_by_id"), 2)
-
-    def test_blocks_outside_hours_and_suggests_size(self):
-        code, msg = self.pre({"symbol": "AAPL", "side": "buy", "qty": 200, "limit_price": 200, "order_class": "bracket",
-                              "stop_loss": {"stop_price": 190}}, now=NIGHT)
-        self.assertEqual(code, 2)
-        self.assertIn("geschlossen", msg)
-        self.assertIn("qty=50", msg)
+    def test_shell_writes(self):
+        blocked = ["echo {} > /data/config.json", "sed -i s/true/false/ /data/config.json",
+                   "python3 -c \"open('/data/portfolio.json','w')\"", "rm /data/journal/theses.jsonl",
+                   "cat <<EOF > /data/paper_account.json"]
+        for cmd in blocked:
+            self.assertEqual(self.code("Bash", command=cmd), 2, cmd)
+        allowed = ["cat /data/config.json", "python3 tools/screen.py --top 10 2>/dev/null",
+                   "python3 tools/risk_check.py --portfolio /data/portfolio.json < order.json",
+                   "python3 tools/journal.py add --ticker AAPL --direction up --entry 1 --target 2 "
+                   "--horizon-days 5 --rationale x > /tmp/out.json"]
+        for cmd in allowed:
+            self.assertEqual(self.code("Bash", command=cmd), 0, cmd)
 
     def test_fail_closed(self):
-        self.assertEqual(self.pre({"symbol": "AAPL"}, pf=self.pf.with_name("fehlt.json"))[0], 2)
-        self.assertEqual(self.pre({})[0], 2)
-        self.assertEqual(self.pre({"symbol": "TSLA", "side": "buy", "qty": 1, "limit_price": 200, "order_class": "bracket",
-                                   "stop_loss": {"stop_price": 190}})[0], 2)
+        r = subprocess.run([sys.executable, str(HOOKS), "pre"], input="kein json", capture_output=True, text=True,
+                           env={**os.environ, "BROKING_JOURNAL_DIR": self.tmp.name})
+        self.assertEqual(r.returncode, 2)
+        r = subprocess.run([sys.executable, str(HOOKS), "pre"], capture_output=True, text=True,
+                           input=json.dumps({"tool_name": "Edit", "tool_input": "kaputt"}),
+                           env={**os.environ, "BROKING_JOURNAL_DIR": self.tmp.name})
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("blockiert", r.stderr)
 
-    def test_crypto_and_options_blocked(self):
-        for name in ("mcp__alpaca__place_crypto_order", "mcp__alpaca__place_option_market_order"):
-            code, _ = hooks.pre({"tool_name": name, "tool_input": {}}, self.pf, load_config(),
-                                self.prices, self.journal, OPEN)
-            self.assertEqual(code, 2)
+    def test_post_logs(self):
+        self.hooks.post({"tool_name": "Bash", "tool_input": {"command": "ls"}, "tool_response": {"ok": 1}})
+        line = (Path(self.tmp.name) / "actions.jsonl").read_text(encoding="utf-8").strip()
+        self.assertEqual(json.loads(line)["hook"], "post")
 
 
 if __name__ == "__main__":

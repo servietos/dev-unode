@@ -6,7 +6,7 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const num = (v) => (v == null || v === "" ? null : Number(v));
 const fmt = (v, d = 2) => (num(v) == null || Number.isNaN(num(v)) ? "–" : num(v).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d }));
-const money = (v, cur = "USD", d = 2) => (num(v) == null ? "–" : num(v).toLocaleString("de-DE", { style: "currency", currency: cur, minimumFractionDigits: d, maximumFractionDigits: d }));
+const money = (v, cur = "EUR", d = 2) => (num(v) == null ? "–" : num(v).toLocaleString("de-DE", { style: "currency", currency: cur, minimumFractionDigits: d, maximumFractionDigits: d }));
 const signed = (v, d = 2, suffix = "") => (num(v) == null ? "–" : (num(v) > 0 ? "+" : "") + fmt(v, d) + suffix);
 const cls = (v) => (num(v) > 0 ? "pos" : num(v) < 0 ? "neg" : "");
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "–");
@@ -215,40 +215,57 @@ $$("[data-run]").forEach((b) => b.addEventListener("click", () => runJob(b.datas
 async function loadBroker() {
   const b = await api("/api/broker");
   state.broker = b;
-  const ok = b.configured && !b.error;
-  $("#connect-notice").hidden = b.configured;
-  $("#broker-line").textContent = !b.configured ? "Broker: nicht verbunden" : b.error ? "Broker: Fehler" : `Alpaca ${b.account?.account_number || ""}`;
-  $("#clock-line").textContent = ok && b.clock ? (b.clock.is_open ? `US-Börse offen bis ${fmtDate(b.clock.next_close)}` : `US-Börse zu · öffnet ${fmtDate(b.clock.next_open)}`) : "";
-  const pill = $("#broker-pill");
-  pill.textContent = !b.configured ? "nicht verbunden" : b.error ? "Fehler" : "verbunden";
-  pill.className = `pill ${!b.configured ? "" : b.error ? "bad" : "good"}`;
-  $("#broker-info").innerHTML = !b.configured ? "" : b.error ? `<span class="neg">${esc(b.error)}</span>` :
-    `Konto ${esc(b.account.account_number)} · Key ${esc(b.key_id)} · Status ${esc(b.account.status)}${b.account.trading_blocked ? ' · <span class="neg">Handel gesperrt</span>' : ""}`;
-  $("#btn-disconnect").hidden = !b.configured;
+  const a = b.account, al = b.allocation;
+  $("#broker-line").textContent = b.error ? "Depot: Fehler" : "Paper-Depot · EUR";
+  $("#clock-line").textContent = "Kurse: Tagesschluss (Yahoo)";
+  $("#broker-info").innerHTML = b.error ? `<span class="neg">${esc(b.error)}</span>` :
+    `Gestartet ${fmtDate(a.created)} mit ${money(a.start_cash, "EUR", 0)} · Höchststand ${money(a.high_water)}`;
+  const notice = $("#core-notice");
+  notice.hidden = !al?.core_below_target;
+  if (al?.core_below_target) {
+    $("#core-notice-text").innerHTML = `<strong>Core unter Ziel:</strong> ${fmt(al.core_pct, 1)} % statt ${fmt(al.target_core_pct, 0)} %
+      (${esc(Object.keys(b.core).join(", "))}). Der Core ist die Messlatte – erst auffüllen, dann Satellit-Trades.`;
+  }
   return b;
 }
+
+$("#btn-core").addEventListener("click", async () => {
+  try {
+    const plan = (await api("/api/trade/core")).filter((r) => !r.skip);
+    if (!plan.length) { toast("Nichts aufzufüllen"); return; }
+    const ok = await confirmDialog("Core auffüllen?", `<dl class="facts">${plan.map((r) => `
+      <div><dt>${esc(r.ticker)}</dt><dd>${fmt(r.qty, 4)} × ${fmt(r.price)} = ${money(r.value_eur)}</dd></div>`).join("")}</dl>
+      <p class="muted small">Kauf zum letzten Kurs plus Slippage, Gebühr wie Bitpanda. Ohne Stop und ohne These – der Core ist Bestand, keine Wette.</p>`, "Kaufen");
+    if (!ok) return;
+    const r = await api("/api/trade/core", { method: "POST" });
+    toast(`${r.orders.length} Core-Kauf ausgeführt`);
+  } catch (e) { toast(e.data?.violations ? e.data.violations.join("; ") : e.message); }
+  loaders.dashboard();
+});
 
 // --- Dashboard --------------------------------------------------------------------------
 const histSeg = segmented($("#hist-seg"), () => loadHistory());
 
 loaders.dashboard = async () => {
   const [b] = await Promise.all([loadBroker().catch(() => null), loadStatus().catch(() => null), loadScreen().catch(() => null), loadStatsKpi()]);
-  const a = b?.configured && !b.error ? b.account : null;
+  const a = b && !b.error ? b.account : null;
   if (a) {
-    const eq = num(a.equity), last = num(a.last_equity), day = eq - last;
+    const eq = num(a.equity), last = num(a.last_equity), day = eq - last, total = eq - num(a.start_cash);
+    const al = b.allocation;
     $("#k-equity").textContent = money(eq);
-    $("#k-equity-sub").textContent = `Kaufkraft ${money(a.buying_power, "USD", 0)}`;
-    $("#k-day").innerHTML = `<span class="${cls(day)}">${signed(day, 2)} $</span>`;
+    $("#k-equity-sub").innerHTML = `seit Start <span class="${cls(total)}">${signed((total / num(a.start_cash)) * 100, 2, " %")}</span>`;
+    $("#k-day").innerHTML = `<span class="${cls(day)}">${signed(day, 2)} €</span>`;
     $("#k-day-sub").innerHTML = `<span class="${cls(day)}">${signed(last ? (day / last) * 100 : 0, 2, " %")}</span>`;
     $("#k-cash").textContent = money(a.cash);
     $("#k-cash-sub").textContent = eq ? `${fmt((num(a.cash) / eq) * 100, 1)} % des Depots` : "";
+    $("#s-alloc").textContent = `${fmt(al.core_pct, 0)} / ${fmt(al.satellite_pct, 0)} / ${fmt(al.cash_pct, 0)} %`;
     loadHistory();
     loadPositions($("#dash-pos tbody"), true).catch(() => {});
   } else {
     ["#k-equity", "#k-day", "#k-cash"].forEach((s) => ($(s).textContent = "–"));
-    ["#k-equity-sub", "#k-day-sub", "#k-cash-sub"].forEach((s) => ($(s).textContent = b?.error ? "Broker-Fehler" : "kein Broker"));
-    $("#eq-chart").innerHTML = `<p class="empty">${b?.error ? esc(b.error) : "Verfügbar, sobald Alpaca verbunden ist."}</p>`;
-    $("#dash-pos tbody").innerHTML = `<tr><td colspan="4" class="empty">Kein Broker verbunden.</td></tr>`;
+    ["#k-equity-sub", "#k-day-sub", "#k-cash-sub"].forEach((s) => ($(s).textContent = "Depot-Fehler"));
+    $("#eq-chart").innerHTML = `<p class="empty">${esc(b?.error || "Depot nicht erreichbar")}</p>`;
+    $("#dash-pos tbody").innerHTML = `<tr><td colspan="4" class="empty">${esc(b?.error || "Depot nicht erreichbar")}</td></tr>`;
   }
   const c = state.screen?.candidates || [];
   $("#dash-cands tbody").innerHTML = c.length ? c.slice(0, 6).map((x) => `
@@ -331,10 +348,12 @@ async function selectTicker(t) {
       ["Stand", fmtDay(mt.date)], ["Kurs", fmt(mt.close)], ["RSI 14", fmt(mt.rsi14, 1)], ["ATR 14", `${fmt(mt.atr14)} (${fmt(mt.atr_pct)} %)`],
       ["Mom. 20T", signed(mt.mom20_pct, 1, " %")], ["Mom. 60T", signed(mt.mom60_pct, 1, " %")], ["Volumen/Ø", fmt(mt.vol_ratio)], ["Max. DD 1J", `${fmt(mt.dd_252_pct, 1)} %`],
     ].map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("") : "";
-    const tradable = /^[A-Z]{1,5}(\.[A-Z])?$/.test(t) && !t.endsWith(".DE");
+    const isCore = Object.keys(state.broker?.core || {}).includes(t);
+    const listed = (state.config?.universe || []).includes(t);
     $("#chart-actions").hidden = false;
-    $("#btn-trade").disabled = !tradable;
-    $("#trade-hint").textContent = tradable ? "" : "Über Alpaca nicht handelbar (nur US-Werte)";
+    $("#btn-trade").disabled = isCore || !listed;
+    $("#trade-hint").textContent = isCore ? "Core-Titel – Kauf über „Core auffüllen“ im Dashboard"
+      : listed ? `Kurse in ${d.currency}` : "Nicht im Universum";
   } catch (e) {
     $("#px-chart").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
     $("#metrics").innerHTML = "";
@@ -358,11 +377,11 @@ const tf = $("#ticket");
 
 loaders.handel = async () => {
   const b = await loadBroker().catch(() => null);
-  const ok = b?.configured && !b.error;
-  $("#ticket-src").textContent = ok ? "Alpaca Paper" : "kein Broker";
-  $("#ticket-src").className = `pill ${ok ? "good" : ""}`;
+  const ok = b && !b.error;
+  $("#ticket-src").textContent = ok ? "Paper-Depot" : "Depot-Fehler";
+  $("#ticket-src").className = `pill ${ok ? "good" : "bad"}`;
   if (!ok) {
-    const msg = b?.error ? esc(b.error) : `Kein Broker verbunden – <a href="#einstellungen">Alpaca verbinden</a>.`;
+    const msg = esc(b?.error || "Depot nicht erreichbar");
     $("#pos-table tbody").innerHTML = `<tr><td colspan="7" class="empty">${msg}</td></tr>`;
     $("#orders-table tbody").innerHTML = `<tr><td colspan="7" class="empty">${msg}</td></tr>`;
     return;
@@ -376,24 +395,28 @@ $("#btn-refresh-trade").addEventListener("click", () => loaders.handel());
 async function loadPositions(tbody, short = false) {
   const ps = await api("/api/broker/positions");
   const total = ps.reduce((s, p) => s + num(p.market_value), 0), pl = ps.reduce((s, p) => s + num(p.unrealized_pl), 0);
-  if (!short) $("#pos-total").innerHTML = ps.length ? `${money(total)} · <span class="${cls(pl)}">${signed(pl)} $</span>` : "";
+  if (!short) $("#pos-total").innerHTML = ps.length ? `${money(total)} · <span class="${cls(pl)}">${signed(pl)} €</span>` : "";
   const cols = short ? 4 : 7;
+  const tag = (p) => `<span class="sub">${p.sleeve === "core" ? "Core" : "Satellit"}</span>`;
   tbody.innerHTML = ps.length ? ps.map((p) => short ? `
-    <tr><td class="sym">${esc(p.symbol)}</td><td class="num">${fmt(p.qty, 0)}</td><td class="num">${money(p.market_value)}</td>
+    <tr><td class="sym">${esc(p.symbol)}${tag(p)}</td><td class="num">${fmt(p.qty, 4)}</td><td class="num">${money(p.market_value)}</td>
     <td class="num ${cls(p.unrealized_pl)}">${signed(num(p.unrealized_plpc) * 100, 1, " %")}</td></tr>` : `
-    <tr><td class="sym">${esc(p.symbol)}</td><td class="num">${fmt(p.qty, 0)}</td><td class="num">${fmt(p.avg_entry_price)}</td>
-    <td class="num">${fmt(p.current_price)}<span class="sub ${cls(p.change_today)}">${signed(num(p.change_today) * 100, 2, " %")}</span></td>
+    <tr><td class="sym">${esc(p.symbol)}${tag(p)}</td><td class="num">${fmt(p.qty, 4)}</td><td class="num">${money(p.avg_entry_price, p.currency)}</td>
+    <td class="num">${money(p.current_price, p.currency)}<span class="sub ${cls(p.change_today)}">${signed(num(p.change_today) * 100, 2, " %")}</span></td>
     <td class="num">${money(p.market_value)}</td>
-    <td class="num ${cls(p.unrealized_pl)}">${signed(p.unrealized_pl)} $<span class="sub">${signed(num(p.unrealized_plpc) * 100, 1, " %")}</span></td>
+    <td class="num ${cls(p.unrealized_pl)}">${signed(p.unrealized_pl)} €<span class="sub">${signed(num(p.unrealized_plpc) * 100, 1, " %")}</span></td>
     <td><button class="btn sm danger" data-close="${esc(p.symbol)}">Schließen</button></td></tr>`).join("")
     : `<tr><td colspan="${cols}" class="empty">Keine offenen Positionen.</td></tr>`;
   $$("[data-close]", tbody).forEach((b) => b.addEventListener("click", () => closePosition(b.dataset.close)));
 }
 
 async function closePosition(sym) {
-  const ok = await confirmDialog(`${sym} schließen?`, `<p>Die gesamte Position wird zum Markt verkauft. Offene Stop- und Ziel-Orders für ${esc(sym)} werden vorher storniert.</p>`, "Position schließen");
+  const ok = await confirmDialog(`${sym} schließen?`, `<p>Die gesamte Position wird zum letzten Kurs (minus Slippage und Gebühr) verkauft. Offene Stop- und Ziel-Orders für ${esc(sym)} werden storniert.</p>`, "Position schließen");
   if (!ok) return;
-  try { await api(`/api/trade/close/${encodeURIComponent(sym)}`, { method: "POST" }); toast(`${sym}: Verkauf übermittelt`); }
+  try {
+    const r = await api(`/api/trade/close/${encodeURIComponent(sym)}`, { method: "POST" });
+    toast(`${sym} verkauft · Ergebnis ${signed(r.realized_pl_eur)} €`);
+  }
   catch (e) { toast(e.message); }
   loaders.handel();
 }
@@ -407,11 +430,11 @@ async function loadOrders() {
     <tr${leg ? ' class="muted"' : ""}>
       <td>${leg ? "" : fmtDate(o.created_at)}</td>
       <td class="sym">${leg ? "↳" : esc(o.symbol)}</td>
-      <td>${esc(o.side === "buy" ? "Kauf" : "Verkauf")} ${esc(o.type)}${o.order_class === "bracket" && !leg ? " · Bracket" : ""}</td>
-      <td class="num">${fmt(o.filled_qty, 0)}/${fmt(o.qty, 0)}</td>
+      <td>${esc(o.side === "buy" ? "Kauf" : "Verkauf")} ${esc({ limit: leg ? "Ziel" : "Limit", stop: "Stop", market: "Markt" }[o.type] || o.type)}${o.order_class === "bracket" && !leg ? " · Bracket" : ""}</td>
+      <td class="num">${fmt(o.filled_qty, 4)}/${fmt(o.qty, 4)}</td>
       <td class="num">${fmt(o.limit_price ?? o.stop_price)}</td>
-      <td>${esc(LABEL[o.status] || o.status)}${o.filled_avg_price ? `<span class="sub">Ø ${fmt(o.filled_avg_price)}</span>` : ""}</td>
-      <td>${!leg && st === "open" ? `<button class="btn sm" data-cancel="${esc(o.id)}">Stornieren</button>` : ""}</td>
+      <td>${esc(LABEL[o.status] || o.status)}${o.filled_avg_price ? `<span class="sub">Ø ${fmt(o.filled_avg_price)}${o.realized_pl_eur != null ? ` · ${signed(o.realized_pl_eur)} €` : ""}</span>` : ""}${o.note ? `<span class="sub">${esc(o.note)}</span>` : ""}</td>
+      <td>${st === "open" && ["new", "held"].includes(o.status) ? `<button class="btn sm" data-cancel="${esc(o.id)}">Stornieren</button>` : ""}</td>
     </tr>`;
   tb.innerHTML = os.length ? os.map((o) => row(o) + (o.legs || []).map((l) => row(l, true)).join("")).join("")
     : `<tr><td colspan="7" class="empty">${st === "open" ? "Keine offenen Orders." : "Noch keine erledigten Orders."}</td></tr>`;
@@ -430,12 +453,17 @@ function ticketBody() {
   };
 }
 
+let ticketMeta = { ticker: null, currency: "EUR", fx: 1 };
+
 function renderTicketSum() {
-  const o = ticketBody(), risk = (o.price - o.stop) * o.qty, reward = (o.target - o.price) * o.qty;
+  const o = ticketBody(), fx = ticketMeta.ticker === o.ticker ? ticketMeta.fx : null;
+  $$("#ticket .cur").forEach((s) => (s.textContent = fx ? `(${ticketMeta.currency})` : ""));
+  if (!o.qty || !o.price || !o.stop || !o.target || !fx) { $("#ticket-sum").innerHTML = ""; return; }
+  const risk = (o.price - o.stop) * o.qty * fx, reward = (o.target - o.price) * o.qty * fx, vol = o.qty * o.price * fx;
   const eq = num(state.broker?.account?.equity);
-  if (!o.qty || !o.price || !o.stop || !o.target) { $("#ticket-sum").innerHTML = ""; return; }
   const items = [
-    ["Volumen", money(o.qty * o.price)], ["Risiko bis Stop", `${money(risk)}${eq ? ` · ${fmt((risk / eq) * 100, 2)} %` : ""}`],
+    ["Volumen", `${money(vol)}${eq ? ` · ${fmt((vol / eq) * 100, 1)} %` : ""}`],
+    ["Risiko bis Stop", `${money(risk)}${eq ? ` · ${fmt((risk / eq) * 100, 2)} %` : ""}`],
     ["Chance bis Ziel", money(reward)], ["Chance/Risiko", risk > 0 ? `${fmt(reward / risk, 1)} : 1` : "–"],
   ];
   $("#ticket-sum").innerHTML = items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("");
@@ -454,14 +482,17 @@ async function prefill() {
   if (!t) return;
   try {
     const k = await api(`/api/trade/ticket/${encodeURIComponent(t)}`);
+    ticketMeta = { ticker: k.ticker, currency: k.currency, fx: k.fx };
     tf.ticker.value = k.ticker;
-    tf.price.value = k.price.toFixed(2);
-    tf.stop.value = k.stop.toFixed(2);
-    tf.target.value = k.target.toFixed(2);
+    tf.price.value = k.price;
+    tf.stop.value = k.stop;
+    tf.target.value = k.target;
     tf.qty.value = k.qty;
     invalidateTicket();
-    $("#ticket-result").innerHTML = `<p class="muted small">Vorschlag: Kurs ${fmt(k.price)} (${k.price_source === "alpaca" ? "Alpaca live" : "letzter Schluss"}),
-      Stop 1,5 × ATR, Ziel 3 × ATR, Stückzahl nach Risiko-Limits.${k.tradable ? "" : ' <span class="neg">Nicht über Alpaca handelbar.</span>'}</p>`;
+    $("#ticket-result").innerHTML = k.core
+      ? `<p class="small neg">${esc(k.ticker)} ist Core-Bestand – Kauf über „Core auffüllen“ im Dashboard.</p>`
+      : `<p class="muted small">Vorschlag: letzter Schluss ${money(k.price, k.currency)} vom ${fmtDay(k.price_date)}, Stop 1,5 × ATR, Ziel 3 × ATR,
+        Stückzahl nach Risiko-Limits (≈ ${money(k.value_eur)}).${k.qty ? "" : ' <span class="neg">Limits lassen keinen Kauf zu.</span>'}</p>`;
   } catch (e) { toast(e.message); }
 }
 $("#btn-prefill").addEventListener("click", prefill);
@@ -477,11 +508,16 @@ tf.addEventListener("submit", async (e) => {
   e.preventDefault();
   const o = ticketBody();
   try {
+    if (ticketMeta.ticker !== o.ticker) {  // Titel von Hand eingetippt: Währung und Kurs nachladen
+      const k = await api(`/api/trade/ticket/${encodeURIComponent(o.ticker)}`);
+      ticketMeta = { ticker: k.ticker, currency: k.currency, fx: k.fx };
+      renderTicketSum();
+    }
     const r = await api("/api/trade/check", { method: "POST", body: o });
     checkedOrder = o;
     $("#btn-send").disabled = false;
     $("#ticket-result").innerHTML = `<div class="result ok"><span class="status ok">Prüfung bestanden</span>
-      <p class="small">Letzter Kurs ${fmt(r.last_price)} · max. ${r.risk.suggested_qty} Stück nach Limits. Order kann gesendet werden.</p></div>`;
+      <p class="small">Letzter Kurs ${fmt(r.last_price)} · ${money(r.risk.value_eur)} + ${money(r.risk.fee_eur)} Gebühr · max. ${fmt(r.risk.suggested_qty, 4)} Stück nach Limits. Order kann gesendet werden.</p></div>`;
   } catch (err) { checkedOrder = null; $("#btn-send").disabled = true; showViolations(err); }
 });
 
@@ -491,12 +527,12 @@ $("#btn-send").addEventListener("click", async () => {
   const ok = await confirmDialog("Order senden?", `
     <dl class="facts">
       <div><dt>Titel</dt><dd>${esc(o.ticker)}</dd></div>
-      <div><dt>Kauf (Limit, GTC)</dt><dd>${o.qty} × ${fmt(o.price)}</dd></div>
-      <div><dt>Stop-Loss</dt><dd>${fmt(o.stop)}</dd></div>
-      <div><dt>Ziel</dt><dd>${fmt(o.target)}</dd></div>
-      <div><dt>Volumen</dt><dd>${money(o.qty * o.price)}</dd></div>
+      <div><dt>Kauf (Limit, bis Storno)</dt><dd>${fmt(o.qty, 4)} × ${money(o.price, ticketMeta.currency)}</dd></div>
+      <div><dt>Stop-Loss</dt><dd>${money(o.stop, ticketMeta.currency)}</dd></div>
+      <div><dt>Ziel</dt><dd>${money(o.target, ticketMeta.currency)}</dd></div>
+      <div><dt>Volumen</dt><dd>${money(o.qty * o.price * ticketMeta.fx)}</dd></div>
     </dl>
-    <p class="muted small">Alpaca Paper-Trading. Die Order wird serverseitig erneut geprüft; dazu wird eine These im Journal angelegt.</p>`, "Order senden");
+    <p class="muted small">Paper-Depot. Die Order wird serverseitig erneut geprüft; dazu wird eine These im Journal angelegt.</p>`, "Order senden");
   if (!ok) return;
   try {
     const r = await api("/api/trade/order", { method: "POST", body: o });
@@ -549,7 +585,7 @@ loaders.journal = async () => {
     } catch (e) { toast(e.message); }
   }));
 
-  const label = (a) => a.action ? { order: "Order", cancel: "Storno", close: "Position geschlossen", broker_keys_saved: "Broker verbunden", broker_keys_deleted: "Broker getrennt" }[a.action] || a.action
+  const label = (a) => a.action ? { order: "Order", cancel: "Storno", close: "Position geschlossen", core_buy: "Core-Kauf", paper_reset: "Depot neu gestartet", config_migrated: "Konfiguration aktualisiert" }[a.action] || a.action
     : a.hook ? `Hook ${a.hook}` : "Eintrag";
   $("#action-table tbody").innerHTML = acts.length ? acts.map((a) => {
     const { ts, ...rest } = a;
@@ -585,7 +621,8 @@ $("#thesis-form").addEventListener("submit", async (e) => {
 // --- Einstellungen ----------------------------------------------------------------------
 const sf = $("#settings-form");
 const SCREEN_KEYS = ["top_n", "min_history_days", "min_avg_volume", "rsi_min", "rsi_max"];
-const RISK_KEYS = ["max_position_pct", "max_risk_per_trade_pct", "max_daily_loss_pct", "max_open_positions"];
+const RISK_KEYS = ["max_position_pct", "max_risk_per_trade_pct", "max_daily_loss_pct", "max_drawdown_pct",
+  "max_open_positions", "min_order_eur", "max_fee_pct"];
 
 async function loadConfig() {
   const c = await api("/api/config");
@@ -595,8 +632,13 @@ async function loadConfig() {
 }
 
 loaders.einstellungen = async () => {
-  loadBroker().catch(() => {});
+  loadBroker().then((b) => { if (b.account) $("#reset-form").start_cash_eur.value = b.account.start_cash; }).catch(() => {});
   const c = await loadConfig();
+  const [coreTicker, corePct] = Object.entries(c.portfolio.core)[0] || ["", 0];
+  sf.core_ticker.value = coreTicker;
+  sf.core_pct.value = corePct;
+  sf.satellite_pct.value = c.portfolio.satellite_pct;
+  sf.rebalance_drift_pct.value = c.portfolio.rebalance_drift_pct;
   sf.universe.value = c.universe.join("\n");
   sf.benchmark.value = c.benchmark || "";
   SCREEN_KEYS.forEach((k) => (sf[k].value = c.screen[k]));
@@ -615,6 +657,11 @@ sf.addEventListener("submit", async (e) => {
     ...c,
     universe: sf.universe.value.split(/[\s,;]+/).map((t) => t.trim().toUpperCase()).filter(Boolean),
     benchmark: sf.benchmark.value.trim().toUpperCase(),
+    portfolio: {
+      ...c.portfolio,
+      core: sf.core_ticker.value.trim() ? { [sf.core_ticker.value.trim().toUpperCase()]: Number(sf.core_pct.value) } : {},
+      satellite_pct: Number(sf.satellite_pct.value), rebalance_drift_pct: Number(sf.rebalance_drift_pct.value),
+    },
     screen: Object.fromEntries(SCREEN_KEYS.map((k) => [k, Number(sf[k].value)])),
     risk: { ...c.risk, ...Object.fromEntries(RISK_KEYS.map((k) => [k, Number(sf[k].value)])), enforce_market_hours: sf.enforce_market_hours.checked },
     schedule: { ...c.schedule, enabled: sf.schedule_enabled.checked, times: sf.schedule_times.value.split(/[\s,;]+/).filter(Boolean) },
@@ -626,23 +673,18 @@ sf.addEventListener("submit", async (e) => {
   } catch (err) { msg.className = "small status bad"; msg.textContent = err.message; }
 });
 
-$("#broker-form").addEventListener("submit", async (e) => {
+$("#reset-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const f = e.target, msg = $("#broker-msg");
-  msg.className = "small muted"; msg.textContent = "Prüfe Schlüssel bei Alpaca …";
+  const f = e.target, msg = $("#reset-msg");
+  if (f.confirm.value.trim() !== "RESET") { msg.className = "small status bad"; msg.textContent = "Zur Bestätigung RESET eintippen"; return; }
+  const cash = Number(f.start_cash_eur.value);
+  if (!(await confirmDialog("Paper-Depot neu starten?", `<p>Alle Positionen, Orders und die Depot-Historie werden gelöscht. Neues Startkapital: <b>${money(cash, "EUR", 0)}</b>.</p>`, "Neu starten"))) return;
   try {
-    const r = await api("/api/broker/keys", { method: "PUT", body: { key_id: f.key_id.value.trim(), secret: f.secret.value.trim() } });
-    f.reset();
-    msg.className = "small status ok"; msg.textContent = `Verbunden mit Konto ${r.account_number}`;
+    await api("/api/broker/reset", { method: "POST", body: { start_cash_eur: cash, confirm: "RESET" } });
+    f.confirm.value = "";
+    msg.className = "small status ok"; msg.textContent = "Depot neu gestartet";
     loadBroker();
   } catch (err) { msg.className = "small status bad"; msg.textContent = err.message; }
-});
-
-$("#btn-disconnect").addEventListener("click", async () => {
-  if (!(await confirmDialog("Broker trennen?", "<p>Die gespeicherten Alpaca-Schlüssel werden vom Umbrel gelöscht. Offene Orders bei Alpaca bleiben bestehen.</p>", "Trennen"))) return;
-  await api("/api/broker/keys", { method: "DELETE" });
-  $("#broker-msg").textContent = "";
-  loadBroker();
 });
 
 // --- Start ------------------------------------------------------------------------------
