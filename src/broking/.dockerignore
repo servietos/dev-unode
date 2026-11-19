@@ -7,4 +7,5 @@ journal
 tests
 **/__pycache__
 *.md
-.claude
+!CLAUDE.md
+.claude/settings.local.json

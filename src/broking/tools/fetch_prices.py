@@ -12,16 +12,27 @@ import math
 import warnings
 from pathlib import Path
 
-from common import PRICES_DIR, emit, load_config, price_path, write_prices
+from common import PRICES_DIR, emit, load_config, price_path, read_prices, write_prices
+
+
+def expected_last_date(ticker: str, today: dt.date) -> dt.date:
+    """Jüngster Schlusskurs, den es heute geben sollte: Krypto gestern, Börsen am letzten Werktag davor."""
+    d = today - dt.timedelta(days=1)
+    if not ticker.upper().endswith(("-EUR", "-USD")):
+        while d.weekday() >= 5:
+            d -= dt.timedelta(days=1)
+    return d
 
 
 def is_fresh(ticker: str, prices_dir: Path = PRICES_DIR, today: dt.date | None = None) -> bool:
-    """Cache gilt als frisch, wenn die Datei heute geschrieben wurde."""
+    """Cache gilt als frisch, wenn die Datei heute geschrieben wurde UND den Vortag schon enthält.
+    Früh am Morgen liefert Yahoo den Vortag mitunter noch nicht – dann wird erneut geladen."""
+    today = today or dt.date.today()
     path = price_path(ticker, prices_dir)
-    if not path.exists():
+    if not path.exists() or dt.date.fromtimestamp(path.stat().st_mtime) != today:
         return False
-    mtime = dt.date.fromtimestamp(path.stat().st_mtime)
-    return mtime == (today or dt.date.today())
+    rows = read_prices(ticker, prices_dir)
+    return bool(rows) and rows[-1]["date"] >= expected_last_date(ticker, today).isoformat()
 
 
 def frame_to_rows(df) -> list[dict]:

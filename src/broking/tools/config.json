@@ -48,5 +48,10 @@
     "enabled": true,
     "tz": "Europe/Berlin",
     "times": ["07:30", "22:30"]
+  },
+  "advisor": {
+    "enabled": false,
+    "model": "sonnet",
+    "top_n": 10
   }
 }

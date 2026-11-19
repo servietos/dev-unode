@@ -167,6 +167,27 @@ class PaperBrokerTests(unittest.TestCase):
         self.assertEqual(self.b.orders("all"), [])
         self.assertEqual(self.journal.load_theses(), [])
 
+    def test_stale_price_blocks_buys(self):
+        late = self.new_broker("2025-02-05")  # letzte Kerze 30.01. → 6 Tage alt
+        with self.assertRaises(self.trading.OrderRejected) as e:
+            self.trading.check(late, self.order(), self.cfg)
+        self.assertTrue(any("Tage alt" in v for v in e.exception.violations))
+        self.assertIn("Tage alt", self.trading.core_plan(late, self.cfg)[0]["skip"])
+        self.assertIsNotNone(self.trading.ticket(late, "AAPL", self.cfg)["stale"])
+        self.assertIsNone(self.trading.ticket(self.new_broker("2025-02-03"), "AAPL", self.cfg)["stale"])  # Wochenende ok
+
+    def test_place_with_proposal_thesis_reuses_it(self):
+        t = self.journal.add_thesis("AAPL", "up", 200.0, 225.0, 21, "Claude-Idee", "sonnet", 188.0)
+        res = self.trading.place(self.b, self.order(thesis_id=t["id"]), self.cfg)
+        self.assertEqual(res["thesis"]["id"], t["id"])
+        self.assertEqual(res["thesis"]["model"], "sonnet")
+        self.assertEqual(len(self.journal.load_theses()), 1)
+        with self.assertRaises(self.trading.OrderRejected):  # schon mit Order verknüpft
+            self.trading.place(self.b, self.order(thesis_id=t["id"]), self.cfg)
+        other = self.journal.add_thesis("MSFT", "up", 400.0, 450.0, 21, "x", "sonnet", 380.0)
+        with self.assertRaises(self.trading.OrderRejected):  # falscher Titel
+            self.trading.place(self.b, self.order(thesis_id=other["id"]), self.cfg)
+
     def test_core_only_via_buy_core(self):
         with self.assertRaises(self.trading.OrderRejected) as e:
             self.trading.check(self.b, self.order(ticker="EUNL.DE", price=100.0, stop=95.0, target=110.0), self.cfg)

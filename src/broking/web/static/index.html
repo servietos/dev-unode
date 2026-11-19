@@ -36,6 +36,14 @@
         <div id="core-notice-text"></div>
         <button class="btn primary" id="btn-core">Core auffüllen</button>
       </div>
+      <div class="card" id="advisor-card" hidden>
+        <div class="card-head"><h2>Claude-Bewertung</h2><span class="muted small" id="adv-meta"></span></div>
+        <p id="adv-summary" class="adv-summary"></p>
+        <div class="table-wrap" id="adv-wrap"><table class="table" id="adv-table">
+          <thead><tr><th>Titel</th><th class="num">Kurs</th><th class="num">Stop</th><th class="num">Ziel</th><th class="num">Frist</th><th>Begründung</th><th></th></tr></thead>
+          <tbody></tbody></table></div>
+        <details class="rejects" id="adv-more" hidden><summary>Verworfen und ausgelassen</summary><div id="adv-rejects"></div></details>
+      </div>
       <div class="kpis">
         <div class="kpi"><div class="kpi-label">Depotwert</div><div class="kpi-value" id="k-equity">–</div><div class="kpi-sub" id="k-equity-sub"></div></div>
         <div class="kpi"><div class="kpi-label">Heute</div><div class="kpi-value" id="k-day">–</div><div class="kpi-sub" id="k-day-sub"></div></div>
@@ -137,6 +145,7 @@
             <label>Frist (Tage)<input name="horizon_days" type="number" min="1" max="90" value="10" required></label>
             <label>Quelle<input name="model" value="manuell" maxlength="60"></label>
           </div>
+          <input type="hidden" name="thesis_id">
           <label>Begründung (wird zur These)<textarea name="rationale" rows="3" required placeholder="Warum steigt der Titel innerhalb der Frist über das Ziel?"></textarea></label>
           <div class="ticket-sum" id="ticket-sum"></div>
           <div class="actions">
@@ -262,6 +271,36 @@
           <label>Uhrzeiten (HH:MM, kommagetrennt, <span id="sched-tz"></span>)<input name="schedule_times"></label>
           <div class="actions"><button class="btn primary" type="submit">Speichern</button><span id="settings-msg" class="small"></span></div>
         </form>
+        <div class="card" id="advisor-settings">
+          <div class="card-head"><h2>Claude (Morgenbewertung)</h2><span class="pill" id="adv-pill">–</span></div>
+          <p class="small">Nach dem ersten Lauf des Tages bewertet Claude die Top-Kandidaten und schlägt bis zu drei
+            Satellit-Käufe vor. Jeder Vorschlag wird als These im Journal angelegt. Claude handelt nicht: Kaufen kannst nur du,
+            über „Ticket öffnen“ im Dashboard. Das zählt gegen das Nutzungslimit deines Claude-Abos.</p>
+          <form id="token-form" autocomplete="off">
+            <h3>Token</h3>
+            <p class="muted small">Im Terminal <code>claude setup-token</code> ausführen und das Token hier einfügen. Es wird nur auf dem Umbrel
+              gespeichert und nie wieder angezeigt.</p>
+            <div class="form-row">
+              <label>Token<input name="token" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false"></label>
+              <button class="btn primary" type="submit">Speichern</button>
+              <button class="btn danger" type="button" id="btn-token-delete">Entfernen</button>
+            </div>
+            <span id="token-msg" class="small"></span>
+          </form>
+          <form id="advisor-form">
+            <h3>Lauf</h3>
+            <label class="check"><input type="checkbox" name="enabled"> Jeden Morgen nach dem ersten Zeitplan-Lauf bewerten</label>
+            <div class="form-grid two">
+              <label>Modell<select name="model"><option value="sonnet">Sonnet</option><option value="opus">Opus</option><option value="haiku">Haiku</option></select></label>
+              <label>Kandidaten<input name="top_n" type="number" min="1" max="20"></label>
+            </div>
+            <div class="actions">
+              <button class="btn primary" type="submit">Speichern</button>
+              <button class="btn" type="button" id="btn-advise">Jetzt bewerten</button>
+              <span id="advisor-msg" class="small"></span>
+            </div>
+          </form>
+        </div>
       </div>
     </section>
   </main>

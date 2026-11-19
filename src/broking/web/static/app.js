@@ -174,7 +174,7 @@ async function loadStatus() {
   $("#mode-pill").textContent = s.paper_trading ? "Paper-Trading" : "LIVE";
   $("#mode-pill").className = `pill ${s.paper_trading ? "good" : "bad"}`;
 
-  const steps = { fetch: "lade Kurse", screen: "rechne Screen", evaluate: "werte Thesen aus", sync: "gleiche Depot ab" };
+  const steps = { fetch: "lade Kurse", screen: "rechne Screen", evaluate: "werte Thesen aus", sync: "gleiche Depot ab", advise: "Claude bewertet" };
   let line = "";
   if (j.running) line = `${j.trigger === "zeitplan" ? "Zeitplan: " : ""}${steps[j.step] || "startet"} …`;
   else if (j.error) line = `Fehler: ${j.error}`;
@@ -182,6 +182,7 @@ async function loadStatus() {
     const f = j.result?.fetch, failed = f ? Object.keys(f.failed || {}) : [];
     line = `Fertig ${fmtDate(j.finished)}` + (f ? ` · ${f.fetched.length} geladen, ${f.cached.length} aus Cache` : "") +
       (j.result?.evaluate ? ` · ${j.result.evaluate.resolved} Thesen ausgewertet` : "") +
+      (j.result?.advise ? ` · Claude: ${j.result.advise.proposals} Vorschläge` : "") +
       (failed.length ? ` · fehlgeschlagen: ${failed.join(", ")}` : "");
   }
   $("#job-line").textContent = line;
@@ -206,7 +207,8 @@ function refreshAfterJob() {
 async function runJob(kind) {
   const steps = { all: ["fetch", "screen", "evaluate", "sync"], screen: ["screen"], "fetch-screen": ["fetch", "screen"] }[kind];
   try {
-    await api("/api/run", { method: "POST", body: { steps, force: $("#chk-force").checked } });
+    // „Alles aktualisieren“ lädt immer frisch – sonst bleibt ein zu früh geladener Kurs den ganzen Tag stehen
+    await api("/api/run", { method: "POST", body: { steps, force: kind === "all" || $("#chk-force").checked } });
   } catch (e) { toast(e.message); }
   loadStatus();
 }
@@ -247,7 +249,8 @@ $("#btn-core").addEventListener("click", async () => {
 const histSeg = segmented($("#hist-seg"), () => loadHistory());
 
 loaders.dashboard = async () => {
-  const [b] = await Promise.all([loadBroker().catch(() => null), loadStatus().catch(() => null), loadScreen().catch(() => null), loadStatsKpi()]);
+  const [b] = await Promise.all([loadBroker().catch(() => null), loadStatus().catch(() => null), loadScreen().catch(() => null),
+    loadStatsKpi(), loadAdvisor().catch(() => null)]);
   const a = b && !b.error ? b.account : null;
   if (a) {
     const eq = num(a.equity), last = num(a.last_equity), day = eq - last, total = eq - num(a.start_cash);
@@ -274,6 +277,35 @@ loaders.dashboard = async () => {
     : `<tr><td colspan="4" class="empty">Noch kein Screen.</td></tr>`;
   $$("#dash-cands [data-pick]").forEach((a) => a.addEventListener("click", () => (selected = a.dataset.pick)));
 };
+
+async function loadAdvisor() {
+  const a = await api("/api/advisor"), r = a.report, card = $("#advisor-card");
+  card.hidden = !r && !a.enabled;
+  if (card.hidden) return a;
+  if (!r) {
+    $("#adv-meta").textContent = "";
+    $("#adv-summary").textContent = a.token_configured ? "Noch keine Bewertung – sie läuft nach dem ersten Zeitplan-Lauf des Tages."
+      : "Claude ist aktiviert, aber es ist noch kein Token hinterlegt (Einstellungen).";
+    $("#adv-wrap").hidden = true; $("#adv-more").hidden = true;
+    return a;
+  }
+  $("#adv-meta").textContent = `${r.model} · ${fmtDate(r.created)} · ${r.candidates} Kandidaten, ${r.free_slots} freie Plätze`;
+  $("#adv-summary").textContent = r.summary || "";
+  $("#adv-wrap").hidden = !r.proposals.length;
+  $("#adv-table tbody").innerHTML = r.proposals.map((p, i) => `
+    <tr><td class="sym">${esc(p.ticker)}</td><td class="num">${money(p.price, p.currency)}</td>
+      <td class="num">${money(p.stop, p.currency)}</td><td class="num">${money(p.target, p.currency)}</td>
+      <td class="num">${p.horizon_days} T</td><td class="small">${esc(p.rationale)}</td>
+      <td><button class="btn sm primary" data-prop="${i}">Ticket öffnen</button></td></tr>`).join("");
+  $$("#adv-table [data-prop]").forEach((btn) => btn.addEventListener("click", () => {
+    ticketProposal = { ...r.proposals[btn.dataset.prop], model: r.model, created: r.created };
+    location.hash = "handel";
+  }));
+  const more = [...r.rejected.map((x) => `${x.ticker}: verworfen – ${x.reason}`), ...r.skipped.map((x) => `${x.ticker}: ${x.reason}`)];
+  $("#adv-more").hidden = !more.length;
+  $("#adv-rejects").innerHTML = `<ul>${more.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>`;
+  return a;
+}
 
 async function loadStatsKpi() {
   const st = await api("/api/stats");
@@ -371,7 +403,7 @@ $("#btn-thesis").addEventListener("click", () => {
 });
 
 // --- Handel -----------------------------------------------------------------------------
-let ticketTicker = null, checkedOrder = null;
+let ticketTicker = null, ticketProposal = null, checkedOrder = null;
 const ordersSeg = segmented($("#orders-seg"), () => loadOrders());
 const tf = $("#ticket");
 
@@ -386,7 +418,8 @@ loaders.handel = async () => {
     $("#orders-table tbody").innerHTML = `<tr><td colspan="7" class="empty">${msg}</td></tr>`;
     return;
   }
-  if (ticketTicker) { tf.ticker.value = ticketTicker; ticketTicker = null; prefill(); }
+  if (ticketProposal) { fillProposal(ticketProposal); ticketProposal = null; }
+  else if (ticketTicker) { tf.ticker.value = ticketTicker; tf.thesis_id.value = ""; ticketTicker = null; prefill(); }
   loadPositions($("#pos-table tbody")).catch((e) => toast(e.message));
   loadOrders().catch((e) => toast(e.message));
 };
@@ -450,7 +483,22 @@ function ticketBody() {
     ticker: tf.ticker.value.trim().toUpperCase(), qty: Number(tf.qty.value), price: Number(tf.price.value),
     stop: Number(tf.stop.value), target: Number(tf.target.value), horizon_days: Number(tf.horizon_days.value),
     rationale: tf.rationale.value.trim(), model: tf.model.value.trim() || "manuell",
+    thesis_id: tf.thesis_id.value || null,
   };
+}
+
+// Vorschlag aus der Claude-Bewertung ins Ticket übernehmen; die Order hängt sich an Claudes These
+async function fillProposal(p) {
+  tf.ticker.value = p.ticker; tf.price.value = p.price; tf.stop.value = p.stop; tf.target.value = p.target;
+  tf.qty.value = p.qty; tf.horizon_days.value = p.horizon_days; tf.rationale.value = p.rationale;
+  tf.model.value = p.model; tf.thesis_id.value = p.thesis_id;
+  try {
+    const k = await api(`/api/trade/ticket/${encodeURIComponent(p.ticker)}`);
+    ticketMeta = { ticker: k.ticker, currency: k.currency, fx: k.fx };
+  } catch (e) { toast(e.message); }
+  invalidateTicket();
+  $("#ticket-result").innerHTML = `<p class="muted small">Vorschlag von Claude (${esc(p.model)}) vom ${fmtDate(p.created)}. Kurs vom ${fmtDay(p.price_date)}.
+    Werte prüfen und bei Bedarf anpassen, dann „Prüfen“. Die Order wird mit Claudes These ${esc(p.thesis_id)} verknüpft.</p>`;
 }
 
 let ticketMeta = { ticker: null, currency: "EUR", fx: 1 };
@@ -476,6 +524,7 @@ function invalidateTicket() {
   renderTicketSum();
 }
 $$("input, textarea", tf).forEach((i) => i.addEventListener("input", invalidateTicket));
+tf.ticker.addEventListener("input", () => (tf.thesis_id.value = ""));  // anderer Titel = eigene These
 
 async function prefill() {
   const t = tf.ticker.value.trim().toUpperCase();
@@ -532,14 +581,15 @@ $("#btn-send").addEventListener("click", async () => {
       <div><dt>Ziel</dt><dd>${money(o.target, ticketMeta.currency)}</dd></div>
       <div><dt>Volumen</dt><dd>${money(o.qty * o.price * ticketMeta.fx)}</dd></div>
     </dl>
-    <p class="muted small">Paper-Depot. Die Order wird serverseitig erneut geprüft; dazu wird eine These im Journal angelegt.</p>`, "Order senden");
+    <p class="muted small">Paper-Depot. Die Order wird serverseitig erneut geprüft; ${o.thesis_id ? "sie wird mit Claudes These verknüpft" : "dazu wird eine These im Journal angelegt"}.</p>`, "Order senden");
   if (!ok) return;
   try {
     const r = await api("/api/trade/order", { method: "POST", body: o });
     toast(`Order ${o.ticker} übermittelt (${r.order.status})`);
     $("#ticket-result").innerHTML = `<div class="result ok"><span class="status ok">Order übermittelt</span>
-      <p class="small">Status ${esc(r.order.status)} · These ${esc(r.thesis.id)} angelegt, Frist ${esc(r.thesis.deadline)}.</p></div>`;
+      <p class="small">Status ${esc(r.order.status)} · These ${esc(r.thesis.id)} ${o.thesis_id ? "verknüpft" : "angelegt"}, Frist ${esc(r.thesis.deadline)}.</p></div>`;
     tf.rationale.value = "";
+    tf.thesis_id.value = "";
     checkedOrder = null;
     $("#btn-send").disabled = true;
     loadOrders(); loadPositions($("#pos-table tbody"));
@@ -585,7 +635,9 @@ loaders.journal = async () => {
     } catch (e) { toast(e.message); }
   }));
 
-  const label = (a) => a.action ? { order: "Order", cancel: "Storno", close: "Position geschlossen", core_buy: "Core-Kauf", paper_reset: "Depot neu gestartet", config_migrated: "Konfiguration aktualisiert" }[a.action] || a.action
+  const label = (a) => a.action ? { order: "Order", cancel: "Storno", close: "Position geschlossen", core_buy: "Core-Kauf", paper_reset: "Depot neu gestartet",
+    config_migrated: "Konfiguration aktualisiert", advisor_run: "Claude-Bewertung", advisor_token_saved: "Claude-Token gespeichert",
+    advisor_token_deleted: "Claude-Token entfernt" }[a.action] || a.action
     : a.hook ? `Hook ${a.hook}` : "Eintrag";
   $("#action-table tbody").innerHTML = acts.length ? acts.map((a) => {
     const { ts, ...rest } = a;
@@ -648,7 +700,55 @@ loaders.einstellungen = async () => {
   sf.schedule_enabled.checked = sc.enabled;
   sf.schedule_times.value = sc.times.join(", ");
   $("#sched-tz").textContent = sc.tz;
+  loadAdvisorSettings().catch((e) => toast(e.message));
 };
+
+// --- Claude-Einstellungen (Token getrennt von der Konfiguration, wird nie zurückgegeben) ---
+const af = $("#advisor-form"), tkf = $("#token-form");
+
+async function loadAdvisorSettings() {
+  const a = await api("/api/advisor");
+  af.enabled.checked = a.enabled; af.model.value = a.model; af.top_n.value = a.top_n;
+  const pill = $("#adv-pill");
+  pill.textContent = !a.cli_available ? "CLI fehlt" : a.token_configured ? (a.enabled ? "aktiv" : "Token hinterlegt") : "kein Token";
+  pill.className = `pill ${!a.cli_available ? "bad" : a.token_configured && a.enabled ? "good" : a.token_configured ? "" : "warn"}`;
+  $("#btn-token-delete").disabled = !a.token_configured;
+  $("#btn-advise").disabled = !a.token_configured || !a.cli_available;
+  tkf.token.placeholder = a.token_configured ? "hinterlegt – zum Ersetzen neues Token einfügen" : "sk-ant-…";
+}
+
+tkf.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("#token-msg");
+  try {
+    await api("/api/advisor/token", { method: "PUT", body: { token: tkf.token.value } });
+    tkf.token.value = "";
+    msg.className = "small status ok"; msg.textContent = "Token gespeichert";
+  } catch (err) { msg.className = "small status bad"; msg.textContent = err.message; }
+  loadAdvisorSettings();
+});
+
+$("#btn-token-delete").addEventListener("click", async () => {
+  if (!(await confirmDialog("Token entfernen?", "<p>Claude kann danach nicht mehr bewerten, bis du ein neues Token hinterlegst. Widerrufen kannst du es in deinem Claude-Konto.</p>", "Entfernen"))) return;
+  try { await api("/api/advisor/token", { method: "DELETE" }); toast("Token entfernt"); } catch (e) { toast(e.message); }
+  loadAdvisorSettings();
+});
+
+af.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("#advisor-msg");
+  try {
+    const c = await loadConfig();
+    await api("/api/config", { method: "PUT", body: { ...c, advisor: { enabled: af.enabled.checked, model: af.model.value, top_n: Number(af.top_n.value) } } });
+    msg.className = "small status ok"; msg.textContent = "Gespeichert";
+    loadConfig(); loadAdvisorSettings();
+  } catch (err) { msg.className = "small status bad"; msg.textContent = err.message; }
+});
+
+$("#btn-advise").addEventListener("click", async () => {
+  try { await api("/api/advisor/run", { method: "POST" }); toast("Claude bewertet … das dauert etwa eine Minute"); } catch (e) { toast(e.message); }
+  loadStatus();
+});
 
 sf.addEventListener("submit", async (e) => {
   e.preventDefault();

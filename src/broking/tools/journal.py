@@ -113,6 +113,10 @@ def resolve(thesis_id: str, status: str, price: float | None = None, note: str =
     raise KeyError(f"These {thesis_id} nicht gefunden")
 
 
+def get_thesis(thesis_id: str, journal_dir: Path = JOURNAL_DIR) -> dict | None:
+    return next((t for t in load_theses(journal_dir) if t["id"] == thesis_id), None)
+
+
 def attach_order(thesis_id: str, order_id: str | None, journal_dir: Path = JOURNAL_DIR) -> dict:
     theses = load_theses(journal_dir)
     for t in theses:

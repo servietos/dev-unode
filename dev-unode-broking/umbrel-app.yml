@@ -3,7 +3,7 @@ id: dev-unode-broking
 name: Broking
 tagline: Aktien, ETFs und Krypto screenen, Thesen führen, im Paper-Depot (EUR) handeln
 category: finance
-version: "0.3.0"
+version: "0.3.1"
 port: 3847
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/broking/web/static/icon.svg
 description: >-
@@ -29,10 +29,10 @@ repo: https://github.com/servietos/dev-unode/tree/master/src/broking
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Eigenes Paper-Depot in EUR statt Alpaca: alle Märkte (US, Xetra, ETFs, Krypto),
-  Core-Satellite mit „Core auffüllen“, Bitpanda-Gebühren, Bruchstücke, Startkapital und
-  Neustart in den Einstellungen, Drawdown-Stopp. Die bisherige Konfiguration wird automatisch
-  übernommen (Zeitplan bleibt, Sicherung als config.v1.json).
+  Optional: Claude bewertet jeden Morgen die Top-Kandidaten und schlägt bis zu drei Satellit-Käufe
+  vor (Token aus „claude setup-token“ unter Einstellungen → Claude). Vorschläge landen als Thesen im
+  Journal, gekauft wird nur nach deiner Freigabe im Order-Ticket. „Alles aktualisieren“ lädt Kurse
+  jetzt immer neu, und Käufe mit Kursen älter als 4 Tage werden abgelehnt.
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

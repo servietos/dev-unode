@@ -26,6 +26,7 @@ from instruments import Fx, currency
 MAX_LIMIT_DEVIATION_PCT = 3.0   # Limit darf höchstens so weit vom letzten Kurs abweichen
 MAX_TARGET_MULT = 3.0            # Ziel höchstens 3 × Limit (Tippfehler-Schutz)
 STOP_ATR, TARGET_ATR = 1.5, 3.0  # Vorschlag: Chance/Risiko 2:1
+MAX_PRICE_AGE_DAYS = 4           # Wochenende + Feiertag; älter = Kurse erst neu laden
 _order_lock = threading.Lock()   # zwei gleichzeitige Orders dürfen nicht dieselben Limits „sehen“
 
 
@@ -62,6 +63,21 @@ def with_pending(pf: dict, open_orders: list[dict], fx: Fx | None = None) -> dic
     return pf
 
 
+def price_age_days(client: PaperBroker, ticker: str) -> int | None:
+    """Kalendertage zwischen letzter Kerze und dem Depot-Datum; None = gar kein Kurs."""
+    rows = read_prices(ticker, client.prices_dir)
+    if not rows:
+        return None
+    return (dt.date.fromisoformat(client.today()) - dt.date.fromisoformat(rows[-1]["date"])).days
+
+
+def stale_reason(client: PaperBroker, ticker: str) -> str | None:
+    age = price_age_days(client, ticker)
+    if age is not None and age > MAX_PRICE_AGE_DAYS:
+        return f"Kurs für {ticker} ist {age} Tage alt (max. {MAX_PRICE_AGE_DAYS}) – erst Kurse laden"
+    return None
+
+
 def live_portfolio(client: PaperBroker) -> dict:
     return with_pending(sync_portfolio(client), client.orders("open", 500))
 
@@ -81,6 +97,7 @@ def ticket(client: PaperBroker, ticker: str, cfg: dict) -> dict:
     return {
         "ticker": t, "tradable": tradable_symbol(t), "core": t in risk_check.core_tickers(cfg),
         "price": round_px(price), "price_date": rows[-1]["date"], "price_source": "cache",
+        "stale": stale_reason(client, t),
         "currency": currency(t), "fx": round(rate, 6), "atr": round(a, 4),
         "stop": stop, "target": target, "qty": qty, "value_eur": round(qty * price * rate, 2),
         "portfolio": pf,
@@ -134,6 +151,8 @@ def check(client: PaperBroker, order: dict, cfg: dict, now: dt.datetime | None =
     order = normalize(order)
     last = client.last_price(order["ticker"])
     violations = validate(order, last, cfg)
+    if stale := stale_reason(client, order["ticker"]):
+        violations.append(stale)
     rate = fx_of(order["ticker"]) if tradable_symbol(order["ticker"]) else 0.0
     pf = live_portfolio(client)
     risk = risk_check.check({**order, "fx": rate}, pf, cfg, now)
@@ -143,18 +162,36 @@ def check(client: PaperBroker, order: dict, cfg: dict, now: dt.datetime | None =
     return {"order": order, "risk": risk, "portfolio": pf, "last_price": last, "fx": rate}
 
 
+def proposal_thesis(order: dict) -> dict | None:
+    """Freigabe eines Vorschlags (z. B. von Claude): die vorhandene These wird übernommen statt
+    eine zweite anzulegen – sonst zählte dieselbe Idee doppelt in der Trefferquote."""
+    tid = order.get("thesis_id")
+    if not tid:
+        return None
+    t = journal.get_thesis(str(tid))
+    if t is None:
+        raise OrderRejected([f"These {tid} nicht gefunden"])
+    if t["status"] != "open" or t.get("order_id"):
+        raise OrderRejected([f"These {tid} ist nicht mehr offen oder hat schon eine Order"])
+    if t["ticker"] != str(order.get("ticker", "")).upper():
+        raise OrderRejected([f"These {tid} gehört zu {t['ticker']}, nicht zu {order.get('ticker')}"])
+    return t
+
+
 def place(client: PaperBroker, order: dict, cfg: dict, now: dt.datetime | None = None) -> dict:
     """Prüfen und buchen unter einer Sperre. Die These wird VOR der Order geschrieben,
     damit keine Order ohne Journal-Eintrag existieren kann."""
     with _order_lock:
+        existing = proposal_thesis(order)
         o = check(client, order, cfg, now)["order"]
         coid = f"broking-{dt.date.today():%Y%m%d}-{uuid.uuid4().hex[:10]}"
-        thesis = journal.add_thesis(o["ticker"], "up", o["price"], o["target"], int(o["horizon_days"]),
-                                    o["rationale"], o.get("model") or "manuell", o["stop"])
+        thesis = existing or journal.add_thesis(o["ticker"], "up", o["price"], o["target"], int(o["horizon_days"]),
+                                                o["rationale"], o.get("model") or "manuell", o["stop"])
         try:
             res = client.submit_bracket(o["ticker"], o["qty"], o["price"], o["stop"], o["target"], coid)
         except BrokerError as e:
-            journal.resolve(thesis["id"], "cancelled", note=f"Order nicht angenommen: {e}"[:300])
+            if not existing:  # Claudes These bleibt als Prognose bestehen, auch ohne Order
+                journal.resolve(thesis["id"], "cancelled", note=f"Order nicht angenommen: {e}"[:300])
             raise
         thesis = journal.attach_order(thesis["id"], res.get("id"))
         journal.log_action({"source": "web", "action": "order", "order_id": res.get("id"),
@@ -173,6 +210,9 @@ def core_plan(client: PaperBroker, cfg: dict) -> list[dict]:
         last = client.last_price(t)
         if last is None:
             out.append({"ticker": t, "skip": "kein Kurs – erst Kurse laden"})
+            continue
+        if stale := stale_reason(client, t):
+            out.append({"ticker": t, "skip": stale})
             continue
         price = last * (1 + slip)  # so wird gebucht
         rate = fx_of(t)

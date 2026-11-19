@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
+import advisor  # noqa: E402
 import broker  # noqa: E402
 import evaluate_theses  # noqa: E402
 import fetch_prices  # noqa: E402
@@ -117,6 +118,10 @@ class Jobs:
                 c = PaperBroker(cfg)
                 result["sync"] = {"equity": c.mark()["equity"]}
                 broker.sync_portfolio(c)
+            if "advise" in steps:  # Claude bewertet die Kandidaten (nur mit Token)
+                self.state["step"] = "advise"
+                rep = advisor.run(cfg)
+                result["advise"] = {"proposals": len(rep["proposals"])}
         except Exception as e:  # Fehler sichtbar machen statt den Thread still sterben zu lassen
             self.state["error"] = str(e)[:500]
         finally:
@@ -183,11 +188,20 @@ class Scheduler:
         key = local.strftime("%Y-%m-%d %H:%M")
         return None if key == self.last_key else key
 
+    @staticmethod
+    def steps_for(cfg: dict, key: str) -> list[str]:
+        """Claude bewertet nur im ersten Lauf des Tages (morgens), und nur wenn aktiviert + Token da."""
+        first = min(cfg.get("schedule", {}).get("times") or ["99:99"])
+        if advisor.settings(cfg)["enabled"] and key.endswith(first) and advisor.load_token():
+            return [*ALL_STEPS, "advise"]
+        return ALL_STEPS
+
     def loop(self) -> None:
         while True:
             try:
-                key = self.due(load_config())
-                if key and jobs.start(ALL_STEPS, force=True, trigger="zeitplan"):
+                cfg = load_config()
+                key = self.due(cfg)
+                if key and jobs.start(self.steps_for(cfg, key), force=True, trigger="zeitplan"):
                     self.last_key = key
             except Exception:
                 pass  # Konfigurationsfehler dürfen den Zeitplan nicht beenden
@@ -242,6 +256,7 @@ def status():
         "due_theses": len(journal.due_theses()),
         "broker": "paper",
         "broker_configured": True,
+        "advisor": {"enabled": advisor.settings(cfg)["enabled"], "token_configured": advisor.load_token() is not None},
     }
 
 
@@ -406,6 +421,11 @@ def validate_config(new: dict) -> dict:
             raise ValueError("Zeitplan: Uhrzeiten im Format HH:MM")
         schedule_cfg = {"enabled": bool(sched.get("enabled")), "tz": base.get("schedule", {}).get("tz", "Europe/Berlin"),
                         "times": times}
+
+        adv = {**advisor.settings(base), **(new.get("advisor") or {})}
+        advisor_cfg = {"enabled": bool(adv["enabled"]), "model": str(adv["model"]), "top_n": int(adv["top_n"])}
+        if advisor_cfg["model"] not in advisor.MODELS or not 1 <= advisor_cfg["top_n"] <= 20:
+            raise ValueError(f"Claude: Modell aus {', '.join(advisor.MODELS)}, Kandidaten 1–20")
     except (KeyError, TypeError, AttributeError) as e:
         raise ValueError(f"Feld fehlt oder hat falschen Typ: {e}")
     unsupported = [t for t in universe if currency_of(t) is None]
@@ -414,7 +434,8 @@ def validate_config(new: dict) -> dict:
     benchmark = check_ticker(str(new.get("benchmark", base.get("benchmark", "EUNL.DE"))))
     # paper_trading, broker und Gebühren sind über die Oberfläche nicht änderbar
     return {**base, "paper_trading": True, "universe": universe, "benchmark": benchmark,
-            "portfolio": portfolio_cfg, "screen": screen_cfg, "risk": risk_cfg, "schedule": schedule_cfg}
+            "portfolio": portfolio_cfg, "screen": screen_cfg, "risk": risk_cfg, "schedule": schedule_cfg,
+            "advisor": advisor_cfg}
 
 
 @app.put("/api/config")
@@ -544,6 +565,7 @@ class OrderIn(BaseModel):
     horizon_days: int = 10
     rationale: str = Field(max_length=2000)
     model: str = Field("manuell", max_length=60)
+    thesis_id: str | None = Field(None, pattern=r"^[0-9A-Za-z.\-=^]{1,60}$")  # Freigabe eines Vorschlags
 
 
 @app.post("/api/trade/check")
@@ -578,6 +600,46 @@ def core_plan():
 @app.post("/api/trade/core")
 def core_buy():
     return trading.buy_core(client(), load_config())
+
+
+# --- Claude (Morgenbewertung) ------------------------------------------------------------
+
+@app.get("/api/advisor")
+def advisor_status():
+    s = advisor.settings(load_config())
+    return {**s, "token_configured": advisor.load_token() is not None,
+            "cli_available": advisor.claude_bin() is not None, "report": advisor.load_report()}
+
+
+class TokenIn(BaseModel):
+    token: str = Field(max_length=500)
+
+
+@app.put("/api/advisor/token")
+def advisor_token(t: TokenIn):
+    """Token nur annehmen, nie zurückgeben – auch nicht teilweise."""
+    try:
+        advisor.save_token(t.token)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    journal.log_action({"source": "web", "action": "advisor_token_saved"})
+    return {"token_configured": True}
+
+
+@app.delete("/api/advisor/token")
+def advisor_token_delete():
+    advisor.delete_token()
+    journal.log_action({"source": "web", "action": "advisor_token_deleted"})
+    return {"token_configured": False}
+
+
+@app.post("/api/advisor/run")
+def advisor_run():
+    if advisor.load_token() is None:
+        raise HTTPException(400, "Kein Claude-Token hinterlegt")
+    if not jobs.start(["advise"], False, trigger="manuell"):
+        raise HTTPException(409, "Es läuft bereits ein Job")
+    return jobs.state
 
 
 @app.get("/")
