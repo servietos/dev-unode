@@ -75,8 +75,14 @@ def main() -> None:
     p.add_argument("--period", default="2y")
     p.add_argument("--force", action="store_true", help="Cache ignorieren")
     a = p.parse_args()
-    tickers = a.tickers or load_config()["universe"]
-    emit(fetch(tickers, a.period, a.force))
+    emit(fetch(a.tickers or universe_with_fx(load_config()), a.period, a.force))
+
+
+def universe_with_fx(cfg: dict) -> list[str]:
+    """Universum plus EURUSD-Kurs (für die Umrechnung von USD-Titeln ins EUR-Depot)."""
+    from instruments import FX_TICKER
+
+    return list(dict.fromkeys([*cfg["universe"], FX_TICKER]))
 
 
 if __name__ == "__main__":

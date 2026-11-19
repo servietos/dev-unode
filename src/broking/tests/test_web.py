@@ -1,5 +1,6 @@
 import datetime as dt
 import importlib
+import json
 import os
 import shutil
 import tempfile
@@ -26,8 +27,8 @@ class WebTests(unittest.TestCase):
         os.environ.update(BROKING_DATA_DIR=str(d), BROKING_JOURNAL_DIR=str(d / "journal"),
                           BROKING_CONFIG=str(d / "config.json"))
         # Module neu laden, damit sie die Pfade aus der Umgebung übernehmen
-        import broker, common, evaluate_theses, fetch_prices, journal, risk_check, screen, trading  # noqa: E401
-        for mod in (common, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading):
+        import broker, common, evaluate_theses, fetch_prices, instruments, journal, risk_check, screen, trading  # noqa: E401
+        for mod in (common, instruments, fetch_prices, journal, risk_check, screen, broker, evaluate_theses, trading):
             importlib.reload(mod)
         import web.app as webapp
         cls.webapp = importlib.reload(webapp)
@@ -86,19 +87,40 @@ class WebTests(unittest.TestCase):
         r = self.client.post("/api/risk/check", json=body).json()
         self.assertFalse(r["approved"])
         self.assertTrue(any("Whitelist" in v for v in r["violations"]))
-        self.assertEqual(self.client.get("/api/risk/size?price=200&stop=190&equity=100000").json()["qty"], 50)
+        # 1 % von 100k / 10 = 100 Stück, aber Positionslimit 12 % = 12.000 / 200 = 60
+        self.assertEqual(self.client.get("/api/risk/size?price=200&stop=190&equity=100000").json()["qty"], 60)
 
     def test_config_cannot_disable_paper_trading(self):
         cfg = self.client.get("/api/config").json()
+        orig = json.loads(json.dumps(cfg))
         cfg["paper_trading"] = False
-        cfg["universe"] = ["aapl", "sap.de"]
+        cfg["fees"] = {"security_flat_eur": 0, "crypto_pct": 0, "slippage_pct": 0}
+        cfg["universe"] = ["eunl.de", "aapl", "sap.de", "btc-eur"]
         saved = self.client.put("/api/config", json=cfg).json()
         self.assertTrue(saved["paper_trading"])
-        self.assertEqual(saved["universe"], ["AAPL", "SAP.DE"])
-        bad = {**cfg, "risk": {**cfg["risk"], "max_risk_per_trade_pct": 50}}
-        self.assertEqual(self.client.put("/api/config", json=bad).status_code, 400)
-        bad = {**cfg, "schedule": {"enabled": True, "times": ["25:00"]}}
-        self.assertEqual(self.client.put("/api/config", json=bad).status_code, 400)
+        self.assertEqual(saved["fees"], orig["fees"])  # Gebühren nicht über die API änderbar
+        self.assertEqual(saved["universe"], ["EUNL.DE", "AAPL", "SAP.DE", "BTC-EUR"])
+        for bad in ({**cfg, "risk": {**cfg["risk"], "max_risk_per_trade_pct": 50}},
+                    {**cfg, "schedule": {"enabled": True, "times": ["25:00"]}},
+                    {**cfg, "universe": ["AAPL"]},                                   # Core fehlt im Universum
+                    {**cfg, "universe": [*cfg["universe"], "VOD.L"]},                 # Pence nicht unterstützt
+                    {**cfg, "portfolio": {**cfg["portfolio"], "satellite_pct": 40}}):  # 75 + 40 > 100
+            self.assertEqual(self.client.put("/api/config", json=bad).status_code, 400)
+        self.client.put("/api/config", json=orig)
+
+    def test_old_config_is_migrated(self):
+        old = {"paper_trading": True, "universe": ["AAPL", "SPY"], "benchmark": "URTH",
+               "screen": {}, "risk": {}, "schedule": {"enabled": False, "tz": "Europe/Berlin", "times": ["08:00"]}}
+        current = (self.data / "config.json").read_text(encoding="utf-8")
+        (self.data / "config.json").write_text(json.dumps(old), encoding="utf-8")
+        try:
+            self.webapp.ensure_config()
+            cfg = self.client.get("/api/config").json()
+            self.assertEqual((cfg["version"], cfg["benchmark"]), (2, "EUNL.DE"))
+            self.assertEqual(cfg["schedule"]["times"], ["08:00"])  # Zeitplan bleibt
+            self.assertTrue((self.data / "config.v1.json").exists())
+        finally:
+            (self.data / "config.json").write_text(current, encoding="utf-8")
 
     def test_csrf_header_required_for_writes(self):
         raw = TestClient(self.webapp.app)
@@ -106,37 +128,38 @@ class WebTests(unittest.TestCase):
         self.assertEqual(r.status_code, 403)
         self.assertEqual(raw.get("/api/status").status_code, 200)
 
-    def test_broker_without_keys(self):
-        os.environ.pop("ALPACA_API_KEY", None)
-        self.assertEqual(self.client.get("/api/broker").json(), {"configured": False, "paper": True})
-        self.assertEqual(self.client.get("/api/broker/positions").status_code, 409)
+    def test_paper_trade_flow(self):
+        from common import write_prices
+        from tests.helpers import make_rows
+        write_prices("AAPL", make_rows([200.0] * 30))
+        write_prices("EUNL.DE", make_rows([100.0] * 30))
+        write_prices("EURUSD=X", make_rows([1.25] * 30))
+        self.assertEqual(self.client.post("/api/broker/reset", json={"start_cash_eur": 1000, "confirm": "nein"}).status_code, 400)
+        self.client.post("/api/broker/reset", json={"start_cash_eur": 1000, "confirm": "RESET"})
+        b = self.client.get("/api/broker").json()
+        self.assertEqual((b["broker"], b["account"]["equity"]), ("paper", 1000.0))
+        self.assertTrue(b["allocation"]["core_below_target"])
 
-    def test_trade_flow_with_fake_alpaca(self):
-        from tests.fake_alpaca import FakeAlpaca
-        import broker
-        fake = FakeAlpaca(price=200.0)
-        orig = self.webapp.client
-        self.webapp.client = lambda: broker.Alpaca("KEYID123", "s" * 20, transport=fake)
-        cfg = self.client.get("/api/config").json()
-        cfg["risk"]["enforce_market_hours"] = False
-        self.client.put("/api/config", json=cfg)
-        try:
-            from common import write_prices
-            from tests.helpers import make_rows
-            write_prices("AAPL", make_rows([200.0] * 30))
-            order = {"ticker": "AAPL", "qty": 40, "price": 200, "stop": 190, "target": 220,
-                     "horizon_days": 10, "rationale": "Test"}
-            self.assertTrue(self.client.post("/api/trade/check", json=order).json()["approved"])
-            bad = self.client.post("/api/trade/order", json={**order, "qty": 400})
-            self.assertEqual(bad.status_code, 422)
-            self.assertTrue(bad.json()["violations"])
-            ok = self.client.post("/api/trade/order", json=order).json()
-            self.assertEqual(ok["thesis"]["order_id"], ok["order"]["id"])
-            h = self.client.get("/api/broker/history?period=1M").json()
-            self.assertEqual(h["equity_idx"], [100.0, 101.0])
-            self.assertEqual(self.client.delete("/api/trade/orders/not-an-id").status_code, 400)
-        finally:
-            self.webapp.client = orig
+        core = self.client.post("/api/trade/core").json()
+        self.assertEqual(len(core["orders"]), 1)
+        self.assertFalse(self.client.get("/api/broker").json()["allocation"]["core_below_target"])
+
+        order = {"ticker": "AAPL", "qty": 0.5, "price": 200, "stop": 190, "target": 220,
+                 "horizon_days": 10, "rationale": "Test"}
+        self.assertTrue(self.client.post("/api/trade/check", json=order).json()["approved"])
+        bad = self.client.post("/api/trade/order", json={**order, "qty": 4})
+        self.assertEqual(bad.status_code, 422)
+        self.assertTrue(bad.json()["violations"])
+        ok = self.client.post("/api/trade/order", json=order).json()
+        self.assertEqual(ok["thesis"]["order_id"], ok["order"]["id"])
+        pos = {p["symbol"]: p for p in self.client.get("/api/broker/positions").json()}
+        self.assertEqual(set(pos), {"AAPL", "EUNL.DE"})
+        h = self.client.get("/api/broker/history?period=1M").json()
+        self.assertEqual(h["equity_idx"][0], 100.0)
+        self.assertEqual(self.client.delete("/api/trade/orders/not-an-id").status_code, 400)
+        closed = self.client.post("/api/trade/close/AAPL").json()
+        self.assertEqual(closed["status"], "filled")
+        self.assertEqual(self.client.post("/api/trade/close/AAPL").status_code, 404)
 
     def test_scheduler(self):
         sch = self.webapp.Scheduler()

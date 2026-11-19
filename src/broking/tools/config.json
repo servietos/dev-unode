@@ -1,59 +1,52 @@
 {
+  "version": 2,
   "paper_trading": true,
+  "broker": "paper",
   "universe": [
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "AMZN",
-    "GOOGL",
-    "META",
-    "JPM",
-    "V",
-    "UNH",
-    "XOM",
-    "SAP.DE",
-    "SIE.DE",
-    "ALV.DE",
-    "DTE.DE",
-    "MUV2.DE",
-    "SPY",
-    "QQQ",
-    "URTH",
-    "EUNL.DE"
+    "EUNL.DE",
+    "SXR8.DE", "SXRV.DE", "EXSA.DE", "EXS1.DE", "IS3N.DE", "IS3Q.DE", "ZPRV.DE", "4GLD.DE",
+    "SAP.DE", "SIE.DE", "ALV.DE", "DTE.DE", "MUV2.DE", "RHM.DE", "AIR.DE", "IFX.DE",
+    "MBG.DE", "BMW.DE", "BAS.DE", "DBK.DE", "ENR.DE", "DHL.DE", "ADS.DE",
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AVGO", "AMD", "NFLX", "CRM",
+    "JPM", "V", "MA", "UNH", "LLY", "JNJ", "PG", "COST", "HD", "XOM",
+    "BTC-EUR", "ETH-EUR", "SOL-EUR"
   ],
-  "benchmark": "URTH",
+  "benchmark": "EUNL.DE",
+  "portfolio": {
+    "start_cash_eur": 1000,
+    "core": {"EUNL.DE": 75},
+    "satellite_pct": 25,
+    "rebalance_drift_pct": 10
+  },
+  "fees": {
+    "security_flat_eur": 1.0,
+    "crypto_pct": 1.49,
+    "slippage_pct": 0.1
+  },
   "screen": {
     "top_n": 10,
     "min_history_days": 200,
-    "min_avg_volume": 100000,
+    "min_avg_volume": 5000,
     "rsi_min": 35,
     "rsi_max": 70
   },
   "risk": {
-    "max_position_pct": 10.0,
+    "max_position_pct": 12.0,
     "max_risk_per_trade_pct": 1.0,
-    "max_daily_loss_pct": 2.0,
-    "max_open_positions": 8,
-    "enforce_market_hours": true,
+    "max_daily_loss_pct": 3.0,
+    "max_drawdown_pct": 15.0,
+    "max_open_positions": 3,
+    "min_order_eur": 50,
+    "max_fee_pct": 2.0,
+    "enforce_market_hours": false,
     "market_hours": {
-      "US": {
-        "tz": "America/New_York",
-        "open": "09:30",
-        "close": "16:00"
-      },
-      "DE": {
-        "tz": "Europe/Berlin",
-        "open": "09:00",
-        "close": "17:30"
-      }
+      "US": {"tz": "America/New_York", "open": "09:30", "close": "16:00"},
+      "DE": {"tz": "Europe/Berlin", "open": "09:00", "close": "17:30"}
     }
   },
   "schedule": {
     "enabled": true,
     "tz": "Europe/Berlin",
-    "times": [
-      "07:30",
-      "22:30"
-    ]
+    "times": ["07:30", "22:30"]
   }
 }

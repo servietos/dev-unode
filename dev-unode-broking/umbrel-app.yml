@@ -1,35 +1,38 @@
 manifestVersion: 1
 id: dev-unode-broking
 name: Broking
-tagline: Aktien screenen, Thesen führen und per Alpaca Paper-Trading handeln
+tagline: Aktien, ETFs und Krypto screenen, Thesen führen, im Paper-Depot (EUR) handeln
 category: finance
-version: "0.2.0"
+version: "0.3.0"
 port: 3847
 icon: https://raw.githubusercontent.com/servietos/dev-unode/master/src/broking/web/static/icon.svg
 description: >-
-  Weboberfläche für das broking-Projekt: lädt Tageskurse (Yahoo Finance), filtert das
-  Universum nach Trend, RSI und Liquidität, zeigt Kurs-Charts mit SMA 50/200 und führt ein
-  Journal mit messbaren Thesen samt Trefferquote.
+  Weboberfläche für das broking-Projekt: lädt Tageskurse (Yahoo Finance) für US-Aktien,
+  Xetra-Aktien und -ETFs sowie Krypto, filtert das Universum nach Trend, RSI und Liquidität,
+  zeigt Kurs-Charts mit SMA 50/200 und führt ein Journal mit messbaren Thesen samt Trefferquote.
 
 
-  Handel über Alpaca (nur Paper-Trading): Order-Ticket mit Vorschlag aus ATR und Limits,
-  serverseitige Prüfung gegen das Live-Depot inklusive offener Orders (Positionsgröße, Risiko
-  pro Trade, Cash, Tagesverlust, Whitelist, Handelszeiten), Bestätigung, dann Bracket-Order
-  mit Stop-Loss und Ziel. Jede Order legt automatisch eine These im Journal an.
+  Handel im simulierten Paper-Depot in EUR mit Core-Satellite: Der Core (Standard MSCI World,
+  75 %) ist Bestand und Benchmark, der Satellit (max. 25 %, 3 Positionen) für Swing-Trades.
+  Order-Ticket mit Vorschlag aus ATR und Limits, serverseitige Prüfung (Risiko je Trade,
+  Positionsgröße, Satellit-Quote, Mindestorder, Gebühren, Tagesverlust, Drawdown), dann
+  Bracket-Order mit Stop-Loss und Ziel. Gebühren wie Bitpanda, Bruchstücke erlaubt. Jede
+  Order legt automatisch eine These im Journal an.
 
 
   Mo–Fr lädt sie zu einstellbaren Uhrzeiten (Standard 07:30 und 22:30) automatisch Kurse,
-  rechnet den Screen, wertet fällige Thesen aus und gleicht das Depot ab. Alpaca-Schlüssel
-  trägst du in den Einstellungen ein; sie bleiben auf dem Umbrel.
+  rechnet den Screen, wertet fällige Thesen aus und schreibt das Depot fort. Keine
+  Broker-Schlüssel nötig, alle Daten bleiben auf dem Umbrel.
 developer: servietos
 website: https://github.com/servietos/dev-unode/tree/master/src/broking
 repo: https://github.com/servietos/dev-unode/tree/master/src/broking
 support: https://github.com/servietos/dev-unode/issues
 gallery: []
 releaseNotes: >-
-  Neues Design mit Dashboard (Depot vs. Benchmark), Handel über Alpaca Paper-Trading
-  (Bracket-Orders, Positionen schließen, Orders stornieren), automatische Thesen-Auswertung
-  mit Trefferquote je Modell, Broker-Verbindung in den Einstellungen.
+  Eigenes Paper-Depot in EUR statt Alpaca: alle Märkte (US, Xetra, ETFs, Krypto),
+  Core-Satellite mit „Core auffüllen“, Bitpanda-Gebühren, Bruchstücke, Startkapital und
+  Neustart in den Einstellungen, Drawdown-Stopp. Die bisherige Konfiguration wird automatisch
+  übernommen (Zeitplan bleibt, Sicherung als config.v1.json).
 dependencies: []
 submitter: servietos
 submission: https://github.com/servietos/dev-unode

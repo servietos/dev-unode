@@ -32,10 +32,9 @@
         <div><h1>Dashboard</h1><p class="muted" id="dash-sub">Überblick über Depot, Signale und Thesen</p></div>
         <div class="actions"><button class="btn" data-run="all">Alles aktualisieren</button></div>
       </header>
-      <div class="notice" id="connect-notice" hidden>
-        <div><strong>Kein Broker verbunden.</strong> Screen und Journal funktionieren, Depot und Handel brauchen einen
-          kostenlosen Alpaca-Paper-Account.</div>
-        <a class="btn primary" href="#einstellungen">Alpaca verbinden</a>
+      <div class="notice" id="core-notice" hidden>
+        <div id="core-notice-text"></div>
+        <button class="btn primary" id="btn-core">Core auffüllen</button>
       </div>
       <div class="kpis">
         <div class="kpi"><div class="kpi-label">Depotwert</div><div class="kpi-value" id="k-equity">–</div><div class="kpi-sub" id="k-equity-sub"></div></div>
@@ -50,11 +49,12 @@
             <div class="seg" id="hist-seg"><button data-v="1M">1M</button><button data-v="3M" aria-pressed="true">3M</button><button data-v="6M">6M</button><button data-v="1A">1J</button></div>
           </div>
           <div class="legend" id="eq-legend"></div>
-          <div class="chart" id="eq-chart"><p class="empty">Verfügbar, sobald Alpaca verbunden ist.</p></div>
+          <div class="chart" id="eq-chart"><p class="empty">Lädt …</p></div>
         </div>
         <div class="card">
           <div class="card-head"><h2>Status</h2></div>
           <dl class="facts">
+            <div><dt>Core / Satellit / Cash</dt><dd id="s-alloc">–</dd></div>
             <div><dt>Letzter Screen</dt><dd id="s-last">–</dd></div>
             <div><dt>Nächster Lauf</dt><dd id="s-next">–</dd></div>
             <div><dt>Kandidaten</dt><dd id="s-cands">–</dd></div>
@@ -118,7 +118,7 @@
     <!-- Handel -->
     <section class="page" id="page-handel" hidden>
       <header class="page-head">
-        <div><h1>Handel</h1><p class="muted">Alpaca Paper-Trading · Bracket-Orders mit Stop und Ziel</p></div>
+        <div><h1>Handel</h1><p class="muted">Paper-Depot in EUR · Satellit per Bracket-Order mit Stop und Ziel · Gebühren wie Bitpanda</p></div>
         <div class="actions"><button class="btn" id="btn-refresh-trade">Aktualisieren</button></div>
       </header>
       <div class="grid g-1-2">
@@ -130,10 +130,10 @@
           </div>
           <datalist id="universe-list"></datalist>
           <div class="form-grid">
-            <label>Stück<input name="qty" type="number" min="1" step="1" required></label>
-            <label>Limit<input name="price" type="number" step="0.01" required></label>
-            <label>Stop-Loss<input name="stop" type="number" step="0.01" required></label>
-            <label>Ziel<input name="target" type="number" step="0.01" required></label>
+            <label>Stück (Bruchteile möglich)<input name="qty" type="number" min="0" step="any" required></label>
+            <label>Limit <span class="cur muted"></span><input name="price" type="number" step="any" required></label>
+            <label>Stop-Loss <span class="cur muted"></span><input name="stop" type="number" step="any" required></label>
+            <label>Ziel <span class="cur muted"></span><input name="target" type="number" step="any" required></label>
             <label>Frist (Tage)<input name="horizon_days" type="number" min="1" max="90" value="10" required></label>
             <label>Quelle<input name="model" value="manuell" maxlength="60"></label>
           </div>
@@ -207,34 +207,42 @@
 
     <!-- Einstellungen -->
     <section class="page" id="page-einstellungen" hidden>
-      <header class="page-head"><div><h1>Einstellungen</h1><p class="muted">Broker, Universum, Limits und Zeitplan</p></div></header>
+      <header class="page-head"><div><h1>Einstellungen</h1><p class="muted">Paper-Depot, Aufteilung, Universum, Limits und Zeitplan</p></div></header>
       <div class="grid g-1-1">
-        <form class="card" id="broker-form" autocomplete="off">
-          <div class="card-head"><h2>Broker: Alpaca (Paper)</h2><span class="pill" id="broker-pill">nicht verbunden</span></div>
+        <form class="card" id="reset-form" autocomplete="off">
+          <div class="card-head"><h2>Paper-Depot</h2><span class="pill good">Paper · EUR</span></div>
           <div id="broker-info" class="muted small"></div>
-          <ol class="steps small">
-            <li>Kostenlos registrieren auf <a href="https://app.alpaca.markets/signup" target="_blank" rel="noopener">alpaca.markets</a> (nur E-Mail).</li>
-            <li>Im Dashboard oben links auf <b>Paper</b> wechseln → <b>API Keys</b> → <b>Generate New Keys</b>.</li>
-            <li>Key ID und Secret hier eintragen. Sie werden geprüft und nur auf dem Umbrel gespeichert.</li>
-          </ol>
+          <p class="small">Simuliert mit Tagesschlusskursen, Slippage und Bitpanda-Gebühren (je Wertpapier-Order pauschal,
+            Krypto prozentual). Echte Orders gibt es erst in Phase 3 über Bitpanda – das braucht eine bewusste Code-Änderung.</p>
+          <h3>Neu starten</h3>
+          <p class="muted small">Löscht Positionen, Orders und Depot-Historie. Thesen und Aktionsprotokoll bleiben.</p>
           <div class="form-grid two">
-            <label>API Key ID<input name="key_id" minlength="8" maxlength="64" spellcheck="false" autocomplete="off"></label>
-            <label>Secret Key<input name="secret" type="password" minlength="16" maxlength="128" autocomplete="new-password"></label>
+            <label>Startkapital (€)<input name="start_cash_eur" type="number" min="100" step="1" required></label>
+            <label>Zur Bestätigung RESET eintippen<input name="confirm" autocomplete="off" spellcheck="false"></label>
           </div>
           <div class="actions">
-            <button class="btn primary" type="submit">Verbinden</button>
-            <button class="btn danger" type="button" id="btn-disconnect" hidden>Trennen</button>
-            <span id="broker-msg" class="small"></span>
+            <button class="btn danger" type="submit">Depot neu starten</button>
+            <span id="reset-msg" class="small"></span>
           </div>
-          <p class="muted small">Nur Paper-Trading: Die App spricht ausschließlich mit paper-api.alpaca.markets. Live-Handel ist nicht freigeschaltet.</p>
         </form>
         <form class="card" id="settings-form">
-          <div class="card-head"><h2>Risiko-Limits</h2></div>
+          <div class="card-head"><h2>Aufteilung (Core-Satellite)</h2></div>
+          <div class="form-grid">
+            <label>Core-Titel<input name="core_ticker" list="universe-list" spellcheck="false"></label>
+            <label>Core-Ziel %<input name="core_pct" type="number" min="0" max="100" step="any"></label>
+            <label>Satellit max. %<input name="satellite_pct" type="number" min="0" max="100" step="any"></label>
+            <label>Toleranz %<input name="rebalance_drift_pct" type="number" min="0" max="25" step="any"></label>
+          </div>
+          <p class="muted small">Der Core ist zugleich die Messlatte. Liegt er mehr als die Toleranz unter dem Ziel, bietet das Dashboard „Core auffüllen“ an.</p>
+          <h3>Risiko-Limits</h3>
           <div class="form-grid">
             <label>Max. Position %<input name="max_position_pct" type="number" step="any"></label>
             <label>Max. Risiko/Trade %<input name="max_risk_per_trade_pct" type="number" step="any"></label>
             <label>Max. Tagesverlust %<input name="max_daily_loss_pct" type="number" step="any"></label>
-            <label>Max. Positionen<input name="max_open_positions" type="number" min="1"></label>
+            <label>Max. Drawdown %<input name="max_drawdown_pct" type="number" step="any"></label>
+            <label>Max. Satellit-Positionen<input name="max_open_positions" type="number" min="1"></label>
+            <label>Mindestorder €<input name="min_order_eur" type="number" min="0" step="any"></label>
+            <label>Max. Gebühr %<input name="max_fee_pct" type="number" step="any"></label>
           </div>
           <label class="check"><input type="checkbox" name="enforce_market_hours"> Orders nur zu Börsenzeiten</label>
           <h3>Screen</h3>
@@ -246,7 +254,7 @@
             <label>RSI max<input name="rsi_max" type="number" min="0" max="100"></label>
           </div>
           <h3>Universum &amp; Whitelist</h3>
-          <p class="muted small">Ein Kürzel pro Zeile (Yahoo-Schreibweise). Über Alpaca handelbar sind nur US-Werte; .DE-Titel bleiben Beobachtung.</p>
+          <p class="muted small">Ein Kürzel pro Zeile in Yahoo-Schreibweise: US-Werte ohne Endung (AAPL), Xetra mit .DE (SAP.DE), Krypto mit -EUR (BTC-EUR). Nur EUR- und USD-Titel.</p>
           <textarea name="universe" rows="6" spellcheck="false"></textarea>
           <label>Benchmark<input name="benchmark"></label>
           <h3>Zeitplan</h3>

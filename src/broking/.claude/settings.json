@@ -11,12 +11,10 @@
       "Bash(python3 tools/broker.py orders:*)",
       "Bash(python3 tools/broker.py sync:*)"
     ],
-    "ask": [
-      "mcp__alpaca"
-    ],
     "deny": [
       "Edit(tools/config.json)",
       "Edit(tools/risk_check.py)",
+      "Edit(tools/broker.py)",
       "Edit(tools/hooks.py)",
       "Edit(.claude/settings.json)",
       "Read(data/secrets.json)"
@@ -25,7 +23,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "mcp__alpaca__.*",
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Read|mcp__.*",
         "hooks": [
           {
             "type": "command",
@@ -36,7 +34,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__alpaca__.*",
+        "matcher": "mcp__.*",
         "hooks": [
           {
             "type": "command",

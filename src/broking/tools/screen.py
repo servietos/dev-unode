@@ -57,9 +57,14 @@ def score(m: dict) -> float:
     return round(mom / max(m["atr_pct"], 0.1), 3)
 
 
-def run(tickers: list[str], cfg: dict, top_n: int, prices_dir: Path = PRICES_DIR) -> dict:
+def run(tickers: list[str], cfg: dict, top_n: int, prices_dir: Path = PRICES_DIR,
+        exclude: set[str] = frozenset()) -> dict:
+    """exclude: Core-Titel – die sind Bestand bzw. Benchmark, keine Swing-Kandidaten."""
     candidates, rejected, missing = [], {}, []
     for t in tickers:
+        if t.upper() in exclude:
+            rejected[t] = ["Core-Bestand"]
+            continue
         rows = read_prices(t, prices_dir)
         if len(rows) < cfg["min_history_days"]:
             missing.append(t)
@@ -89,7 +94,8 @@ def main() -> None:
     p.add_argument("tickers", nargs="*")
     p.add_argument("--top", type=int, default=conf["screen"]["top_n"])
     a = p.parse_args()
-    emit(run(a.tickers or conf["universe"], conf["screen"], a.top))
+    core = {t.upper() for t in conf.get("portfolio", {}).get("core", {})}
+    emit(run(a.tickers or conf["universe"], conf["screen"], a.top, exclude=core))
 
 
 if __name__ == "__main__":
